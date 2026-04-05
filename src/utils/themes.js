@@ -1,0 +1,51 @@
+export const pitchBlack = {
+  bg: '#0A0A0F',
+  card: '#111116',
+  cardHover: '#16161D',
+  border: '#1A1A2E',
+  borderLight: '#252540',
+  accent: '#3B6FD4',
+  accentPurple: '#7C5CFC',
+  gradient: 'linear-gradient(135deg, #3B6FD4, #7C5CFC)',
+  text: '#E0E0E0',
+  textDim: '#888888',
+  textMuted: '#555555',
+  green: '#34D399',
+  yellow: '#FBBF24',
+  red: '#F87171',
+  terminal: {
+    bg: '#0A0A0F',
+    foreground: '#E0E0E0',
+    cursor: '#7C5CFC',
+    cursorAccent: '#0A0A0F',
+    selectionBackground: '#3B6FD440',
+    black: '#0A0A0F',
+    red: '#F87171',
+    green: '#34D399',
+    yellow: '#FBBF24',
+    blue: '#3B6FD4',
+    magenta: '#7C5CFC',
+    cyan: '#22D3EE',
+    white: '#E0E0E0',
+    brightBlack: '#555555',
+    brightRed: '#FCA5A5',
+    brightGreen: '#6EE7B7',
+    brightYellow: '#FDE68A',
+    brightBlue: '#93C5FD',
+    brightMagenta: '#A78BFA',
+    brightCyan: '#67E8F9',
+    brightWhite: '#FFFFFF',
+  },
+};
+
+export const statusColors = {
+  active: pitchBlack.green,
+  recent: pitchBlack.yellow,
+  inactive: pitchBlack.red,
+};
+
+export const statusLabels = {
+  active: 'Active',
+  recent: 'Recent',
+  inactive: 'Inactive',
+};

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+dist-react/
+.vite/
+*.log
+.env
+.env.local

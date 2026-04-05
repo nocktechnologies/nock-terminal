@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global resets */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #0A0A0F;
+  color: #E0E0E0;
+}
+
+/* Scrollbar styling — pitch black */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0A0A0F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1A1A2E;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #252540;
+}
+
+/* Custom title bar drag region */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Terminal container */
+.terminal-container .xterm {
+  padding: 8px;
+}
+
+.terminal-container .xterm-viewport {
+  overflow-y: auto !important;
+}
+
+/* Nock gradient text */
+.nock-gradient-text {
+  background: linear-gradient(135deg, #3B6FD4, #7C5CFC);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Nock gradient background */
+.nock-gradient-bg {
+  background: linear-gradient(135deg, #3B6FD4, #7C5CFC);
+}
+
+/* Status dot pulse animation */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.status-dot-active {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Chat message code blocks */
+.chat-message pre {
+  background: #0A0A0F;
+  border: 1px solid #1A1A2E;
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.chat-message code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+}
+
+.chat-message p code {
+  background: #1A1A2E;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Focus ring override */
+*:focus-visible {
+  outline: 1px solid #3B6FD4;
+  outline-offset: 1px;
+}
+
+/* Transition utility */
+.transition-sidebar {
+  transition: width 200ms ease, opacity 150ms ease;
+}
