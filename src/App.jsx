@@ -16,6 +16,8 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [activePorts, setActivePorts] = useState([]);
+  const [processStatus, setProcessStatus] = useState({});
+  const [lastDataTimestamps, setLastDataTimestamps] = useState({});
 
   // Discover sessions on mount and periodically
   const refreshSessions = useCallback(async () => {
@@ -45,6 +47,20 @@ export default function App() {
     }, 30000); // Refresh every 30s
     return () => clearInterval(interval);
   }, [refreshSessions, refreshPorts]);
+
+  useEffect(() => {
+    const cleanup = window.nockTerminal.process.onStatus((status) => {
+      setProcessStatus(prev => ({ ...prev, [status.tabId]: status }));
+    });
+    return cleanup;
+  }, []);
+
+  useEffect(() => {
+    const cleanup = window.nockTerminal.terminal.onData((id) => {
+      setLastDataTimestamps(prev => ({ ...prev, [id]: Date.now() }));
+    });
+    return cleanup;
+  }, []);
 
   // Open a terminal tab for a session
   const openTerminalTab = useCallback((session) => {
@@ -222,6 +238,14 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [tabs, activeTabId, openNewTab, closeTab]);
 
+  const getSessionStatus = useCallback((tabId) => {
+    const proc = processStatus[tabId];
+    const lastData = lastDataTimestamps[tabId] || 0;
+    if (!proc?.hasClaude) return 'inactive';
+    if (Date.now() - lastData < 2000) return 'active';
+    return 'ready';
+  }, [processStatus, lastDataTimestamps]);
+
   const activeTab = tabs.find(t => t.id === activeTabId);
 
   return (
@@ -265,6 +289,7 @@ export default function App() {
               onTabClick={(id) => setActiveTabId(id)}
               onTabClose={closeTab}
               onNewTab={openNewTab}
+              getSessionStatus={getSessionStatus}
             />
             <div className="flex-1 overflow-hidden relative">
               {tabs.map(tab => (
