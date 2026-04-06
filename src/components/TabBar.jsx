@@ -30,7 +30,7 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNe
   };
 
   return (
-    <div className="bg-nock-bg border-b border-nock-border flex items-center shrink-0 h-9 relative">
+    <div className="bg-nock-bg flex items-center shrink-0 h-9 relative flex-1">
       <div className="flex-1 flex items-center overflow-x-auto no-scrollbar">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;

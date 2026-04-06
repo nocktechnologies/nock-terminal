@@ -3,6 +3,7 @@ import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import TabBar from './components/TabBar';
+import ActionToolbar from './components/ActionToolbar';
 import TerminalView from './components/TerminalView';
 import SplitPane from './components/SplitPane';
 import AIChatPanel from './components/AIChatPanel';
@@ -288,14 +289,25 @@ export default function App() {
 
           {/* Terminal area — always rendered so PTYs stay alive */}
           <div className={`absolute inset-0 flex flex-col ${view === 'terminal' ? '' : 'hidden'}`}>
-            <TabBar
-              tabs={tabs}
-              activeTabId={activeTabId}
-              onTabClick={(id) => setActiveTabId(id)}
-              onTabClose={closeTab}
-              onNewTab={openNewTab}
-              getSessionStatus={getSessionStatus}
-            />
+            <div className="flex items-center border-b border-nock-border shrink-0">
+              <TabBar
+                tabs={tabs}
+                activeTabId={activeTabId}
+                onTabClick={(id) => setActiveTabId(id)}
+                onTabClose={closeTab}
+                onNewTab={openNewTab}
+                getSessionStatus={getSessionStatus}
+              />
+              <ActionToolbar
+                onSplit={toggleTerminalSplit}
+                onToggleSidebar={() => setSidebarCollapsed(prev => !prev)}
+                onToggleChat={() => setChatOpen(prev => !prev)}
+                onDashboard={() => setView('dashboard')}
+                sidebarOpen={!sidebarCollapsed}
+                chatOpen={chatOpen}
+                hasSplit={!!activeTab?.splitContent}
+              />
+            </div>
             <div className="flex-1 overflow-hidden relative">
               {tabs.map(tab => (
                 <div
