@@ -1,5 +1,6 @@
 import React from 'react';
 import FileTree from './FileTree';
+import ContextMonitor from './ContextMonitor';
 
 const STATUS_COLORS = {
   active:   'bg-nock-green',
@@ -114,6 +115,12 @@ export default function Sidebar({
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {!collapsed && activeProjectPath && (
+        <div className="border-t border-nock-border">
+          <ContextMonitor projectPath={activeProjectPath} onEditFile={onFileClick} />
         </div>
       )}
 
