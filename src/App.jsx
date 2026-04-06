@@ -210,18 +210,25 @@ export default function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ctrl+T: New tab
-      if (e.ctrlKey && e.key === 't' && !e.shiftKey) {
+      const isCtrl = e.ctrlKey || e.metaKey;
+
+      // Ctrl+T / Ctrl+N: New tab
+      if (isCtrl && (e.key === 't' || e.key === 'n') && !e.shiftKey) {
         e.preventDefault();
         openNewTab();
       }
-      // Ctrl+W: Close active tab
-      if (e.ctrlKey && e.key === 'w') {
+      // Ctrl+W: Close editor tab/split or close terminal tab
+      if (isCtrl && e.key === 'w' && !e.shiftKey) {
         e.preventDefault();
-        if (activeTabId) closeTab(activeTabId);
+        const tab = tabs.find(t => t.id === activeTabId);
+        if (tab?.splitContent) {
+          closeSplit();
+        } else if (activeTabId) {
+          closeTab(activeTabId);
+        }
       }
       // Ctrl+1-9: Switch tabs
-      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+      if (isCtrl && !e.shiftKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
         const index = parseInt(e.key) - 1;
         if (tabs[index]) {
@@ -229,16 +236,71 @@ export default function App() {
           setView('terminal');
         }
       }
+      // Ctrl+Tab: Next tab
+      if (isCtrl && e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault();
+        const idx = tabs.findIndex(t => t.id === activeTabId);
+        if (tabs.length > 0) {
+          const next = (idx + 1) % tabs.length;
+          setActiveTabId(tabs[next].id);
+          setView('terminal');
+        }
+      }
+      // Ctrl+Shift+Tab: Previous tab
+      if (isCtrl && e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        const idx = tabs.findIndex(t => t.id === activeTabId);
+        if (tabs.length > 0) {
+          const prev = (idx - 1 + tabs.length) % tabs.length;
+          setActiveTabId(tabs[prev].id);
+          setView('terminal');
+        }
+      }
       // Ctrl+Shift+A: Toggle AI chat
-      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+      if (isCtrl && e.shiftKey && e.key === 'A') {
         e.preventDefault();
         setChatOpen(prev => !prev);
+      }
+      // Ctrl+Shift+D: Toggle terminal split
+      if (isCtrl && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        toggleTerminalSplit();
+      }
+      // Ctrl+B: Toggle sidebar
+      if (isCtrl && e.key === 'b' && !e.shiftKey) {
+        e.preventDefault();
+        setSidebarCollapsed(prev => !prev);
+      }
+      // Ctrl+D: Dashboard
+      if (isCtrl && e.key === 'd' && !e.shiftKey) {
+        e.preventDefault();
+        setView('dashboard');
+      }
+      // Ctrl+P: Focus file filter
+      if (isCtrl && e.key === 'p' && !e.shiftKey) {
+        e.preventDefault();
+        ctrlPFocusRef.current?.();
+      }
+      // Ctrl+`: Toggle terminal focus
+      if (isCtrl && e.key === '`') {
+        e.preventDefault();
+        if (view !== 'terminal' && tabs.length > 0) {
+          setView('terminal');
+        }
+      }
+      // F11: Fullscreen
+      if (e.key === 'F11') {
+        e.preventDefault();
+        window.nockTerminal.window.isMaximized().then(max => {
+          if (max) window.nockTerminal.window.maximize();
+          else window.nockTerminal.window.maximize();
+        });
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tabs, activeTabId, openNewTab, closeTab]);
+  }, [tabs, activeTabId, openNewTab, closeTab, closeSplit, toggleTerminalSplit, view]);
 
   const getSessionStatus = useCallback((tabId) => {
     const proc = processStatus[tabId];
