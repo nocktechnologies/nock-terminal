@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import TabBar from './components/TabBar';
 import TerminalView from './components/TerminalView';
+import SplitPane from './components/SplitPane';
 import AIChatPanel from './components/AIChatPanel';
 import Settings from './components/Settings';
 
@@ -62,6 +63,8 @@ export default function App() {
       branch: session.branch,
       status: session.status,
       cwd: session.path,
+      splitContent: null,
+      splitRatio: 0.5,
     };
 
     setTabs(prev => [...prev, newTab]);
@@ -79,6 +82,8 @@ export default function App() {
       branch: null,
       status: 'active',
       cwd: cwd || 'C:\\Users\\kkwil',
+      splitContent: null,
+      splitRatio: 0.5,
     };
 
     setTabs(prev => [...prev, newTab]);
@@ -101,6 +106,87 @@ export default function App() {
     });
     // Destroy the terminal process
     window.nockTerminal.terminal.destroy(tabId);
+  }, [activeTabId]);
+
+  const openFileInEditor = useCallback((filePath) => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId) return tab;
+      const existingFiles = tab.splitContent?.type === 'editor' ? tab.splitContent.files : [];
+      if (existingFiles.includes(filePath)) {
+        return {
+          ...tab,
+          splitContent: { type: 'editor', files: existingFiles, activeFile: filePath },
+        };
+      }
+      return {
+        ...tab,
+        splitContent: {
+          type: 'editor',
+          files: [...existingFiles, filePath],
+          activeFile: filePath,
+        },
+      };
+    }));
+  }, [activeTabId]);
+
+  const toggleTerminalSplit = useCallback(() => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId) return tab;
+      if (tab.splitContent?.type === 'terminal') {
+        window.nockTerminal.terminal.destroy(tab.splitContent.id);
+        return { ...tab, splitContent: null };
+      }
+      const splitId = `${tab.id}-split-${Date.now()}`;
+      return {
+        ...tab,
+        splitContent: { type: 'terminal', id: splitId },
+      };
+    }));
+  }, [activeTabId]);
+
+  const closeSplit = useCallback(() => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId) return tab;
+      if (tab.splitContent?.type === 'terminal') {
+        window.nockTerminal.terminal.destroy(tab.splitContent.id);
+      }
+      return { ...tab, splitContent: null };
+    }));
+  }, [activeTabId]);
+
+  const closeEditorFile = useCallback((filePath) => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId || tab.splitContent?.type !== 'editor') return tab;
+      const remaining = tab.splitContent.files.filter(f => f !== filePath);
+      if (remaining.length === 0) {
+        return { ...tab, splitContent: null };
+      }
+      const activeFile = tab.splitContent.activeFile === filePath ? remaining[remaining.length - 1] : tab.splitContent.activeFile;
+      return {
+        ...tab,
+        splitContent: { ...tab.splitContent, files: remaining, activeFile },
+      };
+    }));
+  }, [activeTabId]);
+
+  const setActiveEditorFile = useCallback((filePath) => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId || tab.splitContent?.type !== 'editor') return tab;
+      return {
+        ...tab,
+        splitContent: { ...tab.splitContent, activeFile: filePath },
+      };
+    }));
+  }, [activeTabId]);
+
+  const updateSplitRatio = useCallback((ratio) => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => tab.id === activeTabId ? { ...tab, splitRatio: ratio } : tab));
   }, [activeTabId]);
 
   // Keyboard shortcuts
@@ -186,11 +272,29 @@ export default function App() {
                   key={tab.id}
                   className={`absolute inset-0 ${tab.id === activeTabId ? 'flex' : 'hidden'}`}
                 >
-                  <TerminalView
-                    tabId={tab.id}
-                    cwd={tab.cwd}
-                    active={tab.id === activeTabId && view === 'terminal'}
-                  />
+                  <SplitPane
+                    defaultRatio={tab.splitRatio}
+                    onRatioChange={tab.id === activeTabId ? updateSplitRatio : undefined}
+                    rightPane={
+                      tab.splitContent?.type === 'terminal' ? (
+                        <TerminalView
+                          tabId={tab.splitContent.id}
+                          cwd={tab.cwd}
+                          active={tab.id === activeTabId && view === 'terminal'}
+                        />
+                      ) : tab.splitContent?.type === 'editor' ? (
+                        <div className="flex-1 bg-nock-card text-nock-text-dim flex items-center justify-center text-sm">
+                          Editor — will be connected in Task 8
+                        </div>
+                      ) : null
+                    }
+                  >
+                    <TerminalView
+                      tabId={tab.id}
+                      cwd={tab.cwd}
+                      active={tab.id === activeTabId && view === 'terminal'}
+                    />
+                  </SplitPane>
                 </div>
               ))}
               {tabs.length === 0 && view === 'terminal' && (
