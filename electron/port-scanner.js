@@ -73,8 +73,8 @@ class PortScanner {
           });
         }
       }
-    } catch {
-      // netstat may fail
+    } catch (err) {
+      console.error('PortScanner: netstat scan failed:', err.message);
     }
     return activePorts;
   }
@@ -83,8 +83,8 @@ class PortScanner {
     const names = new Map();
     if (pids.size === 0) return names;
 
-    try {
-      for (const pid of pids) {
+    for (const pid of pids) {
+      try {
         const output = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, {
           timeout: 3000,
           encoding: 'utf-8',
@@ -94,9 +94,9 @@ class PortScanner {
         if (match) {
           names.set(pid, match[1]);
         }
+      } catch (err) {
+        console.warn(`PortScanner: tasklist failed for PID ${pid}:`, err.message);
       }
-    } catch {
-      // tasklist may fail
     }
     return names;
   }
@@ -121,8 +121,8 @@ class PortScanner {
           activePorts.push({ port, label, url: `http://localhost:${port}` });
         }
       }
-    } catch {
-      // Command may fail
+    } catch (err) {
+      console.error('PortScanner: Unix scan failed:', err.message);
     }
     return activePorts;
   }

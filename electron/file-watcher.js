@@ -32,6 +32,7 @@ class FileWatcher extends EventEmitter {
     });
 
     this.watcher
+      .on('error', (err) => console.error('FileWatcher: chokidar error:', err.message))
       .on('add', (filePath) => this.emit('changed', { type: 'add', path: filePath }))
       .on('unlink', (filePath) => this.emit('changed', { type: 'unlink', path: filePath }))
       .on('addDir', (dirPath) => this.emit('changed', { type: 'addDir', path: dirPath }))
@@ -43,7 +44,7 @@ class FileWatcher extends EventEmitter {
 
   stop() {
     if (this.watcher) {
-      this.watcher.close();
+      this.watcher.close().catch(err => console.error('FileWatcher: close error:', err.message));
       this.watcher = null;
     }
     if (this.gitPollInterval) {

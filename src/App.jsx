@@ -288,13 +288,10 @@ export default function App() {
           setView('terminal');
         }
       }
-      // F11: Fullscreen
+      // F11: Toggle maximize
       if (e.key === 'F11') {
         e.preventDefault();
-        window.nockTerminal.window.isMaximized().then(max => {
-          if (max) window.nockTerminal.window.maximize();
-          else window.nockTerminal.window.maximize();
-        });
+        window.nockTerminal.window.maximize();
       }
     };
 

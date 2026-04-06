@@ -65,13 +65,16 @@ class FileService {
       const size = stat.size;
       const readOnly = size > 1024 * 1024;
 
-      const fd = fs.openSync(filePath, 'r');
-      const buf = Buffer.alloc(Math.min(8192, size));
-      fs.readSync(fd, buf, 0, buf.length, 0);
-      fs.closeSync(fd);
-
-      if (buf.includes(0)) {
-        return { error: 'Binary file — cannot open in editor' };
+      let fd;
+      try {
+        fd = fs.openSync(filePath, 'r');
+        const buf = Buffer.alloc(Math.min(8192, size));
+        fs.readSync(fd, buf, 0, buf.length, 0);
+        if (buf.includes(0)) {
+          return { error: 'Binary file — cannot open in editor' };
+        }
+      } finally {
+        if (fd !== undefined) fs.closeSync(fd);
       }
 
       const content = fs.readFileSync(filePath, 'utf-8');
@@ -101,7 +104,10 @@ class FileService {
     try {
       const stat = fs.statSync(filePath);
       return { exists: true, size: stat.size, mtime: stat.mtimeMs };
-    } catch {
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error(`FileService.stat error for ${filePath}:`, err.message);
+      }
       return { exists: false, size: 0, mtime: 0 };
     }
   }
@@ -123,7 +129,11 @@ class FileService {
         if (file) status[file] = code;
       }
       return status;
-    } catch {
+    } catch (err) {
+      const msg = err.message || '';
+      if (!msg.includes('not a git repository')) {
+        console.warn(`FileService.gitStatus error for ${dirPath}:`, msg);
+      }
       return {};
     }
   }
@@ -131,9 +141,11 @@ class FileService {
   _isAllowedPath(filePath) {
     const resolved = path.resolve(filePath);
     const devRoots = this.store?.get('devRoots') || [];
-    const homeDir = require('os').homedir();
-    const allowedRoots = [...devRoots, homeDir];
-    return allowedRoots.some(root => resolved.startsWith(path.resolve(root)));
+    if (devRoots.length === 0) {
+      console.warn('FileService: no devRoots configured — all paths rejected');
+      return false;
+    }
+    return devRoots.some(root => resolved.startsWith(path.resolve(root)));
   }
 }
 

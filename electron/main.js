@@ -155,7 +155,6 @@ function initServices() {
   fileService = new FileService(store);
   fileWatcher = new FileWatcher(fileService);
   processDetector = new ProcessDetector(terminalManager);
-  processDetector.start();
 }
 
 function registerIPC() {
@@ -267,9 +266,11 @@ function registerIPC() {
     fileWatcher.stop();
   });
 
-  // Shell / external
+  // Shell / external — restrict to http/https URLs
   ipcMain.on('shell:openExternal', (_, url) => {
-    shell.openExternal(url);
+    if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+      shell.openExternal(url);
+    }
   });
 
   // Clipboard (routed via IPC so renderer doesn't need permission prompts)
@@ -306,6 +307,7 @@ app.whenReady().then(() => {
   registerIPC();
   wireTerminalEvents();
   wireFileEvents();
+  processDetector.start();
 
   // Global shortcut: Ctrl+Shift+T to toggle window
   globalShortcut.register('Control+Shift+T', toggleWindow);

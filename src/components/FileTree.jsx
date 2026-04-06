@@ -17,8 +17,13 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
 
   const loadTree = useCallback(async () => {
     if (!rootPath) return;
-    const result = await window.nockTerminal.files.tree(rootPath);
-    setTree(result);
+    try {
+      const result = await window.nockTerminal.files.tree(rootPath);
+      setTree(Array.isArray(result) ? result : []);
+    } catch (err) {
+      console.error('FileTree: failed to load tree:', err);
+      setTree([]);
+    }
   }, [rootPath]);
 
   useEffect(() => {

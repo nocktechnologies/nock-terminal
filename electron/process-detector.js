@@ -50,7 +50,7 @@ class ProcessDetector extends EventEmitter {
         this.emit('status', { tabId, hasClaude });
       }
     } catch (err) {
-      // Silently fail
+      console.error('ProcessDetector: Windows detection failed:', err.message);
     }
   }
 

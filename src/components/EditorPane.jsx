@@ -53,9 +53,14 @@ export default function EditorPane({
   const containerRef = useRef(null);
   const monacoRef = useRef(null);
   const modelsRef = useRef({});
+  const activeFileRef = useRef(activeFile);
   const [loading, setLoading] = useState(true);
   const [fileContents, setFileContents] = useState({});
+  const [saveError, setSaveError] = useState(null);
   const [, forceUpdate] = useState(0);
+
+  // Keep ref in sync so Monaco command closure reads current value
+  useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +87,25 @@ export default function EditorPane({
 
         editorRef.current.addCommand(
           monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
-          () => saveCurrentFile()
+          () => {
+            const file = activeFileRef.current;
+            if (!file || !modelsRef.current[file]) return;
+            const entry = modelsRef.current[file];
+            const content = entry.model.getValue();
+            window.nockTerminal.files.write(file, content).then(result => {
+              if (result.success) {
+                entry.modified = false;
+                setSaveError(null);
+                forceUpdate(n => n + 1);
+              } else {
+                console.error('Save failed:', result.error);
+                setSaveError(result.error);
+              }
+            }).catch(err => {
+              console.error('Save IPC error:', err);
+              setSaveError(err.message);
+            });
+          }
         );
       }
       setLoading(false);
@@ -95,8 +118,13 @@ export default function EditorPane({
     const loadNewFiles = async () => {
       for (const filePath of files) {
         if (fileContents[filePath]) continue;
-        const result = await window.nockTerminal.files.read(filePath);
-        setFileContents(prev => ({ ...prev, [filePath]: result }));
+        try {
+          const result = await window.nockTerminal.files.read(filePath);
+          setFileContents(prev => ({ ...prev, [filePath]: result }));
+        } catch (err) {
+          console.error(`Failed to load file ${filePath}:`, err);
+          setFileContents(prev => ({ ...prev, [filePath]: { error: err.message } }));
+        }
       }
     };
     loadNewFiles();
@@ -154,10 +182,19 @@ export default function EditorPane({
     if (!activeFile || !modelsRef.current[activeFile]) return;
     const entry = modelsRef.current[activeFile];
     const content = entry.model.getValue();
-    const result = await window.nockTerminal.files.write(activeFile, content);
-    if (result.success) {
-      entry.modified = false;
-      forceUpdate(n => n + 1);
+    try {
+      const result = await window.nockTerminal.files.write(activeFile, content);
+      if (result.success) {
+        entry.modified = false;
+        setSaveError(null);
+        forceUpdate(n => n + 1);
+      } else {
+        console.error('Save failed:', result.error);
+        setSaveError(result.error);
+      }
+    } catch (err) {
+      console.error('Save IPC error:', err);
+      setSaveError(err.message);
     }
   }, [activeFile]);
 
@@ -226,6 +263,13 @@ export default function EditorPane({
       {fileContents[activeFile]?.error && (
         <div className="px-3 py-1.5 bg-red-400/10 border-b border-red-400/20 text-[10px] text-red-400 font-mono">
           {fileContents[activeFile].error}
+        </div>
+      )}
+
+      {saveError && (
+        <div className="px-3 py-1.5 bg-red-400/10 border-b border-red-400/20 text-[10px] text-red-400 font-mono flex items-center justify-between">
+          <span>Save failed: {saveError}</span>
+          <button onClick={() => setSaveError(null)} className="text-red-400 hover:text-red-300 ml-2">✕</button>
         </div>
       )}
 
