@@ -159,61 +159,64 @@ export default function App() {
           onViewChange={setView}
         />
 
-        {/* Main content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {view === 'dashboard' && (
+        {/* Main content — all views always mounted, visibility controlled by CSS */}
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Dashboard */}
+          <div className={`absolute inset-0 ${view === 'dashboard' ? 'flex flex-col' : 'hidden'}`}>
             <Dashboard
               sessions={sessions}
               onSessionClick={openTerminalTab}
               onNewTerminal={openNewTab}
               onRefresh={refreshSessions}
             />
-          )}
+          </div>
 
-          {view === 'terminal' && (
-            <>
-              <TabBar
-                tabs={tabs}
-                activeTabId={activeTabId}
-                onTabClick={(id) => setActiveTabId(id)}
-                onTabClose={closeTab}
-                onNewTab={openNewTab}
-              />
-              <div className="flex-1 overflow-hidden relative">
-                {tabs.map(tab => (
-                  <div
-                    key={tab.id}
-                    className={`absolute inset-0 ${tab.id === activeTabId ? 'block' : 'hidden'}`}
-                  >
-                    <TerminalView
-                      tabId={tab.id}
-                      cwd={tab.cwd}
-                      active={tab.id === activeTabId}
-                    />
+          {/* Terminal area — always rendered so PTYs stay alive */}
+          <div className={`absolute inset-0 flex flex-col ${view === 'terminal' ? '' : 'hidden'}`}>
+            <TabBar
+              tabs={tabs}
+              activeTabId={activeTabId}
+              onTabClick={(id) => setActiveTabId(id)}
+              onTabClose={closeTab}
+              onNewTab={openNewTab}
+            />
+            <div className="flex-1 overflow-hidden relative">
+              {tabs.map(tab => (
+                <div
+                  key={tab.id}
+                  className={`absolute inset-0 ${tab.id === activeTabId ? 'flex' : 'hidden'}`}
+                >
+                  <TerminalView
+                    tabId={tab.id}
+                    cwd={tab.cwd}
+                    active={tab.id === activeTabId && view === 'terminal'}
+                  />
+                </div>
+              ))}
+              {tabs.length === 0 && view === 'terminal' && (
+                <div className="flex items-center justify-center h-full text-nock-text-dim">
+                  <div className="text-center">
+                    <p className="text-lg mb-2">No terminal tabs open</p>
+                    <p className="text-sm">Press <kbd className="px-2 py-1 bg-nock-card border border-nock-border rounded text-xs font-mono">Ctrl+T</kbd> to open a new tab</p>
                   </div>
-                ))}
-                {tabs.length === 0 && (
-                  <div className="flex items-center justify-center h-full text-nock-text-dim">
-                    <div className="text-center">
-                      <p className="text-lg mb-2">No terminal tabs open</p>
-                      <p className="text-sm">Press <kbd className="px-2 py-1 bg-nock-card border border-nock-border rounded text-xs font-mono">Ctrl+T</kbd> to open a new tab</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+                </div>
+              )}
+            </div>
+          </div>
 
-          {view === 'settings' && <Settings />}
+          {/* Settings */}
+          <div className={`absolute inset-0 overflow-y-auto ${view === 'settings' ? '' : 'hidden'}`}>
+            <Settings />
+          </div>
         </div>
 
         {/* AI Chat Panel */}
-        {chatOpen && (
+        <div className={chatOpen ? '' : 'hidden'}>
           <AIChatPanel
             onClose={() => setChatOpen(false)}
             activeSession={activeTab}
           />
-        )}
+        </div>
       </div>
 
       {/* Chat toggle button (when closed) */}
