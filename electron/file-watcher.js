@@ -44,7 +44,7 @@ class FileWatcher extends EventEmitter {
 
   stop() {
     if (this.watcher) {
-      this.watcher.close().catch(err => console.error('FileWatcher: close error:', err.message));
+      try { this.watcher.close(); } catch (err) { console.error('FileWatcher: close error:', err.message); }
       this.watcher = null;
     }
     if (this.gitPollInterval) {
