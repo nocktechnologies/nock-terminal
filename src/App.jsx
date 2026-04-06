@@ -246,6 +246,8 @@ export default function App() {
     return 'ready';
   }, [processStatus, lastDataTimestamps]);
 
+  const ctrlPFocusRef = useRef(null);
+
   const activeTab = tabs.find(t => t.id === activeTabId);
 
   return (
@@ -267,6 +269,9 @@ export default function App() {
           onRefresh={refreshSessions}
           activeView={view}
           onViewChange={setView}
+          activeProjectPath={activeTab?.cwd || null}
+          onFileClick={openFileInEditor}
+          onCtrlPFocus={(fn) => { ctrlPFocusRef.current = fn; }}
         />
 
         {/* Main content — all views always mounted, visibility controlled by CSS */}

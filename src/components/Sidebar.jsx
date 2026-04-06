@@ -1,4 +1,5 @@
 import React from 'react';
+import FileTree from './FileTree';
 
 const STATUS_COLORS = {
   active:   'bg-nock-green',
@@ -16,6 +17,9 @@ export default function Sidebar({
   onRefresh,
   activeView,
   onViewChange,
+  activeProjectPath,
+  onFileClick,
+  onCtrlPFocus,
 }) {
   return (
     <div
@@ -33,6 +37,22 @@ export default function Sidebar({
       {/* Sessions list */}
       {!collapsed && (
         <div className="flex-1 overflow-y-auto">
+          {activeProjectPath && (
+            <div className="px-1 pt-3 pb-2 border-b border-nock-border" style={{ maxHeight: '40%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div className="px-2 mb-2 flex items-center justify-between">
+                <span className="font-mono text-[9px] text-nock-text-muted uppercase tracking-widest">
+                  // Files
+                </span>
+                <span className="font-mono text-[8px] text-nock-text-muted bg-nock-card px-1.5 py-0.5 rounded">Ctrl+P</span>
+              </div>
+              <FileTree
+                rootPath={activeProjectPath}
+                onFileClick={onFileClick}
+                onCtrlPFocus={onCtrlPFocus}
+              />
+            </div>
+          )}
+
           <div className="px-3 pt-4 pb-2">
             <div className="flex items-center justify-between mb-3">
               <span className="font-mono text-[9px] text-nock-text-muted uppercase tracking-widest">
