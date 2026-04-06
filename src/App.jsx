@@ -7,6 +7,7 @@ import ActionToolbar from './components/ActionToolbar';
 import TerminalView from './components/TerminalView';
 import SplitPane from './components/SplitPane';
 import AIChatPanel from './components/AIChatPanel';
+import EditorPane from './components/EditorPane';
 import Settings from './components/Settings';
 
 export default function App() {
@@ -325,9 +326,13 @@ export default function App() {
                           active={tab.id === activeTabId && view === 'terminal'}
                         />
                       ) : tab.splitContent?.type === 'editor' ? (
-                        <div className="flex-1 bg-nock-card text-nock-text-dim flex items-center justify-center text-sm">
-                          Editor — will be connected in Task 8
-                        </div>
+                        <EditorPane
+                          files={tab.splitContent.files}
+                          activeFile={tab.splitContent.activeFile}
+                          onActiveFileChange={setActiveEditorFile}
+                          onClose={closeSplit}
+                          onCloseFile={closeEditorFile}
+                        />
                       ) : null
                     }
                   >
