@@ -37,29 +37,68 @@ class PortScanner {
       const output = execSync('netstat -ano -p TCP', {
         timeout: 5000,
         encoding: 'utf-8',
+        windowsHide: true,
       });
 
       const lines = output.split('\n');
-      const listening = new Set();
+      const portPidMap = new Map();
 
       for (const line of lines) {
         if (line.includes('LISTENING')) {
-          const match = line.match(/:(\d+)\s/);
+          const match = line.match(/:(\d+)\s+\S+\s+(\d+)/);
           if (match) {
-            listening.add(parseInt(match[1], 10));
+            portPidMap.set(parseInt(match[1], 10), parseInt(match[2], 10));
           }
         }
       }
 
+      const pidsToResolve = new Set();
+      for (const { port } of this.knownPorts) {
+        if (portPidMap.has(port)) {
+          pidsToResolve.add(portPidMap.get(port));
+        }
+      }
+
+      const processNames = this._resolveProcessNames(pidsToResolve);
+
       for (const { port, label } of this.knownPorts) {
-        if (listening.has(port)) {
-          activePorts.push({ port, label, url: `http://localhost:${port}` });
+        if (portPidMap.has(port)) {
+          const pid = portPidMap.get(port);
+          activePorts.push({
+            port,
+            label,
+            url: `http://localhost:${port}`,
+            pid,
+            processName: processNames.get(pid) || null,
+          });
         }
       }
     } catch {
       // netstat may fail
     }
     return activePorts;
+  }
+
+  _resolveProcessNames(pids) {
+    const names = new Map();
+    if (pids.size === 0) return names;
+
+    try {
+      for (const pid of pids) {
+        const output = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, {
+          timeout: 3000,
+          encoding: 'utf-8',
+          windowsHide: true,
+        });
+        const match = output.match(/"([^"]+)"/);
+        if (match) {
+          names.set(pid, match[1]);
+        }
+      }
+    } catch {
+      // tasklist may fail
+    }
+    return names;
   }
 
   _scanUnix() {

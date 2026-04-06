@@ -86,7 +86,9 @@ export default function Sidebar({
                   <span className="w-1.5 h-1.5 rounded-full bg-nock-accent-cyan shrink-0 shadow-glow-cyan" />
                   <div className="min-w-0 flex-1">
                     <p className="font-mono text-[11px] text-nock-text group-hover:text-white transition-colors tabular-nums">:{port.port}</p>
-                    <p className="text-[9px] text-nock-text-muted truncate">{port.label}</p>
+                    <p className="text-[9px] text-nock-text-muted truncate">
+                      {port.processName ? `${port.processName} · ${port.label}` : port.label}
+                    </p>
                   </div>
                 </button>
               ))}
