@@ -6,6 +6,9 @@ const SessionDiscovery = require('./session-discovery');
 const OllamaClient = require('./ollama-client');
 const ClaudeCodeClient = require('./claude-code-client');
 const PortScanner = require('./port-scanner');
+const FileService = require('./file-service');
+const FileWatcher = require('./file-watcher');
+const ProcessDetector = require('./process-detector');
 
 const store = new Store({
   defaults: {
@@ -14,6 +17,14 @@ const store = new Store({
     claudeCodePath: '',
     maraBriefPath: '',
     terminalFontSize: 14,
+    terminalFontFamily: "'JetBrains Mono', 'Consolas', monospace",
+    editorFontFamily: "'JetBrains Mono', 'Consolas', monospace",
+    editorFontSize: 13,
+    editorMinimap: false,
+    editorWordWrap: false,
+    fileTreeOpen: true,
+    showDotfiles: false,
+    theme: 'pitch-black',
     launchAtStartup: false,
     sidebarCollapsed: false,
     devRoots: process.platform === 'win32' ? ['C:\\Dev'] : [],
@@ -28,6 +39,9 @@ let sessionDiscovery = null;
 let ollamaClient = null;
 let claudeCodeClient = null;
 let portScanner = null;
+let fileService = null;
+let fileWatcher = null;
+let processDetector = null;
 
 const isDev = !app.isPackaged;
 
@@ -138,6 +152,9 @@ function initServices() {
   ollamaClient = new OllamaClient(store.get('ollamaUrl'));
   claudeCodeClient = new ClaudeCodeClient(store.get('claudeCodePath'));
   portScanner = new PortScanner();
+  fileService = new FileService(store);
+  fileWatcher = new FileWatcher(fileService);
+  processDetector = new ProcessDetector(terminalManager);
 }
 
 function registerIPC() {
@@ -226,9 +243,34 @@ function registerIPC() {
     }
   });
 
-  // Shell / external
+  // File operations
+  ipcMain.handle('files:tree', (_, dirPath) => {
+    return fileService.tree(dirPath);
+  });
+  ipcMain.handle('files:read', (_, filePath) => {
+    return fileService.read(filePath);
+  });
+  ipcMain.handle('files:write', (_, { filePath, content }) => {
+    return fileService.write(filePath, content);
+  });
+  ipcMain.handle('files:stat', (_, filePath) => {
+    return fileService.stat(filePath);
+  });
+  ipcMain.handle('files:gitStatus', (_, dirPath) => {
+    return fileService.gitStatus(dirPath);
+  });
+  ipcMain.on('files:watch', (_, dirPath) => {
+    fileWatcher.watch(dirPath);
+  });
+  ipcMain.on('files:stopWatch', () => {
+    fileWatcher.stop();
+  });
+
+  // Shell / external — restrict to http/https URLs
   ipcMain.on('shell:openExternal', (_, url) => {
-    shell.openExternal(url);
+    if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+      shell.openExternal(url);
+    }
   });
 
   // Clipboard (routed via IPC so renderer doesn't need permission prompts)
@@ -246,12 +288,26 @@ function wireTerminalEvents() {
   });
 }
 
+function wireFileEvents() {
+  fileWatcher.on('changed', (event) => {
+    mainWindow?.webContents.send('files:changed', event);
+  });
+  fileWatcher.on('gitStatus', (status) => {
+    mainWindow?.webContents.send('files:gitStatus', status);
+  });
+  processDetector.on('status', (status) => {
+    mainWindow?.webContents.send('process:status', status);
+  });
+}
+
 app.whenReady().then(() => {
   initServices();
   createWindow();
   createTray();
   registerIPC();
   wireTerminalEvents();
+  wireFileEvents();
+  processDetector.start();
 
   // Global shortcut: Ctrl+Shift+T to toggle window
   globalShortcut.register('Control+Shift+T', toggleWindow);
@@ -271,6 +327,8 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   terminalManager?.destroyAll();
+  fileWatcher?.stop();
+  processDetector?.stop();
 });
 
 app.on('before-quit', () => {

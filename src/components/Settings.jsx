@@ -6,6 +6,14 @@ export default function Settings() {
     claudeCodePath: '',
     maraBriefPath: '',
     terminalFontSize: 14,
+    terminalFontFamily: "'JetBrains Mono', 'Consolas', monospace",
+    editorFontFamily: "'JetBrains Mono', 'Consolas', monospace",
+    editorFontSize: 13,
+    editorMinimap: false,
+    editorWordWrap: false,
+    fileTreeOpen: true,
+    showDotfiles: false,
+    theme: 'pitch-black',
     launchAtStartup: false,
     devRoots: [],
     projectSkipList: [],
@@ -123,6 +131,18 @@ export default function Settings() {
         </Section>
 
         <Section num="04" title="Terminal">
+          <Field label="Font Family">
+            <select
+              value={settings.terminalFontFamily}
+              onChange={(e) => updateSetting('terminalFontFamily', e.target.value)}
+              className="w-full bg-nock-card border border-nock-border rounded px-3 py-2 text-sm text-nock-text font-mono focus:outline-none focus:border-nock-accent-blue"
+            >
+              <option value="'JetBrains Mono', 'Consolas', monospace">JetBrains Mono</option>
+              <option value="'Consolas', monospace">Consolas</option>
+              <option value="'Cascadia Code', monospace">Cascadia Code</option>
+              <option value="'Courier New', monospace">Courier New</option>
+            </select>
+          </Field>
           <Field label="Font Size">
             <div className="flex items-center gap-4">
               <input
@@ -140,7 +160,96 @@ export default function Settings() {
           </Field>
         </Section>
 
-        <Section num="05" title="General">
+        <Section num="05" title="Editor">
+          <Field label="Font Family">
+            <select
+              value={settings.editorFontFamily}
+              onChange={(e) => updateSetting('editorFontFamily', e.target.value)}
+              className="w-full bg-nock-card border border-nock-border rounded px-3 py-2 text-sm text-nock-text font-mono focus:outline-none focus:border-nock-accent-blue"
+            >
+              <option value="'JetBrains Mono', 'Consolas', monospace">JetBrains Mono</option>
+              <option value="'Consolas', monospace">Consolas</option>
+              <option value="'Cascadia Code', monospace">Cascadia Code</option>
+              <option value="'Courier New', monospace">Courier New</option>
+            </select>
+          </Field>
+          <Field label="Font Size">
+            <div className="flex items-center gap-4">
+              <input
+                type="range"
+                min="10"
+                max="24"
+                value={settings.editorFontSize}
+                onChange={(e) => updateSetting('editorFontSize', parseInt(e.target.value))}
+                className="flex-1 accent-[#3B6FD4]"
+              />
+              <span className="font-mono text-sm text-nock-text tabular-nums w-10 text-right">
+                {settings.editorFontSize}px
+              </span>
+            </div>
+          </Field>
+          <Field label="Minimap">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.editorMinimap}
+                onChange={(e) => updateSetting('editorMinimap', e.target.checked)}
+                className="w-4 h-4 rounded border-nock-border bg-nock-card accent-[#3B6FD4]"
+              />
+              <span className="text-sm text-nock-text">Show minimap in editor</span>
+            </label>
+          </Field>
+          <Field label="Word Wrap">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.editorWordWrap}
+                onChange={(e) => updateSetting('editorWordWrap', e.target.checked)}
+                className="w-4 h-4 rounded border-nock-border bg-nock-card accent-[#3B6FD4]"
+              />
+              <span className="text-sm text-nock-text">Wrap long lines</span>
+            </label>
+          </Field>
+        </Section>
+
+        <Section num="06" title="File Tree">
+          <Field label="Default State">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.fileTreeOpen}
+                onChange={(e) => updateSetting('fileTreeOpen', e.target.checked)}
+                className="w-4 h-4 rounded border-nock-border bg-nock-card accent-[#3B6FD4]"
+              />
+              <span className="text-sm text-nock-text">Open file tree by default</span>
+            </label>
+          </Field>
+          <Field label="Dotfiles">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.showDotfiles}
+                onChange={(e) => updateSetting('showDotfiles', e.target.checked)}
+                className="w-4 h-4 rounded border-nock-border bg-nock-card accent-[#3B6FD4]"
+              />
+              <span className="text-sm text-nock-text">Show dotfiles in file tree</span>
+            </label>
+          </Field>
+        </Section>
+
+        <Section num="07" title="Theme">
+          <Field label="Theme" description="More themes coming soon.">
+            <select
+              value={settings.theme}
+              disabled
+              className="w-full bg-nock-card border border-nock-border rounded px-3 py-2 text-sm text-nock-text font-mono opacity-60"
+            >
+              <option value="pitch-black">Pitch Black</option>
+            </select>
+          </Field>
+        </Section>
+
+        <Section num="08" title="General">
           <Field label="Launch at Startup">
             <label className="flex items-center gap-2.5 cursor-pointer">
               <input
@@ -154,15 +263,22 @@ export default function Settings() {
           </Field>
         </Section>
 
-        <Section num="06" title="Shortcuts">
+        <Section num="09" title="Shortcuts">
           <div className="space-y-2.5">
             <Shortcut keys="Ctrl+T" action="New terminal tab" />
-            <Shortcut keys="Ctrl+W" action="Close active tab" />
+            <Shortcut keys="Ctrl+W" action="Close editor tab or split" />
+            <Shortcut keys="Ctrl+B" action="Toggle sidebar" />
+            <Shortcut keys="Ctrl+D" action="Dashboard" />
+            <Shortcut keys="Ctrl+P" action="Quick file finder" />
             <Shortcut keys="Ctrl+1-9" action="Switch to tab N" />
+            <Shortcut keys="Ctrl+Tab" action="Next tab" />
+            <Shortcut keys="Ctrl+Shift+Tab" action="Previous tab" />
             <Shortcut keys="Ctrl+Shift+A" action="Toggle AI chat panel" />
+            <Shortcut keys="Ctrl+Shift+D" action="Split terminal" />
             <Shortcut keys="Ctrl+Shift+T" action="Toggle window (global)" />
-            <Shortcut keys="Ctrl+C" action="Copy (when selection exists, else SIGINT)" />
-            <Shortcut keys="Ctrl+V" action="Paste from clipboard" />
+            <Shortcut keys="Ctrl+S" action="Save file (editor)" />
+            <Shortcut keys="Ctrl+`" action="Focus terminal" />
+            <Shortcut keys="F11" action="Fullscreen" />
           </div>
         </Section>
       </div>

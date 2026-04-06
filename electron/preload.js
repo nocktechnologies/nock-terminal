@@ -71,4 +71,34 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     read: () => ipcRenderer.invoke('clipboard:read'),
     write: (text) => ipcRenderer.send('clipboard:write', text),
   },
+
+  // File operations
+  files: {
+    tree: (dirPath) => ipcRenderer.invoke('files:tree', dirPath),
+    read: (filePath) => ipcRenderer.invoke('files:read', filePath),
+    write: (filePath, content) => ipcRenderer.invoke('files:write', { filePath, content }),
+    stat: (filePath) => ipcRenderer.invoke('files:stat', filePath),
+    gitStatus: (dirPath) => ipcRenderer.invoke('files:gitStatus', dirPath),
+    watch: (dirPath) => ipcRenderer.send('files:watch', dirPath),
+    stopWatch: () => ipcRenderer.send('files:stopWatch'),
+    onChanged: (callback) => {
+      const handler = (_, event) => callback(event);
+      ipcRenderer.on('files:changed', handler);
+      return () => ipcRenderer.removeListener('files:changed', handler);
+    },
+    onGitStatus: (callback) => {
+      const handler = (_, status) => callback(status);
+      ipcRenderer.on('files:gitStatus', handler);
+      return () => ipcRenderer.removeListener('files:gitStatus', handler);
+    },
+  },
+
+  // Process detection
+  process: {
+    onStatus: (callback) => {
+      const handler = (_, status) => callback(status);
+      ipcRenderer.on('process:status', handler);
+      return () => ipcRenderer.removeListener('process:status', handler);
+    },
+  },
 });

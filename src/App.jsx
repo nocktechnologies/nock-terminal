@@ -3,8 +3,11 @@ import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import TabBar from './components/TabBar';
+import ActionToolbar from './components/ActionToolbar';
 import TerminalView from './components/TerminalView';
+import SplitPane from './components/SplitPane';
 import AIChatPanel from './components/AIChatPanel';
+import EditorPane from './components/EditorPane';
 import Settings from './components/Settings';
 
 export default function App() {
@@ -15,6 +18,8 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [activePorts, setActivePorts] = useState([]);
+  const [processStatus, setProcessStatus] = useState({});
+  const [lastDataTimestamps, setLastDataTimestamps] = useState({});
 
   // Discover sessions on mount and periodically
   const refreshSessions = useCallback(async () => {
@@ -45,6 +50,20 @@ export default function App() {
     return () => clearInterval(interval);
   }, [refreshSessions, refreshPorts]);
 
+  useEffect(() => {
+    const cleanup = window.nockTerminal.process.onStatus((status) => {
+      setProcessStatus(prev => ({ ...prev, [status.tabId]: status }));
+    });
+    return cleanup;
+  }, []);
+
+  useEffect(() => {
+    const cleanup = window.nockTerminal.terminal.onData((id) => {
+      setLastDataTimestamps(prev => ({ ...prev, [id]: Date.now() }));
+    });
+    return cleanup;
+  }, []);
+
   // Open a terminal tab for a session
   const openTerminalTab = useCallback((session) => {
     const existingTab = tabs.find(t => t.sessionId === session.id);
@@ -62,6 +81,8 @@ export default function App() {
       branch: session.branch,
       status: session.status,
       cwd: session.path,
+      splitContent: null,
+      splitRatio: 0.5,
     };
 
     setTabs(prev => [...prev, newTab]);
@@ -79,6 +100,8 @@ export default function App() {
       branch: null,
       status: 'active',
       cwd: cwd || 'C:\\Users\\kkwil',
+      splitContent: null,
+      splitRatio: 0.5,
     };
 
     setTabs(prev => [...prev, newTab]);
@@ -103,21 +126,109 @@ export default function App() {
     window.nockTerminal.terminal.destroy(tabId);
   }, [activeTabId]);
 
+  const openFileInEditor = useCallback((filePath) => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId) return tab;
+      const existingFiles = tab.splitContent?.type === 'editor' ? tab.splitContent.files : [];
+      if (existingFiles.includes(filePath)) {
+        return {
+          ...tab,
+          splitContent: { type: 'editor', files: existingFiles, activeFile: filePath },
+        };
+      }
+      return {
+        ...tab,
+        splitContent: {
+          type: 'editor',
+          files: [...existingFiles, filePath],
+          activeFile: filePath,
+        },
+      };
+    }));
+  }, [activeTabId]);
+
+  const toggleTerminalSplit = useCallback(() => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId) return tab;
+      if (tab.splitContent?.type === 'terminal') {
+        window.nockTerminal.terminal.destroy(tab.splitContent.id);
+        return { ...tab, splitContent: null };
+      }
+      const splitId = `${tab.id}-split-${Date.now()}`;
+      return {
+        ...tab,
+        splitContent: { type: 'terminal', id: splitId },
+      };
+    }));
+  }, [activeTabId]);
+
+  const closeSplit = useCallback(() => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId) return tab;
+      if (tab.splitContent?.type === 'terminal') {
+        window.nockTerminal.terminal.destroy(tab.splitContent.id);
+      }
+      return { ...tab, splitContent: null };
+    }));
+  }, [activeTabId]);
+
+  const closeEditorFile = useCallback((filePath) => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId || tab.splitContent?.type !== 'editor') return tab;
+      const remaining = tab.splitContent.files.filter(f => f !== filePath);
+      if (remaining.length === 0) {
+        return { ...tab, splitContent: null };
+      }
+      const activeFile = tab.splitContent.activeFile === filePath ? remaining[remaining.length - 1] : tab.splitContent.activeFile;
+      return {
+        ...tab,
+        splitContent: { ...tab.splitContent, files: remaining, activeFile },
+      };
+    }));
+  }, [activeTabId]);
+
+  const setActiveEditorFile = useCallback((filePath) => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== activeTabId || tab.splitContent?.type !== 'editor') return tab;
+      return {
+        ...tab,
+        splitContent: { ...tab.splitContent, activeFile: filePath },
+      };
+    }));
+  }, [activeTabId]);
+
+  const updateSplitRatio = useCallback((ratio) => {
+    if (!activeTabId) return;
+    setTabs(prev => prev.map(tab => tab.id === activeTabId ? { ...tab, splitRatio: ratio } : tab));
+  }, [activeTabId]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ctrl+T: New tab
-      if (e.ctrlKey && e.key === 't' && !e.shiftKey) {
+      const isCtrl = e.ctrlKey || e.metaKey;
+
+      // Ctrl+T / Ctrl+N: New tab
+      if (isCtrl && (e.key === 't' || e.key === 'n') && !e.shiftKey) {
         e.preventDefault();
         openNewTab();
       }
-      // Ctrl+W: Close active tab
-      if (e.ctrlKey && e.key === 'w') {
+      // Ctrl+W: Close editor tab/split or close terminal tab
+      if (isCtrl && e.key === 'w' && !e.shiftKey) {
         e.preventDefault();
-        if (activeTabId) closeTab(activeTabId);
+        const tab = tabs.find(t => t.id === activeTabId);
+        if (tab?.splitContent) {
+          closeSplit();
+        } else if (activeTabId) {
+          closeTab(activeTabId);
+        }
       }
       // Ctrl+1-9: Switch tabs
-      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+      if (isCtrl && !e.shiftKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
         const index = parseInt(e.key) - 1;
         if (tabs[index]) {
@@ -125,16 +236,78 @@ export default function App() {
           setView('terminal');
         }
       }
+      // Ctrl+Tab: Next tab
+      if (isCtrl && e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault();
+        const idx = tabs.findIndex(t => t.id === activeTabId);
+        if (tabs.length > 0) {
+          const next = (idx + 1) % tabs.length;
+          setActiveTabId(tabs[next].id);
+          setView('terminal');
+        }
+      }
+      // Ctrl+Shift+Tab: Previous tab
+      if (isCtrl && e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        const idx = tabs.findIndex(t => t.id === activeTabId);
+        if (tabs.length > 0) {
+          const prev = (idx - 1 + tabs.length) % tabs.length;
+          setActiveTabId(tabs[prev].id);
+          setView('terminal');
+        }
+      }
       // Ctrl+Shift+A: Toggle AI chat
-      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+      if (isCtrl && e.shiftKey && e.key === 'A') {
         e.preventDefault();
         setChatOpen(prev => !prev);
+      }
+      // Ctrl+Shift+D: Toggle terminal split
+      if (isCtrl && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        toggleTerminalSplit();
+      }
+      // Ctrl+B: Toggle sidebar
+      if (isCtrl && e.key === 'b' && !e.shiftKey) {
+        e.preventDefault();
+        setSidebarCollapsed(prev => !prev);
+      }
+      // Ctrl+D: Dashboard
+      if (isCtrl && e.key === 'd' && !e.shiftKey) {
+        e.preventDefault();
+        setView('dashboard');
+      }
+      // Ctrl+P: Focus file filter
+      if (isCtrl && e.key === 'p' && !e.shiftKey) {
+        e.preventDefault();
+        ctrlPFocusRef.current?.();
+      }
+      // Ctrl+`: Toggle terminal focus
+      if (isCtrl && e.key === '`') {
+        e.preventDefault();
+        if (view !== 'terminal' && tabs.length > 0) {
+          setView('terminal');
+        }
+      }
+      // F11: Toggle maximize
+      if (e.key === 'F11') {
+        e.preventDefault();
+        window.nockTerminal.window.maximize();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tabs, activeTabId, openNewTab, closeTab]);
+  }, [tabs, activeTabId, openNewTab, closeTab, closeSplit, toggleTerminalSplit, view]);
+
+  const getSessionStatus = useCallback((tabId) => {
+    const proc = processStatus[tabId];
+    const lastData = lastDataTimestamps[tabId] || 0;
+    if (!proc?.hasClaude) return 'inactive';
+    if (Date.now() - lastData < 2000) return 'active';
+    return 'ready';
+  }, [processStatus, lastDataTimestamps]);
+
+  const ctrlPFocusRef = useRef(null);
 
   const activeTab = tabs.find(t => t.id === activeTabId);
 
@@ -157,63 +330,103 @@ export default function App() {
           onRefresh={refreshSessions}
           activeView={view}
           onViewChange={setView}
+          activeProjectPath={activeTab?.cwd || null}
+          onFileClick={openFileInEditor}
+          onCtrlPFocus={(fn) => { ctrlPFocusRef.current = fn; }}
         />
 
-        {/* Main content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {view === 'dashboard' && (
+        {/* Main content — all views always mounted, visibility controlled by CSS */}
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Dashboard */}
+          <div className={`absolute inset-0 ${view === 'dashboard' ? 'flex flex-col' : 'hidden'}`}>
             <Dashboard
               sessions={sessions}
               onSessionClick={openTerminalTab}
               onNewTerminal={openNewTab}
               onRefresh={refreshSessions}
             />
-          )}
+          </div>
 
-          {view === 'terminal' && (
-            <>
+          {/* Terminal area — always rendered so PTYs stay alive */}
+          <div className={`absolute inset-0 flex flex-col ${view === 'terminal' ? '' : 'hidden'}`}>
+            <div className="flex items-center border-b border-nock-border shrink-0">
               <TabBar
                 tabs={tabs}
                 activeTabId={activeTabId}
                 onTabClick={(id) => setActiveTabId(id)}
                 onTabClose={closeTab}
                 onNewTab={openNewTab}
+                getSessionStatus={getSessionStatus}
               />
-              <div className="flex-1 overflow-hidden relative">
-                {tabs.map(tab => (
-                  <div
-                    key={tab.id}
-                    className={`absolute inset-0 ${tab.id === activeTabId ? 'block' : 'hidden'}`}
+              <ActionToolbar
+                onSplit={toggleTerminalSplit}
+                onToggleSidebar={() => setSidebarCollapsed(prev => !prev)}
+                onToggleChat={() => setChatOpen(prev => !prev)}
+                onDashboard={() => setView('dashboard')}
+                sidebarOpen={!sidebarCollapsed}
+                chatOpen={chatOpen}
+                hasSplit={!!activeTab?.splitContent}
+              />
+            </div>
+            <div className="flex-1 overflow-hidden relative">
+              {tabs.map(tab => (
+                <div
+                  key={tab.id}
+                  className={`absolute inset-0 ${tab.id === activeTabId ? 'flex' : 'hidden'}`}
+                >
+                  <SplitPane
+                    defaultRatio={tab.splitRatio}
+                    onRatioChange={tab.id === activeTabId ? updateSplitRatio : undefined}
+                    rightPane={
+                      tab.splitContent?.type === 'terminal' ? (
+                        <TerminalView
+                          tabId={tab.splitContent.id}
+                          cwd={tab.cwd}
+                          active={tab.id === activeTabId && view === 'terminal'}
+                        />
+                      ) : tab.splitContent?.type === 'editor' ? (
+                        <EditorPane
+                          files={tab.splitContent.files}
+                          activeFile={tab.splitContent.activeFile}
+                          onActiveFileChange={setActiveEditorFile}
+                          onClose={closeSplit}
+                          onCloseFile={closeEditorFile}
+                        />
+                      ) : null
+                    }
                   >
                     <TerminalView
                       tabId={tab.id}
                       cwd={tab.cwd}
-                      active={tab.id === activeTabId}
+                      active={tab.id === activeTabId && view === 'terminal'}
                     />
+                  </SplitPane>
+                </div>
+              ))}
+              {tabs.length === 0 && view === 'terminal' && (
+                <div className="flex items-center justify-center h-full text-nock-text-dim">
+                  <div className="text-center">
+                    <p className="text-lg mb-2">No terminal tabs open</p>
+                    <p className="text-sm">Press <kbd className="px-2 py-1 bg-nock-card border border-nock-border rounded text-xs font-mono">Ctrl+T</kbd> to open a new tab</p>
                   </div>
-                ))}
-                {tabs.length === 0 && (
-                  <div className="flex items-center justify-center h-full text-nock-text-dim">
-                    <div className="text-center">
-                      <p className="text-lg mb-2">No terminal tabs open</p>
-                      <p className="text-sm">Press <kbd className="px-2 py-1 bg-nock-card border border-nock-border rounded text-xs font-mono">Ctrl+T</kbd> to open a new tab</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+                </div>
+              )}
+            </div>
+          </div>
 
-          {view === 'settings' && <Settings />}
+          {/* Settings */}
+          <div className={`absolute inset-0 overflow-y-auto ${view === 'settings' ? '' : 'hidden'}`}>
+            <Settings />
+          </div>
         </div>
 
         {/* AI Chat Panel */}
-        {chatOpen && (
+        <div className={chatOpen ? '' : 'hidden'}>
           <AIChatPanel
             onClose={() => setChatOpen(false)}
             activeSession={activeTab}
           />
-        )}
+        </div>
       </div>
 
       {/* Chat toggle button (when closed) */}

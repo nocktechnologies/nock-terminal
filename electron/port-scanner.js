@@ -37,29 +37,68 @@ class PortScanner {
       const output = execSync('netstat -ano -p TCP', {
         timeout: 5000,
         encoding: 'utf-8',
+        windowsHide: true,
       });
 
       const lines = output.split('\n');
-      const listening = new Set();
+      const portPidMap = new Map();
 
       for (const line of lines) {
         if (line.includes('LISTENING')) {
-          const match = line.match(/:(\d+)\s/);
+          const match = line.match(/:(\d+)\s+\S+\s+(\d+)/);
           if (match) {
-            listening.add(parseInt(match[1], 10));
+            portPidMap.set(parseInt(match[1], 10), parseInt(match[2], 10));
           }
         }
       }
 
-      for (const { port, label } of this.knownPorts) {
-        if (listening.has(port)) {
-          activePorts.push({ port, label, url: `http://localhost:${port}` });
+      const pidsToResolve = new Set();
+      for (const { port } of this.knownPorts) {
+        if (portPidMap.has(port)) {
+          pidsToResolve.add(portPidMap.get(port));
         }
       }
-    } catch {
-      // netstat may fail
+
+      const processNames = this._resolveProcessNames(pidsToResolve);
+
+      for (const { port, label } of this.knownPorts) {
+        if (portPidMap.has(port)) {
+          const pid = portPidMap.get(port);
+          activePorts.push({
+            port,
+            label,
+            url: `http://localhost:${port}`,
+            pid,
+            processName: processNames.get(pid) || null,
+          });
+        }
+      }
+    } catch (err) {
+      console.error('PortScanner: netstat scan failed:', err.message);
     }
     return activePorts;
+  }
+
+  _resolveProcessNames(pids) {
+    const names = new Map();
+    if (pids.size === 0) return names;
+
+    for (const pid of pids) {
+      try {
+        const output = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, {
+          timeout: 3000,
+          encoding: 'utf-8',
+          windowsHide: true,
+        });
+        const match = output.match(/"([^"]+)"/);
+        if (match) {
+          names.set(pid, match[1]);
+        }
+      } catch (err) {
+        console.warn(`PortScanner: tasklist failed for PID ${pid}:`, err.message);
+      }
+    }
+    return names;
   }
 
   _scanUnix() {
@@ -82,8 +121,8 @@ class PortScanner {
           activePorts.push({ port, label, url: `http://localhost:${port}` });
         }
       }
-    } catch {
-      // Command may fail
+    } catch (err) {
+      console.error('PortScanner: Unix scan failed:', err.message);
     }
     return activePorts;
   }

@@ -6,7 +6,7 @@ const STATUS_COLORS = {
   inactive: 'bg-nock-text-muted',
 };
 
-export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab }) {
+export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNewTab, getSessionStatus }) {
   const [contextMenu, setContextMenu] = useState(null);
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNe
   };
 
   return (
-    <div className="bg-nock-bg border-b border-nock-border flex items-center shrink-0 h-9 relative">
+    <div className="bg-nock-bg flex items-center shrink-0 h-9 relative flex-1">
       <div className="flex-1 flex items-center overflow-x-auto no-scrollbar">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
@@ -52,7 +52,14 @@ export default function TabBar({ tabs, activeTabId, onTabClick, onTabClose, onNe
               {/* Right border separator */}
               <div className="absolute right-0 top-2 bottom-2 w-px bg-nock-border" />
 
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_COLORS[tab.status] || STATUS_COLORS.active}`} />
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                (() => {
+                  const status = getSessionStatus?.(tab.id) || tab.status;
+                  if (status === 'ready') return 'bg-nock-green';
+                  if (status === 'active') return 'bg-nock-yellow animate-pulse-glow';
+                  return 'bg-red-400';
+                })()
+              }`} />
               <span className="text-[11px] truncate font-medium">{tab.title}</span>
               {tab.branch && (
                 <span className="font-mono text-[9px] text-nock-accent-blue truncate hidden sm:inline tracking-tight">
