@@ -140,7 +140,10 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-nock-bg overflow-hidden">
-      <TitleBar />
+      <TitleBar
+        sessionCount={sessions.length}
+        activeCount={sessions.filter(s => s.status === 'active').length}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}

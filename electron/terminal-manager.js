@@ -53,9 +53,27 @@ class TerminalManager extends EventEmitter {
 
   write(id, data) {
     const term = this.terminals.get(id);
-    if (term) {
+    if (!term) return;
+
+    // ConPTY on Windows can drop or corrupt large inputs sent in a single write.
+    // Chunk into 512-byte segments with 1ms spacing to stay within buffer limits.
+    const CHUNK_SIZE = 512;
+    if (data.length <= CHUNK_SIZE) {
       term.write(data);
+      return;
     }
+
+    let offset = 0;
+    const writeChunk = () => {
+      if (offset >= data.length || !this.terminals.has(id)) return;
+      const chunk = data.slice(offset, offset + CHUNK_SIZE);
+      term.write(chunk);
+      offset += CHUNK_SIZE;
+      if (offset < data.length) {
+        setTimeout(writeChunk, 1);
+      }
+    };
+    writeChunk();
   }
 
   resize(id, cols, rows) {
@@ -93,6 +111,44 @@ class TerminalManager extends EventEmitter {
 
   _defaultShell() {
     if (process.platform === 'win32') {
+      // Prefer PowerShell 7 (pwsh), fall back to Windows PowerShell 5.1, then cmd.
+      // NEVER use COMSPEC first — it points to cmd.exe, which can't see user's
+      // PowerShell profile functions (e.g. `cc`, `nockcc` wrappers).
+      const fs = require('fs');
+      const path = require('path');
+      const { spawnSync } = require('child_process');
+
+      // 1. Check standard install locations (fast, no subprocess)
+      const candidates = [
+        path.join(process.env.ProgramFiles || '', 'PowerShell', '7', 'pwsh.exe'),
+        path.join(process.env['ProgramFiles(x86)'] || '', 'PowerShell', '7', 'pwsh.exe'),
+        path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+      ];
+      for (const candidate of candidates) {
+        try {
+          if (fs.existsSync(candidate)) return candidate;
+        } catch { /* try next */ }
+      }
+
+      // 2. Resolve via PATH with `where` — catches winget, scoop, portable
+      //    installs, and anything else on %PATH% (e.g. user-managed pwsh).
+      for (const exe of ['pwsh.exe', 'powershell.exe']) {
+        try {
+          const res = spawnSync('where', [exe], {
+            encoding: 'utf-8',
+            windowsHide: true,
+            timeout: 3000,
+          });
+          if (res.status === 0 && res.stdout) {
+            const firstMatch = res.stdout.split(/\r?\n/).find(l => l.trim());
+            if (firstMatch && fs.existsSync(firstMatch.trim())) {
+              return firstMatch.trim();
+            }
+          }
+        } catch { /* try next */ }
+      }
+
+      // 3. Last resort: cmd.exe (user loses PS profile but terminal still works)
       return process.env.COMSPEC || 'powershell.exe';
     }
     return process.env.SHELL || '/bin/bash';
@@ -100,7 +156,10 @@ class TerminalManager extends EventEmitter {
 
   _defaultArgs(shell) {
     if (process.platform === 'win32') {
-      if (shell.toLowerCase().includes('powershell')) {
+      const lower = shell.toLowerCase();
+      // -NoLogo suppresses the banner. We intentionally do NOT pass -NoProfile
+      // so the user's $PROFILE loads (functions like `cc`, aliases, modules).
+      if (lower.includes('powershell') || lower.includes('pwsh')) {
         return ['-NoLogo'];
       }
       return [];

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, shell, clipboard } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 const TerminalManager = require('./terminal-manager');
@@ -16,6 +16,8 @@ const store = new Store({
     terminalFontSize: 14,
     launchAtStartup: false,
     sidebarCollapsed: false,
+    devRoots: process.platform === 'win32' ? ['C:\\Dev'] : [],
+    projectSkipList: ['Gym-App', 'github.com-kkwills13-nock-technologies-site'],
   },
 });
 
@@ -78,19 +80,15 @@ function createWindow() {
 }
 
 function createTray() {
-  // Create a simple 16x16 tray icon programmatically
-  const icon = nativeImage.createFromBuffer(
-    Buffer.alloc(16 * 16 * 4, 0), // Transparent placeholder
-    { width: 16, height: 16 }
-  );
-
-  // Try to load actual icon, fall back to empty
+  // Load the Nock logo and resize for tray (16x16 on Windows)
+  const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+  let trayIcon;
   try {
-    const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
-    tray = new Tray(nativeImage.createFromPath(iconPath));
+    trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
   } catch {
-    tray = new Tray(icon);
+    trayIcon = nativeImage.createFromBuffer(Buffer.alloc(16 * 16 * 4, 0), { width: 16, height: 16 });
   }
+  tray = new Tray(trayIcon);
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -133,7 +131,10 @@ function toggleWindow() {
 
 function initServices() {
   terminalManager = new TerminalManager();
-  sessionDiscovery = new SessionDiscovery();
+  sessionDiscovery = new SessionDiscovery({
+    devRoots: store.get('devRoots'),
+    skipList: store.get('projectSkipList'),
+  });
   ollamaClient = new OllamaClient(store.get('ollamaUrl'));
   claudeCodeClient = new ClaudeCodeClient(store.get('claudeCodePath'));
   portScanner = new PortScanner();
@@ -166,10 +167,7 @@ function registerIPC() {
     terminalManager.destroy(id);
   });
 
-  // Terminal data output — forwarded to renderer
-  terminalManager?.on?.('data', (id, data) => {
-    mainWindow?.webContents.send('terminal:data', { id, data });
-  });
+  // (Terminal data/exit events are wired in wireTerminalEvents() — not here)
 
   // Session discovery
   ipcMain.handle('sessions:discover', async () => {
@@ -220,12 +218,22 @@ function registerIPC() {
     if (key === 'claudeCodePath') {
       claudeCodeClient.setBinaryPath(value);
     }
+    if (key === 'devRoots' || key === 'projectSkipList') {
+      sessionDiscovery.setConfig({
+        devRoots: store.get('devRoots'),
+        skipList: store.get('projectSkipList'),
+      });
+    }
   });
 
   // Shell / external
   ipcMain.on('shell:openExternal', (_, url) => {
     shell.openExternal(url);
   });
+
+  // Clipboard (routed via IPC so renderer doesn't need permission prompts)
+  ipcMain.handle('clipboard:read', () => clipboard.readText());
+  ipcMain.on('clipboard:write', (_, text) => clipboard.writeText(text || ''));
 }
 
 // Wire up terminal data events after services init

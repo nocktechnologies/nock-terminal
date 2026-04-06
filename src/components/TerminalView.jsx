@@ -6,6 +6,31 @@ export default function TerminalView({ tabId, cwd, active }) {
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
   const [initialized, setInitialized] = useState(false);
+  const [contextMenu, setContextMenu] = useState(null); // { x, y } | null
+
+  // Paste clipboard content to the active pty
+  const pasteFromClipboard = async () => {
+    try {
+      const text = await window.nockTerminal.clipboard.read();
+      if (text) {
+        window.nockTerminal.terminal.write(tabId, text);
+      }
+    } catch (err) {
+      console.error('Clipboard read failed:', err);
+    }
+  };
+
+  // Copy the current terminal selection to clipboard
+  const copySelection = () => {
+    const term = terminalRef.current;
+    if (!term) return false;
+    const selection = term.getSelection();
+    if (selection) {
+      window.nockTerminal.clipboard.write(selection);
+      return true;
+    }
+    return false;
+  };
 
   useEffect(() => {
     let term = null;
@@ -63,6 +88,31 @@ export default function TerminalView({ tabId, cwd, active }) {
 
       term.loadAddon(fitAddon);
       term.loadAddon(webLinksAddon);
+
+      // Intercept Ctrl+C to copy-on-selection (fall through as SIGINT otherwise).
+      // Ctrl+V is handled natively by xterm via the browser paste event on its
+      // backing textarea — do NOT intercept it here or paste will fire twice.
+      term.attachCustomKeyEventHandler((e) => {
+        if (e.type !== 'keydown') return true;
+        if (!e.ctrlKey || e.altKey || e.metaKey) return true;
+
+        const key = e.key.toLowerCase();
+        if (key === 'c' && !e.shiftKey) {
+          if (term.hasSelection()) {
+            window.nockTerminal.clipboard.write(term.getSelection());
+            return false;
+          }
+          return true; // no selection → let SIGINT through
+        }
+        if (e.shiftKey && key === 'c') {
+          // Ctrl+Shift+C — always copy
+          if (term.hasSelection()) {
+            window.nockTerminal.clipboard.write(term.getSelection());
+          }
+          return false;
+        }
+        return true;
+      });
 
       term.open(containerRef.current);
       fitAddon.fit();
@@ -148,10 +198,111 @@ export default function TerminalView({ tabId, cwd, active }) {
     }
   }, [active]);
 
+  // Close context menu on any click / escape
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const onKey = (e) => { if (e.key === 'Escape') setContextMenu(null); };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [contextMenu]);
+
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    // Clamp menu position to viewport so it's never rendered off-screen
+    // near the right/bottom edges (menu is ~160×140px at default font).
+    const MENU_W = 160;
+    const MENU_H = 140;
+    const x = Math.max(0, Math.min(e.clientX, window.innerWidth - MENU_W - 4));
+    const y = Math.max(0, Math.min(e.clientY, window.innerHeight - MENU_H - 4));
+    setContextMenu({ x, y });
+  };
+
+  const hasSelection = terminalRef.current?.hasSelection?.() ?? false;
+
+  // Drag-and-drop: paste file paths (or text) into terminal
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    // Files → paste paths (quoted if they contain spaces)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const paths = Array.from(e.dataTransfer.files)
+        .map(f => f.path.includes(' ') ? `"${f.path}"` : f.path)
+        .join(' ');
+      window.nockTerminal.terminal.write(tabId, paths);
+      return;
+    }
+    // Plain text fallback
+    const text = e.dataTransfer.getData('text/plain');
+    if (text) {
+      window.nockTerminal.terminal.write(tabId, text);
+    }
+  };
+
   return (
     <div
       ref={containerRef}
+      onContextMenu={handleContextMenu}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
       className="terminal-container w-full h-full bg-nock-bg"
-    />
+    >
+      {contextMenu && (
+        <div
+          className="fixed bg-nock-card border border-nock-border rounded-lg shadow-xl py-1 z-50 min-w-[140px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              copySelection();
+              setContextMenu(null);
+            }}
+            disabled={!hasSelection}
+            className="w-full text-left px-3 py-1.5 text-xs text-nock-text hover:bg-nock-border/50 transition-colors disabled:opacity-40 disabled:hover:bg-transparent flex items-center justify-between"
+          >
+            <span>Copy</span>
+            <kbd className="text-[9px] text-nock-text-dim font-mono">Ctrl+C</kbd>
+          </button>
+          <button
+            onClick={() => {
+              pasteFromClipboard();
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs text-nock-text hover:bg-nock-border/50 transition-colors flex items-center justify-between"
+          >
+            <span>Paste</span>
+            <kbd className="text-[9px] text-nock-text-dim font-mono">Ctrl+V</kbd>
+          </button>
+          <div className="border-t border-nock-border my-1" />
+          <button
+            onClick={() => {
+              terminalRef.current?.selectAll();
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs text-nock-text hover:bg-nock-border/50 transition-colors flex items-center justify-between"
+          >
+            <span>Select All</span>
+            <kbd className="text-[9px] text-nock-text-dim font-mono">Ctrl+A</kbd>
+          </button>
+          <button
+            onClick={() => {
+              terminalRef.current?.clear();
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs text-nock-text hover:bg-nock-border/50 transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
