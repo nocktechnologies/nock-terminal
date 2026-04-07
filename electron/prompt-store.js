@@ -22,6 +22,14 @@ class PromptStore {
     }
   }
 
+  _safePath(id) {
+    const safe = String(id).replace(/[\/\\\.]+/g, '').slice(0, 50);
+    if (!safe) throw new Error('Invalid prompt ID');
+    const resolved = path.join(this.dir, `${safe}.md`);
+    if (!resolved.startsWith(this.dir)) throw new Error('Path traversal blocked');
+    return resolved;
+  }
+
   _parseFrontmatter(content) {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
     if (!match) {
@@ -95,7 +103,7 @@ class PromptStore {
   }
 
   get(id) {
-    const filePath = path.join(this.dir, `${id}.md`);
+    const filePath = this._safePath(id);
     try {
       const raw = fs.readFileSync(filePath, 'utf8');
       const parsed = this._parseFrontmatter(raw);
@@ -110,7 +118,7 @@ class PromptStore {
 
   save(id, { title, tags, body }) {
     const promptId = id || crypto.randomBytes(6).toString('hex');
-    const filePath = path.join(this.dir, `${promptId}.md`);
+    const filePath = this._safePath(promptId);
     const content = this._serialize({ title, tags, body });
 
     try {
@@ -123,7 +131,7 @@ class PromptStore {
   }
 
   delete(id) {
-    const filePath = path.join(this.dir, `${id}.md`);
+    const filePath = this._safePath(id);
     try {
       fs.unlinkSync(filePath);
       return { success: true };

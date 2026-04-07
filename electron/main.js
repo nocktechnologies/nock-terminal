@@ -125,8 +125,13 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist-react', 'index.html'));
   }
 
+  // Apply stored window settings
+  if (store.get('alwaysOnTop')) mainWindow.setAlwaysOnTop(true);
+  const opacity = store.get('windowOpacity');
+  if (opacity != null && opacity < 100) mainWindow.setOpacity(Math.max(0.7, opacity / 100));
+
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    if (!store.get('startMinimized')) mainWindow.show();
   });
 
   mainWindow.on('close', (e) => {
@@ -353,7 +358,14 @@ function registerIPC() {
     return store.get(key);
   });
   ipcMain.handle('settings:getAll', () => {
-    return store.store;
+    const all = { ...store.store };
+    if (all.telegramBotToken) all.telegramBotToken = '••••••••';
+    return all;
+  });
+  ipcMain.handle('settings:getSecure', (_, key) => {
+    const allowed = ['telegramBotToken'];
+    if (!allowed.includes(key)) return null;
+    return store.get(key);
   });
   ipcMain.on('settings:set', (_, { key, value }) => {
     store.set(key, value);

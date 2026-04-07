@@ -37,6 +37,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
     let fitAddon = null;
     let cleanupData = null;
     let cleanupExit = null;
+    let launchTimer = null;
 
     const init = async () => {
       // Dynamic import xterm (ESM modules)
@@ -53,12 +54,16 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
       const settings = await window.nockTerminal.settings.getAll();
       const fontSize = settings?.terminalFontSize ?? 16;
       const fontFamily = settings?.terminalFontFamily ?? "'JetBrains Mono', 'Consolas', monospace";
+      const cursorStyle = settings?.cursorStyle || 'block';
+      const cursorBlink = settings?.cursorBlink ?? true;
+      const scrollback = settings?.scrollbackSize || 5000;
 
       term = new Terminal({
-        cursorBlink: true,
-        cursorStyle: 'bar',
+        cursorBlink,
+        cursorStyle,
         fontSize,
         fontFamily,
+        scrollback,
         lineHeight: 1.2,
         theme: {
           background: pitchBlack.terminal.bg,
@@ -139,7 +144,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
       // If a launch command is specified, send it to the pty after a short
       // delay so the shell prompt has time to initialize.
       if (launchCommand) {
-        setTimeout(() => {
+        launchTimer = setTimeout(() => {
           window.nockTerminal.terminal.write(tabId, launchCommand + '\r');
         }, 500);
       }
@@ -172,6 +177,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
     init();
 
     return () => {
+      if (launchTimer) clearTimeout(launchTimer);
       if (cleanupData) cleanupData();
       if (cleanupExit) cleanupExit();
       if (term) {

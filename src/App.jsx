@@ -57,7 +57,7 @@ export default function App() {
     const checkOllama = async () => {
       try {
         const result = await window.nockTerminal.ai.ollama.status();
-        setOllamaStatus(!!result);
+        setOllamaStatus(result?.connected === true);
       } catch {
         setOllamaStatus(false);
       }
@@ -117,7 +117,7 @@ export default function App() {
       title: 'Terminal',
       branch: null,
       status: 'active',
-      cwd: cwd || 'C:\\Users\\kkwil',
+      cwd: cwd || undefined,
       splitContent: null,
       splitRatio: 0.5,
     };
@@ -125,7 +125,7 @@ export default function App() {
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(tabId);
     setView('terminal');
-    window.nockTerminal.sessionHistory.start(tabId, { project: 'Terminal', shell: '', cwd: cwd || 'C:\\Users\\kkwil' });
+    window.nockTerminal.sessionHistory.start(tabId, { project: 'Terminal', shell: '', cwd: cwd || undefined });
   }, []);
 
   // Open a new terminal tab with Claude Code launched
@@ -137,7 +137,7 @@ export default function App() {
       title: 'Kit (Claude)',
       branch: null,
       status: 'active',
-      cwd: cwd || 'C:\\Users\\kkwil',
+      cwd: cwd || undefined,
       splitContent: null,
       splitRatio: 0.5,
       launchCommand: 'claude',
@@ -145,6 +145,7 @@ export default function App() {
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(tabId);
     setView('terminal');
+    window.nockTerminal.sessionHistory.start(tabId, { project: 'Kit (Claude)', shell: 'claude', cwd: cwd || undefined });
   }, []);
 
   const closeTab = useCallback((tabId) => {

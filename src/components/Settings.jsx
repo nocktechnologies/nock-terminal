@@ -259,26 +259,15 @@ export default function Settings() {
   // -----------------------------------------------------------------------
   const [telegramTestStatus, setTelegramTestStatus] = useState(null);
   const testTelegram = useCallback(async () => {
-    const token = settings.telegramBotToken;
-    const chatId = settings.telegramChatId;
-    if (!token || !chatId) {
-      setTelegramTestStatus('Missing bot token or chat ID');
-      return;
-    }
     setTelegramTestStatus('sending...');
     try {
-      const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text: 'Nock Terminal test notification' }),
-      });
-      const data = await resp.json();
-      setTelegramTestStatus(data.ok ? 'Sent successfully' : `Error: ${data.description}`);
+      const result = await window.nockTerminal.telegram.test();
+      setTelegramTestStatus(result.success ? 'Sent successfully' : `Error: ${result.error || 'Unknown error'}`);
     } catch (err) {
       setTelegramTestStatus(`Failed: ${err.message}`);
     }
     setTimeout(() => setTelegramTestStatus(null), 4000);
-  }, [settings.telegramBotToken, settings.telegramChatId]);
+  }, []);
 
   // -----------------------------------------------------------------------
   // Render section content

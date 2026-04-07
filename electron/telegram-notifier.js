@@ -136,14 +136,18 @@ class TelegramNotifier {
     });
   }
 
+  _escapeHtml(text) {
+    return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   async notify(eventType, details) {
     if (!this.shouldNotify(eventType)) {
       return { success: false, error: 'Notification suppressed' };
     }
 
-    const label = eventType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const label = this._escapeHtml(eventType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
     const timestamp = new Date().toLocaleString();
-    const text = `\u{1F514} <b>Nock Terminal</b>\n${label}: ${details}\n<i>${timestamp}</i>`;
+    const text = `\u{1F514} <b>Nock Terminal</b>\n${label}: ${this._escapeHtml(details)}\n<i>${timestamp}</i>`;
 
     return this.send(text);
   }

@@ -19,6 +19,12 @@ class SessionHistory {
     }
   }
 
+  _safeFilename(startTime, tabId) {
+    const safeTime = String(startTime).replace(/[\/\\:*?"<>|]/g, '-');
+    const safeTab = String(tabId).replace(/[\/\\:*?"<>|]/g, '-');
+    return `${safeTime}-${safeTab}`;
+  }
+
   startSession(tabId, metadata) {
     const session = {
       metadata: {
@@ -65,7 +71,7 @@ class SessionHistory {
     session.metadata.endTime = Date.now();
     session.metadata.exitCode = exitCode ?? null;
 
-    const prefix = `${session.metadata.startTime}-${tabId}`;
+    const prefix = this._safeFilename(session.metadata.startTime, tabId);
     const metaPath = path.join(this.dir, `${prefix}.json`);
     const outputPath = path.join(this.dir, `${prefix}.txt`);
 
@@ -114,7 +120,7 @@ class SessionHistory {
   }
 
   getOutput(startTime, tabId) {
-    const prefix = `${startTime}-${tabId}`;
+    const prefix = this._safeFilename(startTime, tabId);
     const outputPath = path.join(this.dir, `${prefix}.txt`);
     try {
       return fs.readFileSync(outputPath, 'utf8');
