@@ -33,6 +33,9 @@ class TerminalManager extends EventEmitter {
         rows: 30,
         cwd: cwd || os.homedir(),
         env: { ...process.env, TERM: 'xterm-256color' },
+        // ConPTY's console list agent crashes with AttachConsole on Node 18+
+        // (Electron 28). Disable it to use the stable winpty backend instead.
+        useConpty: process.platform !== 'win32',
       });
 
       ptyProcess.onData((data) => {
@@ -78,7 +81,7 @@ class TerminalManager extends EventEmitter {
 
   resize(id, cols, rows) {
     const term = this.terminals.get(id);
-    if (term) {
+    if (term && cols > 0 && rows > 0) {
       try {
         term.resize(cols, rows);
       } catch {

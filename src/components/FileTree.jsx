@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ContextMenu from './ContextMenu';
 
 const GIT_STATUS_COLORS = {
   M: 'bg-nock-yellow',
@@ -45,19 +46,78 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
     }
   }, [onCtrlPFocus]);
 
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    window.addEventListener('click', close);
-    return () => window.removeEventListener('click', close);
-  }, [contextMenu]);
-
   const handleContextMenu = (e, node) => {
     e.preventDefault();
     e.stopPropagation();
-    const x = Math.min(e.clientX, window.innerWidth - 180);
-    const y = Math.min(e.clientY, window.innerHeight - 120);
-    setContextMenu({ x, y, node });
+    setContextMenu({ x: e.clientX, y: e.clientY, node });
+  };
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const buildMenuItems = (node) => {
+    const isFile = node.type === 'file';
+    const items = [];
+
+    if (isFile) {
+      items.push({
+        label: 'Open in Editor',
+        icon: (
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+        ),
+        onClick: () => onFileClick(node.path),
+      });
+    }
+
+    items.push({
+      label: 'Open in Explorer',
+      icon: (
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+        </svg>
+      ),
+      onClick: () => {
+        window.nockTerminal.shell.showItemInFolder?.(node.path);
+      },
+    });
+
+    items.push({ separator: true });
+
+    items.push({
+      label: 'Copy Path',
+      icon: (
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+        </svg>
+      ),
+      onClick: () => {
+        window.nockTerminal.clipboard.write(node.path);
+      },
+    });
+
+    if (isFile) {
+      items.push({
+        label: 'Copy Content',
+        icon: (
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        ),
+        onClick: async () => {
+          try {
+            const content = await window.nockTerminal.files.read(node.path);
+            window.nockTerminal.clipboard.write(content || '');
+          } catch (err) {
+            console.error('Failed to copy file content:', err);
+          }
+        },
+      });
+    }
+
+    return items;
   };
 
   const filterNodes = (nodes) => {
@@ -105,41 +165,14 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
         ))}
       </div>
 
+      {/* Context menu */}
       {contextMenu && (
-        <div
-          className="fixed bg-nock-card border border-nock-border rounded-lg shadow-xl py-1 z-50 min-w-[160px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <button
-            onClick={() => { onFileClick(contextMenu.node.path); setContextMenu(null); }}
-            className="w-full text-left px-3 py-1.5 text-[10px] text-nock-text hover:bg-nock-border/50 transition-colors"
-          >
-            Open in Editor
-          </button>
-          <button
-            onClick={() => { window.nockTerminal.shell.openExternal(contextMenu.node.path); setContextMenu(null); }}
-            className="w-full text-left px-3 py-1.5 text-[10px] text-nock-text hover:bg-nock-border/50 transition-colors"
-          >
-            Open in External Editor
-          </button>
-          <div className="border-t border-nock-border my-1" />
-          <button
-            onClick={() => { window.nockTerminal.clipboard.write(contextMenu.node.path); setContextMenu(null); }}
-            className="w-full text-left px-3 py-1.5 text-[10px] text-nock-text hover:bg-nock-border/50 transition-colors"
-          >
-            Copy Path
-          </button>
-          <button
-            onClick={() => {
-              const parentDir = contextMenu.node.path.replace(/[/\\][^/\\]+$/, '');
-              window.nockTerminal.shell.openExternal(parentDir);
-              setContextMenu(null);
-            }}
-            className="w-full text-left px-3 py-1.5 text-[10px] text-nock-text hover:bg-nock-border/50 transition-colors"
-          >
-            Reveal in Explorer
-          </button>
-        </div>
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={buildMenuItems(contextMenu.node)}
+          onClose={closeContextMenu}
+        />
       )}
     </div>
   );

@@ -414,6 +414,13 @@ function registerIPC() {
     }
   });
 
+  // Shell / show item in folder (Explorer / Finder)
+  ipcMain.on('shell:showItemInFolder', (_, filePath) => {
+    if (typeof filePath === 'string' && filePath.length > 0) {
+      shell.showItemInFolder(filePath);
+    }
+  });
+
   // Clipboard (routed via IPC so renderer doesn't need permission prompts)
   ipcMain.handle('clipboard:read', () => clipboard.readText());
   ipcMain.on('clipboard:write', (_, text) => clipboard.writeText(text || ''));

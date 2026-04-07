@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld('nockTerminal', {
   // Shell
   shell: {
     openExternal: (url) => ipcRenderer.send('shell:openExternal', url),
+    showItemInFolder: (filePath) => ipcRenderer.send('shell:showItemInFolder', filePath),
   },
 
   // Clipboard

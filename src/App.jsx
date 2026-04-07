@@ -149,6 +149,8 @@ export default function App() {
 
   const closeTab = useCallback((tabId) => {
     setTabs(prev => {
+      const tab = prev.find(t => t.id === tabId);
+      if (tab?.pinned) return prev; // Don't close pinned tabs
       const filtered = prev.filter(t => t.id !== tabId);
       if (activeTabId === tabId) {
         if (filtered.length > 0) {
@@ -160,9 +162,39 @@ export default function App() {
       }
       return filtered;
     });
-    // Destroy the terminal process
-    window.nockTerminal.terminal.destroy(tabId);
-  }, [activeTabId]);
+    // Destroy the terminal process (only if not pinned — the setTabs above is a no-op for pinned)
+    const tab = tabs.find(t => t.id === tabId);
+    if (!tab?.pinned) {
+      window.nockTerminal.terminal.destroy(tabId);
+    }
+  }, [activeTabId, tabs]);
+
+  const renameTab = useCallback((tabId, title) => {
+    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, title } : t));
+  }, []);
+
+  const pinTab = useCallback((tabId) => {
+    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, pinned: !t.pinned } : t));
+  }, []);
+
+  const duplicateTab = useCallback((tab) => {
+    const tabId = `tab-${Date.now()}`;
+    const newTab = { ...tab, id: tabId, pinned: false };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(tabId);
+  }, []);
+
+  const reorderTabs = useCallback((dragId, targetId) => {
+    setTabs(prev => {
+      const arr = [...prev];
+      const dragIdx = arr.findIndex(t => t.id === dragId);
+      const targetIdx = arr.findIndex(t => t.id === targetId);
+      if (dragIdx === -1 || targetIdx === -1) return prev;
+      const [dragged] = arr.splice(dragIdx, 1);
+      arr.splice(targetIdx, 0, dragged);
+      return arr;
+    });
+  }, []);
 
   const openFileInEditor = useCallback((filePath) => {
     if (!activeTabId) return;
@@ -398,6 +430,11 @@ export default function App() {
                 onTabClose={closeTab}
                 onNewTab={openNewTab}
                 getSessionStatus={getSessionStatus}
+                onTabRename={renameTab}
+                onTabPin={pinTab}
+                onTabDuplicate={duplicateTab}
+                onSplit={toggleTerminalSplit}
+                onTabReorder={reorderTabs}
               />
               <ActionToolbar
                 onSplit={toggleTerminalSplit}
