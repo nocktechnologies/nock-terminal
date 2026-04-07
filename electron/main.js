@@ -10,6 +10,7 @@ const FileService = require('./file-service');
 const FileWatcher = require('./file-watcher');
 const ProcessDetector = require('./process-detector');
 const TelegramNotifier = require('./telegram-notifier');
+const ProjectProfiles = require('./project-profiles');
 
 const store = new Store({
   defaults: {
@@ -87,6 +88,7 @@ let fileService = null;
 let fileWatcher = null;
 let processDetector = null;
 let telegramNotifier = null;
+let projectProfiles = null;
 
 const isDev = !app.isPackaged;
 
@@ -201,6 +203,7 @@ function initServices() {
   fileWatcher = new FileWatcher(fileService);
   processDetector = new ProcessDetector(terminalManager);
   telegramNotifier = new TelegramNotifier(store);
+  projectProfiles = new ProjectProfiles();
 }
 
 function registerIPC() {
@@ -415,6 +418,20 @@ function registerIPC() {
   });
   ipcMain.handle('telegram:notify', async (_, { eventType, details }) => {
     return telegramNotifier.notify(eventType, details);
+  });
+
+  // Project profiles
+  ipcMain.handle('profiles:get', (_, projectPath) => {
+    return projectProfiles.get(projectPath);
+  });
+  ipcMain.handle('profiles:save', (_, { projectPath, profile }) => {
+    return projectProfiles.save(projectPath, profile);
+  });
+  ipcMain.handle('profiles:delete', (_, projectPath) => {
+    return projectProfiles.delete(projectPath);
+  });
+  ipcMain.handle('profiles:list', () => {
+    return projectProfiles.list();
   });
 }
 

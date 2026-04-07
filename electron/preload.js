@@ -87,6 +87,14 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     notify: (eventType, details) => ipcRenderer.invoke('telegram:notify', { eventType, details }),
   },
 
+  // Project profiles
+  profiles: {
+    get: (projectPath) => ipcRenderer.invoke('profiles:get', projectPath),
+    save: (projectPath, profile) => ipcRenderer.invoke('profiles:save', { projectPath, profile }),
+    delete: (projectPath) => ipcRenderer.invoke('profiles:delete', projectPath),
+    list: () => ipcRenderer.invoke('profiles:list'),
+  },
+
   // File operations
   files: {
     tree: (dirPath) => ipcRenderer.invoke('files:tree', dirPath),
