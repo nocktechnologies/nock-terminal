@@ -81,6 +81,12 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     write: (text) => ipcRenderer.send('clipboard:write', text),
   },
 
+  // Telegram notifications
+  telegram: {
+    test: () => ipcRenderer.invoke('telegram:test'),
+    notify: (eventType, details) => ipcRenderer.invoke('telegram:notify', { eventType, details }),
+  },
+
   // File operations
   files: {
     tree: (dirPath) => ipcRenderer.invoke('files:tree', dirPath),

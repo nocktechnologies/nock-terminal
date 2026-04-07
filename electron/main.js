@@ -9,6 +9,7 @@ const PortScanner = require('./port-scanner');
 const FileService = require('./file-service');
 const FileWatcher = require('./file-watcher');
 const ProcessDetector = require('./process-detector');
+const TelegramNotifier = require('./telegram-notifier');
 
 const store = new Store({
   defaults: {
@@ -85,6 +86,7 @@ let portScanner = null;
 let fileService = null;
 let fileWatcher = null;
 let processDetector = null;
+let telegramNotifier = null;
 
 const isDev = !app.isPackaged;
 
@@ -198,6 +200,7 @@ function initServices() {
   fileService = new FileService(store);
   fileWatcher = new FileWatcher(fileService);
   processDetector = new ProcessDetector(terminalManager);
+  telegramNotifier = new TelegramNotifier(store);
 }
 
 function registerIPC() {
@@ -405,6 +408,14 @@ function registerIPC() {
   // Clipboard (routed via IPC so renderer doesn't need permission prompts)
   ipcMain.handle('clipboard:read', () => clipboard.readText());
   ipcMain.on('clipboard:write', (_, text) => clipboard.writeText(text || ''));
+
+  // Telegram notifications
+  ipcMain.handle('telegram:test', async () => {
+    return telegramNotifier.test();
+  });
+  ipcMain.handle('telegram:notify', async (_, { eventType, details }) => {
+    return telegramNotifier.notify(eventType, details);
+  });
 }
 
 // Wire up terminal data events after services init
