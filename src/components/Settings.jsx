@@ -162,6 +162,12 @@ export default function Settings() {
       setSkipListDraft((all.projectSkipList || []).join('\n'));
       setSystemPromptDraft(all.systemPrompt || '');
       setShellArgsDraft(all.shellArgs || '');
+      // Load real bot token (getAll returns redacted placeholder)
+      if (window.nockTerminal.settings.getSecure) {
+        window.nockTerminal.settings.getSecure('telegramBotToken').then((token) => {
+          if (token) setSettings(prev => ({ ...prev, telegramBotToken: token }));
+        });
+      }
     });
   }, []);
 

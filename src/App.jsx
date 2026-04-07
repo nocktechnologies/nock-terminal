@@ -183,6 +183,11 @@ export default function App() {
     const newTab = { ...tab, id: tabId, pinned: false };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(tabId);
+    window.nockTerminal.sessionHistory.start(tabId, {
+      project: tab.title || 'Terminal',
+      shell: '',
+      cwd: tab.cwd || undefined,
+    });
   }, []);
 
   const reorderTabs = useCallback((dragId, targetId) => {

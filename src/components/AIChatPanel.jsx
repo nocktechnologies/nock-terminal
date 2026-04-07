@@ -38,12 +38,16 @@ export default function AIChatPanel({ onClose, activeSession, onOpenTerminalWith
   // Fetch Ollama models and status
   const fetchModels = useCallback(async () => {
     try {
-      const models = await window.nockTerminal.ai.ollama.models();
-      setOllamaModels(models || []);
-      setOllamaStatus(models && models.length >= 0 ? true : false);
-      // Auto-select first model if none selected yet
-      if (!selectedModel && models && models.length > 0) {
-        setSelectedModel(models[0].name);
+      const status = await window.nockTerminal.ai.ollama.status();
+      setOllamaStatus(status?.connected === true);
+      if (status?.connected) {
+        const models = await window.nockTerminal.ai.ollama.models();
+        setOllamaModels(models || []);
+        if (!selectedModel && models && models.length > 0) {
+          setSelectedModel(models[0].name);
+        }
+      } else {
+        setOllamaModels([]);
       }
     } catch {
       setOllamaModels([]);
