@@ -51,6 +51,9 @@
       "electron/**/*",
       "dist-react/**/*",
       "assets/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/node-pty/**"
     ]
   }
 }
