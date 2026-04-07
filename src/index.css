@@ -223,3 +223,16 @@ kbd {
   border-radius: 4px;
   color: #8A8AA0;
 }
+
+/* ---------- Settings utility classes ---------- */
+@layer components {
+  .settings-input {
+    @apply w-full bg-nock-card border border-nock-border rounded px-3 py-2 text-sm text-nock-text focus:outline-none focus:border-nock-accent-blue transition-colors;
+  }
+  .settings-button {
+    @apply px-4 py-2 bg-nock-card border border-nock-border rounded text-sm text-nock-text hover:bg-nock-card-hover hover:border-nock-border-bright transition-colors;
+  }
+  .settings-button-danger {
+    @apply px-4 py-2 bg-nock-card border border-red-500/30 rounded text-sm text-nock-red hover:bg-red-500/10 transition-colors;
+  }
+}

@@ -13,20 +13,63 @@ const ProcessDetector = require('./process-detector');
 const store = new Store({
   defaults: {
     windowBounds: { width: 1400, height: 900 },
+    // General
+    theme: 'dark',
+    startMinimized: false,
+    alwaysOnTop: false,
+    launchAtStartup: false,
+    windowOpacity: 100,
+    // AI / Models
     ollamaUrl: 'http://localhost:11434',
+    defaultModel: 'qwen3.5:9b',
+    systemPrompt: '',
+    temperature: 0.7,
+    maxTokens: 4096,
+    showThinking: false,
+    // Claude Code
     claudeCodePath: '',
     maraBriefPath: '',
-    terminalFontSize: 14,
+    // Terminal
+    terminalFontSize: 16,
     terminalFontFamily: "'JetBrains Mono', 'Consolas', monospace",
+    defaultShell: '',
+    shellArgs: '',
+    scrollbackSize: 5000,
+    cursorStyle: 'block',
+    cursorBlink: true,
+    bellSound: false,
+    copyOnSelect: false,
+    rightClickPaste: true,
+    // Editor
     editorFontFamily: "'JetBrains Mono', 'Consolas', monospace",
-    editorFontSize: 13,
+    editorFontSize: 15,
     editorMinimap: false,
     editorWordWrap: false,
+    // File Tree
     fileTreeOpen: true,
     showDotfiles: false,
-    theme: 'pitch-black',
-    launchAtStartup: false,
+    // Notifications
+    desktopNotifications: true,
+    notificationSound: false,
+    notifyPrMerged: true,
+    notifyBuildComplete: true,
+    notifySessionEnded: true,
+    notifyFenceEvent: false,
+    // Telegram
+    telegramEnabled: false,
+    telegramBotToken: '',
+    telegramChatId: '',
+    telegramQuietStart: '22:00',
+    telegramQuietEnd: '07:00',
+    telegramNotifyPrMerged: true,
+    telegramNotifyBuildComplete: true,
+    telegramNotifySessionEnded: true,
+    telegramNotifyFenceEvent: false,
+    // Session
+    autoCaptureSessions: false,
+    // Layout
     sidebarCollapsed: false,
+    // Projects
     devRoots: process.platform === 'win32' ? ['C:\\Dev'] : [],
     projectSkipList: ['Gym-App', 'github.com-kkwills13-nock-technologies-site'],
   },
@@ -219,6 +262,80 @@ function registerIPC() {
     return portScanner.scan();
   });
 
+  // System info
+  ipcMain.handle('system:detectShells', async () => {
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+    const shells = [];
+    // PowerShell 7
+    try {
+      const ver = execSync('pwsh -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"', { timeout: 5000, encoding: 'utf8' }).trim();
+      shells.push({ name: 'PowerShell 7', path: 'pwsh', version: ver });
+    } catch { /* not installed */ }
+    // Windows PowerShell
+    try {
+      const ver = execSync('powershell -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"', { timeout: 5000, encoding: 'utf8' }).trim();
+      shells.push({ name: 'Windows PowerShell', path: 'powershell', version: ver });
+    } catch { /* not available */ }
+    // CMD
+    if (process.env.ComSpec || fs.existsSync('C:\\Windows\\System32\\cmd.exe')) {
+      shells.push({ name: 'Command Prompt', path: process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe', version: '' });
+    }
+    // Git Bash
+    const gitBashPaths = ['C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe'];
+    for (const p of gitBashPaths) {
+      if (fs.existsSync(p)) {
+        shells.push({ name: 'Git Bash', path: p, version: '' });
+        break;
+      }
+    }
+    // WSL
+    try {
+      execSync('wsl --status', { timeout: 5000, encoding: 'utf8' });
+      shells.push({ name: 'WSL', path: 'wsl', version: '' });
+    } catch { /* not available */ }
+    return shells;
+  });
+
+  ipcMain.handle('system:ollamaVersion', async () => {
+    try {
+      const url = store.get('ollamaUrl') || 'http://localhost:11434';
+      const http = require('http');
+      return await new Promise((resolve, reject) => {
+        const req = http.get(`${url}/api/version`, { timeout: 3000 }, (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(data).version || 'unknown');
+            } catch {
+              resolve('unknown');
+            }
+          });
+        });
+        req.on('error', () => resolve(null));
+        req.on('timeout', () => { req.destroy(); resolve(null); });
+      });
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle('system:appVersion', () => {
+    return app.getVersion();
+  });
+
+  ipcMain.handle('window:setAlwaysOnTop', (_, value) => {
+    if (mainWindow) mainWindow.setAlwaysOnTop(!!value);
+  });
+
+  ipcMain.handle('window:setOpacity', (_, value) => {
+    if (mainWindow) {
+      const clamped = Math.max(0.7, Math.min(1.0, value / 100));
+      mainWindow.setOpacity(clamped);
+    }
+  });
+
   // Settings
   ipcMain.handle('settings:get', (_, key) => {
     return store.get(key);
@@ -240,6 +357,18 @@ function registerIPC() {
         devRoots: store.get('devRoots'),
         skipList: store.get('projectSkipList'),
       });
+    }
+    if (key === 'alwaysOnTop') {
+      if (mainWindow) mainWindow.setAlwaysOnTop(!!value);
+    }
+    if (key === 'windowOpacity') {
+      if (mainWindow) {
+        const clamped = Math.max(0.7, Math.min(1.0, value / 100));
+        mainWindow.setOpacity(clamped);
+      }
+    }
+    if (key === 'launchAtStartup') {
+      app.setLoginItemSettings({ openAtLogin: !!value });
     }
   });
 

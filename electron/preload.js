@@ -7,6 +7,15 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     maximize: () => ipcRenderer.send('window:maximize'),
     close: () => ipcRenderer.send('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
+    setAlwaysOnTop: (value) => ipcRenderer.invoke('window:setAlwaysOnTop', value),
+    setOpacity: (value) => ipcRenderer.invoke('window:setOpacity', value),
+  },
+
+  // System info
+  system: {
+    detectShells: () => ipcRenderer.invoke('system:detectShells'),
+    ollamaVersion: () => ipcRenderer.invoke('system:ollamaVersion'),
+    appVersion: () => ipcRenderer.invoke('system:appVersion'),
   },
 
   // Terminal
