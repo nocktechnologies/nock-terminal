@@ -9,6 +9,7 @@ import SplitPane from './components/SplitPane';
 import AIChatPanel from './components/AIChatPanel';
 import EditorPane from './components/EditorPane';
 import Settings from './components/Settings';
+import StatusBar from './components/StatusBar';
 
 export default function App() {
   const [view, setView] = useState('dashboard'); // dashboard | terminal | settings
@@ -20,6 +21,7 @@ export default function App() {
   const [activePorts, setActivePorts] = useState([]);
   const [processStatus, setProcessStatus] = useState({});
   const [lastDataTimestamps, setLastDataTimestamps] = useState({});
+  const [ollamaStatus, setOllamaStatus] = useState(false);
 
   // Discover sessions on mount and periodically
   const refreshSessions = useCallback(async () => {
@@ -49,6 +51,21 @@ export default function App() {
     }, 30000); // Refresh every 30s
     return () => clearInterval(interval);
   }, [refreshSessions, refreshPorts]);
+
+  // Poll Ollama status every 30s
+  useEffect(() => {
+    const checkOllama = async () => {
+      try {
+        const result = await window.nockTerminal.ai.ollama.status();
+        setOllamaStatus(!!result);
+      } catch {
+        setOllamaStatus(false);
+      }
+    };
+    checkOllama();
+    const interval = setInterval(checkOllama, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const cleanup = window.nockTerminal.process.onStatus((status) => {
@@ -311,6 +328,9 @@ export default function App() {
 
   const activeTab = tabs.find(t => t.id === activeTabId);
 
+  // File tree path: active tab's cwd, or fall back to first session's path
+  const activeProjectPath = activeTab?.cwd || sessions[0]?.path || null;
+
   return (
     <div className="h-screen w-screen flex flex-col bg-nock-bg overflow-hidden">
       <TitleBar
@@ -330,7 +350,7 @@ export default function App() {
           onRefresh={refreshSessions}
           activeView={view}
           onViewChange={setView}
-          activeProjectPath={activeTab?.cwd || null}
+          activeProjectPath={activeProjectPath}
           onFileClick={openFileInEditor}
           onCtrlPFocus={(fn) => { ctrlPFocusRef.current = fn; }}
         />
@@ -338,7 +358,7 @@ export default function App() {
         {/* Main content — all views always mounted, visibility controlled by CSS */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* Dashboard */}
-          <div className={`absolute inset-0 ${view === 'dashboard' ? 'flex flex-col' : 'hidden'}`}>
+          <div className={`absolute inset-0 ${view === 'dashboard' ? 'flex flex-col z-10' : 'invisible pointer-events-none z-0'}`}>
             <Dashboard
               sessions={sessions}
               onSessionClick={openTerminalTab}
@@ -347,8 +367,8 @@ export default function App() {
             />
           </div>
 
-          {/* Terminal area — always rendered so PTYs stay alive */}
-          <div className={`absolute inset-0 flex flex-col ${view === 'terminal' ? '' : 'hidden'}`}>
+          {/* Terminal area — uses visibility:hidden (not display:none) so xterm canvas stays alive */}
+          <div className={`absolute inset-0 flex flex-col ${view === 'terminal' ? 'z-10' : 'invisible pointer-events-none z-0'}`}>
             <div className="flex items-center border-b border-nock-border shrink-0">
               <TabBar
                 tabs={tabs}
@@ -372,7 +392,7 @@ export default function App() {
               {tabs.map(tab => (
                 <div
                   key={tab.id}
-                  className={`absolute inset-0 ${tab.id === activeTabId ? 'flex' : 'hidden'}`}
+                  className={`absolute inset-0 ${tab.id === activeTabId ? 'flex z-10' : 'invisible pointer-events-none z-0'}`}
                 >
                   <SplitPane
                     defaultRatio={tab.splitRatio}
@@ -415,7 +435,7 @@ export default function App() {
           </div>
 
           {/* Settings */}
-          <div className={`absolute inset-0 overflow-y-auto ${view === 'settings' ? '' : 'hidden'}`}>
+          <div className={`absolute inset-0 overflow-y-auto ${view === 'settings' ? 'z-10' : 'invisible pointer-events-none z-0'}`}>
             <Settings />
           </div>
         </div>
@@ -428,6 +448,14 @@ export default function App() {
           />
         </div>
       </div>
+
+      {/* Status Bar */}
+      <StatusBar
+        activeTab={activeTab}
+        sessions={sessions}
+        ollamaStatus={ollamaStatus}
+        processStatus={processStatus}
+      />
 
       {/* Chat toggle button (when closed) */}
       {!chatOpen && (
