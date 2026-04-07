@@ -95,6 +95,14 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     list: () => ipcRenderer.invoke('profiles:list'),
   },
 
+  // Prompt library
+  prompts: {
+    list: () => ipcRenderer.invoke('prompts:list'),
+    get: (id) => ipcRenderer.invoke('prompts:get', id),
+    save: (id, data) => ipcRenderer.invoke('prompts:save', { id, data }),
+    delete: (id) => ipcRenderer.invoke('prompts:delete', id),
+  },
+
   // Session history
   sessionHistory: {
     list: () => ipcRenderer.invoke('sessionHistory:list'),

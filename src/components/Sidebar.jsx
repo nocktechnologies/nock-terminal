@@ -2,6 +2,7 @@ import React from 'react';
 import FileTree from './FileTree';
 import ContextMonitor from './ContextMonitor';
 import SessionHistory from './SessionHistory';
+import PromptLibrary from './PromptLibrary';
 
 const STATUS_COLORS = {
   active:   'bg-nock-green',
@@ -22,6 +23,7 @@ export default function Sidebar({
   activeProjectPath,
   onFileClick,
   onCtrlPFocus,
+  onExecutePrompt,
 }) {
   return (
     <div
@@ -120,6 +122,11 @@ export default function Sidebar({
           {/* Session history */}
           <div className="border-t border-nock-border" style={{ maxHeight: '30%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <SessionHistory />
+          </div>
+
+          {/* Prompt library */}
+          <div className="border-t border-nock-border" style={{ maxHeight: '30%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <PromptLibrary onExecutePrompt={onExecutePrompt} />
           </div>
         </div>
       )}

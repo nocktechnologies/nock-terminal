@@ -12,6 +12,7 @@ const ProcessDetector = require('./process-detector');
 const TelegramNotifier = require('./telegram-notifier');
 const ProjectProfiles = require('./project-profiles');
 const SessionHistory = require('./session-history');
+const PromptStore = require('./prompt-store');
 
 const store = new Store({
   defaults: {
@@ -91,6 +92,7 @@ let processDetector = null;
 let telegramNotifier = null;
 let projectProfiles = null;
 let sessionHistory = null;
+let promptStore = null;
 
 const isDev = !app.isPackaged;
 
@@ -207,6 +209,7 @@ function initServices() {
   telegramNotifier = new TelegramNotifier(store);
   projectProfiles = new ProjectProfiles();
   sessionHistory = new SessionHistory(store);
+  promptStore = new PromptStore();
 }
 
 function registerIPC() {
@@ -446,6 +449,20 @@ function registerIPC() {
   });
   ipcMain.handle('sessionHistory:start', (_, { tabId, metadata }) => {
     return sessionHistory.startSession(tabId, metadata);
+  });
+
+  // Prompt library
+  ipcMain.handle('prompts:list', () => {
+    return promptStore.list();
+  });
+  ipcMain.handle('prompts:get', (_, id) => {
+    return promptStore.get(id);
+  });
+  ipcMain.handle('prompts:save', (_, { id, data }) => {
+    return promptStore.save(id, data);
+  });
+  ipcMain.handle('prompts:delete', (_, id) => {
+    return promptStore.delete(id);
   });
 }
 
