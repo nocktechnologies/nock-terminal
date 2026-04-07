@@ -1,36 +1,73 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { ChevronDown, RefreshCw, ExternalLink, Terminal } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 
-const MODELS = [
-  { id: 'gemma3:12b', label: 'G3·12B', full: 'Gemma 3 12B', backend: 'ollama' },
-  { id: 'gemma3:27b', label: 'G3·27B', full: 'Gemma 3 27B', backend: 'ollama' },
-  { id: 'gemma4',     label: 'G4',     full: 'Gemma 4',     backend: 'ollama' },
-  { id: 'kit',        label: 'KIT',    full: 'Kit',         backend: 'claude' },
-  { id: 'mara',       label: 'MARA',   full: 'Mara',        backend: 'claude' },
-];
+function formatSize(bytes) {
+  if (!bytes) return '';
+  const gb = bytes / (1024 * 1024 * 1024);
+  if (gb >= 1) return `${gb.toFixed(1)} GB`;
+  const mb = bytes / (1024 * 1024);
+  return `${mb.toFixed(0)} MB`;
+}
 
-export default function AIChatPanel({ onClose, activeSession }) {
+export default function AIChatPanel({ onClose, activeSession, onOpenTerminalWithClaude }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [selectedModel, setSelectedModel] = useState(MODELS[0].id);
+  const [selectedModel, setSelectedModel] = useState(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [ollamaStatus, setOllamaStatus] = useState(null);
+  const [ollamaModels, setOllamaModels] = useState([]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
 
+  // Load saved model preference on mount
   useEffect(() => {
-    const check = async () => {
+    const loadDefault = async () => {
       try {
-        const status = await window.nockTerminal.ai.ollama.status();
-        setOllamaStatus(status.connected);
+        const saved = await window.nockTerminal.settings.get('defaultModel');
+        if (saved) setSelectedModel(saved);
       } catch {
-        setOllamaStatus(false);
+        // ignore — will pick first model after fetch
       }
     };
-    check();
-    const interval = setInterval(check, 30000);
-    return () => clearInterval(interval);
+    loadDefault();
   }, []);
+
+  // Fetch Ollama models and status
+  const fetchModels = useCallback(async () => {
+    try {
+      const models = await window.nockTerminal.ai.ollama.models();
+      setOllamaModels(models || []);
+      setOllamaStatus(models && models.length >= 0 ? true : false);
+      // Auto-select first model if none selected yet
+      if (!selectedModel && models && models.length > 0) {
+        setSelectedModel(models[0].name);
+      }
+    } catch {
+      setOllamaModels([]);
+      setOllamaStatus(false);
+    }
+  }, [selectedModel]);
+
+  useEffect(() => {
+    fetchModels();
+    const interval = setInterval(fetchModels, 30000);
+    return () => clearInterval(interval);
+  }, [fetchModels]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handleClick = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [dropdownOpen]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -49,26 +86,29 @@ export default function AIChatPanel({ onClose, activeSession }) {
     return cleanup;
   }, []);
 
+  const selectModel = useCallback((modelName) => {
+    setSelectedModel(modelName);
+    setDropdownOpen(false);
+    try {
+      window.nockTerminal.settings.set('defaultModel', modelName);
+    } catch {
+      // settings save is best-effort
+    }
+  }, []);
+
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    if (!text || isStreaming) return;
-    const model = MODELS.find(m => m.id === selectedModel);
-    if (!model) return;
+    if (!text || isStreaming || !selectedModel) return;
 
     const userMsg = { role: 'user', content: text };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsStreaming(true);
-    setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true, model: model.full }]);
+    setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true, model: selectedModel }]);
 
     try {
-      if (model.backend === 'ollama') {
-        const chatMessages = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
-        await window.nockTerminal.ai.ollama.chat(model.id, chatMessages);
-      } else {
-        const cwd = activeSession?.cwd || undefined; // main process falls back to process.cwd()
-        await window.nockTerminal.ai.claude.chat(text, model.id, cwd);
-      }
+      const chatMessages = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
+      await window.nockTerminal.ai.ollama.chat(selectedModel, chatMessages);
     } catch (err) {
       setMessages(prev => {
         const last = prev[prev.length - 1];
@@ -85,7 +125,7 @@ export default function AIChatPanel({ onClose, activeSession }) {
       return prev;
     });
     setIsStreaming(false);
-  }, [input, isStreaming, selectedModel, messages, activeSession]);
+  }, [input, isStreaming, selectedModel, messages]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -94,8 +134,8 @@ export default function AIChatPanel({ onClose, activeSession }) {
     }
   };
 
-  const currentModel = MODELS.find(m => m.id === selectedModel);
-  const isOllamaModel = currentModel?.backend === 'ollama';
+  const isOllamaModel = ollamaModels.some(m => m.name === selectedModel);
+  const currentModelObj = ollamaModels.find(m => m.name === selectedModel);
 
   return (
     <div className="w-[400px] bg-nock-bg border-l border-nock-border flex flex-col shrink-0 h-full">
@@ -129,27 +169,119 @@ export default function AIChatPanel({ onClose, activeSession }) {
         </div>
       </div>
 
-      {/* Model selector — segmented pills */}
-      <div className="px-3 py-2.5 border-b border-nock-border shrink-0">
-        <div className="grid grid-cols-5 gap-1 p-1 bg-nock-card/60 rounded-md border border-nock-border">
-          {MODELS.map((m) => {
-            const active = selectedModel === m.id;
-            return (
-              <button
-                key={m.id}
-                onClick={() => setSelectedModel(m.id)}
-                className={`font-mono text-[9px] font-semibold py-1.5 rounded tracking-wider transition-all ${
-                  active
-                    ? 'bg-gradient-to-br from-nock-accent-blue to-nock-accent-purple text-white shadow-glow-blue'
-                    : 'text-nock-text-muted hover:text-nock-text hover:bg-nock-card'
-                }`}
-                title={`${m.full} (${m.backend === 'ollama' ? 'local GPU' : 'Claude Code'})`}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
+      {/* Model selector — dropdown */}
+      <div className="px-3 py-2.5 border-b border-nock-border shrink-0" ref={dropdownRef}>
+        <button
+          onClick={() => setDropdownOpen(prev => !prev)}
+          className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-nock-card/60 rounded-md border border-nock-border hover:border-nock-accent-blue/40 transition-colors"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-mono text-[11px] font-semibold text-nock-text truncate">
+              {selectedModel || 'Select model...'}
+            </span>
+            {currentModelObj && (
+              <span className="font-mono text-[9px] text-nock-text-muted shrink-0">
+                {formatSize(currentModelObj.size)}
+              </span>
+            )}
+          </div>
+          <ChevronDown className={`w-3.5 h-3.5 text-nock-text-muted shrink-0 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {dropdownOpen && (
+          <div className="mt-1 bg-nock-card border border-nock-border rounded-lg shadow-xl overflow-hidden max-h-[320px] overflow-y-auto z-50">
+            {/* Ollama models section */}
+            {ollamaStatus === false ? (
+              <div className="px-3 py-3 flex items-center justify-between">
+                <span className="font-mono text-[10px] text-nock-red">Ollama offline</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    fetchModels();
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 text-[9px] font-mono text-nock-text-muted hover:text-nock-accent-cyan border border-nock-border rounded transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Retry
+                </button>
+              </div>
+            ) : ollamaModels.length === 0 ? (
+              <div className="px-3 py-3">
+                <span className="font-mono text-[10px] text-nock-text-muted">No Ollama models found</span>
+              </div>
+            ) : (
+              <>
+                <div className="px-3 pt-2 pb-1">
+                  <span className="font-mono text-[8px] text-nock-text-dim tracking-widest uppercase">Local Models</span>
+                </div>
+                {ollamaModels.map((model) => (
+                  <button
+                    key={model.name}
+                    onClick={() => selectModel(model.name)}
+                    className={`w-full text-left px-3 py-2 hover:bg-nock-border/30 transition-colors ${
+                      selectedModel === model.name ? 'bg-nock-accent-blue/10 border-l-2 border-nock-accent-blue' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[11px] font-semibold text-nock-text">{model.name}</span>
+                      <span className="font-mono text-[9px] text-nock-text-muted">{formatSize(model.size)}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {model.parameterSize && (
+                        <span className="font-mono text-[8px] text-nock-accent-cyan">{model.parameterSize}</span>
+                      )}
+                      {model.family && (
+                        <span className="font-mono text-[8px] text-nock-text-dim">{model.family}</span>
+                      )}
+                      {model.quantization && (
+                        <span className="font-mono text-[8px] text-nock-text-dim">{model.quantization}</span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </>
+            )}
+
+            {/* Divider */}
+            <div className="border-t border-nock-border my-1" />
+
+            {/* Kit — Claude Code */}
+            <button
+              onClick={() => {
+                setDropdownOpen(false);
+                if (onOpenTerminalWithClaude) {
+                  onOpenTerminalWithClaude(activeSession?.cwd);
+                }
+              }}
+              className="w-full text-left px-3 py-2 hover:bg-nock-border/30 transition-colors flex items-center gap-2"
+            >
+              <Terminal className="w-3.5 h-3.5 text-nock-accent-purple" />
+              <div className="flex-1 min-w-0">
+                <span className="font-mono text-[11px] font-semibold text-nock-accent-purple">Kit</span>
+                <span className="font-mono text-[9px] text-nock-text-muted ml-2">Claude Code</span>
+              </div>
+            </button>
+
+            {/* Mara — claude.ai */}
+            <button
+              onClick={() => {
+                setDropdownOpen(false);
+                try {
+                  window.nockTerminal.shell.openExternal('https://claude.ai');
+                } catch {
+                  // best-effort
+                }
+              }}
+              className="w-full text-left px-3 py-2 hover:bg-nock-border/30 transition-colors flex items-center gap-2"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-nock-accent-cyan" />
+              <div className="flex-1 min-w-0">
+                <span className="font-mono text-[11px] font-semibold text-nock-accent-cyan">Mara</span>
+                <span className="font-mono text-[9px] text-nock-text-muted ml-2">claude.ai</span>
+              </div>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Messages */}
@@ -161,7 +293,7 @@ export default function AIChatPanel({ onClose, activeSession }) {
             </div>
             <p className="font-display text-[13px] text-nock-text mb-1">Ready for instructions</p>
             <p className="font-mono text-[9px] text-nock-text-muted tracking-wider uppercase">
-              Currently: {currentModel?.full}
+              Currently: {selectedModel || 'No model selected'}
             </p>
           </div>
         )}
@@ -184,7 +316,7 @@ export default function AIChatPanel({ onClose, activeSession }) {
           />
           <button
             onClick={sendMessage}
-            disabled={!input.trim() || isStreaming}
+            disabled={!input.trim() || isStreaming || !selectedModel}
             className="absolute bottom-2 right-2 h-7 px-3 rounded bg-gradient-to-br from-nock-accent-blue to-nock-accent-purple text-white font-mono text-[10px] font-semibold tracking-wider uppercase flex items-center gap-1.5 disabled:opacity-30 hover:shadow-glow-purple transition-shadow"
           >
             {isStreaming ? (
@@ -198,7 +330,7 @@ export default function AIChatPanel({ onClose, activeSession }) {
             ) : (
               <>
                 Send
-                <kbd className="text-[8px] bg-white/15 border-white/10 px-1 py-0 text-white">⌃↵</kbd>
+                <kbd className="text-[8px] bg-white/15 border-white/10 px-1 py-0 text-white">Ctrl+Enter</kbd>
               </>
             )}
           </button>

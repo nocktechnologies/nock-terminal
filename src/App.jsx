@@ -126,6 +126,25 @@ export default function App() {
     setView('terminal');
   }, []);
 
+  // Open a new terminal tab with Claude Code launched
+  const openTerminalWithClaude = useCallback((cwd) => {
+    const tabId = `tab-${Date.now()}`;
+    const newTab = {
+      id: tabId,
+      sessionId: null,
+      title: 'Kit (Claude)',
+      branch: null,
+      status: 'active',
+      cwd: cwd || 'C:\\Users\\kkwil',
+      splitContent: null,
+      splitRatio: 0.5,
+      launchCommand: 'claude',
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(tabId);
+    setView('terminal');
+  }, []);
+
   const closeTab = useCallback((tabId) => {
     setTabs(prev => {
       const filtered = prev.filter(t => t.id !== tabId);
@@ -419,6 +438,7 @@ export default function App() {
                       tabId={tab.id}
                       cwd={tab.cwd}
                       active={tab.id === activeTabId && view === 'terminal'}
+                      launchCommand={tab.launchCommand}
                     />
                   </SplitPane>
                 </div>
@@ -445,6 +465,7 @@ export default function App() {
           <AIChatPanel
             onClose={() => setChatOpen(false)}
             activeSession={activeTab}
+            onOpenTerminalWithClaude={openTerminalWithClaude}
           />
         </div>
       </div>

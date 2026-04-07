@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { pitchBlack } from '../utils/themes';
 
-export default function TerminalView({ tabId, cwd, active }) {
+export default function TerminalView({ tabId, cwd, active, launchCommand }) {
   const containerRef = useRef(null);
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
@@ -49,11 +49,16 @@ export default function TerminalView({ tabId, cwd, active }) {
 
       if (!containerRef.current) return;
 
+      // Load font settings (fall back to defaults)
+      const settings = await window.nockTerminal.settings.getAll();
+      const fontSize = settings?.terminalFontSize ?? 16;
+      const fontFamily = settings?.terminalFontFamily ?? "'JetBrains Mono', 'Consolas', monospace";
+
       term = new Terminal({
         cursorBlink: true,
         cursorStyle: 'bar',
-        fontSize: 14,
-        fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+        fontSize,
+        fontFamily,
         lineHeight: 1.2,
         theme: {
           background: pitchBlack.terminal.bg,
@@ -131,6 +136,14 @@ export default function TerminalView({ tabId, cwd, active }) {
         return;
       }
 
+      // If a launch command is specified, send it to the pty after a short
+      // delay so the shell prompt has time to initialize.
+      if (launchCommand) {
+        setTimeout(() => {
+          window.nockTerminal.terminal.write(tabId, launchCommand + '\r');
+        }, 500);
+      }
+
       // Wire input: terminal → pty
       term.onData((data) => {
         window.nockTerminal.terminal.write(tabId, data);
@@ -166,7 +179,7 @@ export default function TerminalView({ tabId, cwd, active }) {
         terminalRef.current = null;
       }
     };
-  }, [tabId, cwd]);
+  }, [tabId, cwd, launchCommand]);
 
   // Refit on visibility change or window resize
   useEffect(() => {
@@ -191,9 +204,12 @@ export default function TerminalView({ tabId, cwd, active }) {
     return () => window.removeEventListener('resize', handleResize);
   }, [active, tabId, initialized]);
 
-  // Focus terminal when tab becomes active
+  // Refresh + focus terminal when tab becomes active again
   useEffect(() => {
     if (active && terminalRef.current) {
+      // Force canvas redraw after being hidden (visibility:hidden preserves
+      // the DOM element but the canvas may need a repaint)
+      terminalRef.current.refresh(0, terminalRef.current.rows - 1);
       terminalRef.current.focus();
     }
   }, [active]);

@@ -22,7 +22,14 @@ class OllamaClient {
   async listModels() {
     try {
       const response = await this._fetch('/api/tags', 'GET');
-      return (response.models || []).map(m => m.name);
+      return (response.models || []).map(m => ({
+        name: m.name,
+        size: m.size,
+        parameterSize: m.details?.parameter_size || '',
+        quantization: m.details?.quantization_level || '',
+        family: m.details?.family || '',
+        contextLength: m.details?.context_length || null,
+      }));
     } catch {
       return [];
     }
