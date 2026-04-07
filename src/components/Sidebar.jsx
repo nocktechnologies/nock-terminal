@@ -1,6 +1,7 @@
 import React from 'react';
 import FileTree from './FileTree';
 import ContextMonitor from './ContextMonitor';
+import SessionHistory from './SessionHistory';
 
 const STATUS_COLORS = {
   active:   'bg-nock-green',
@@ -114,6 +115,11 @@ export default function Sidebar({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Session history */}
+          <div className="border-t border-nock-border" style={{ maxHeight: '30%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <SessionHistory />
           </div>
         </div>
       )}

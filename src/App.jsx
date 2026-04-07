@@ -105,6 +105,7 @@ export default function App() {
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(tabId);
     setView('terminal');
+    window.nockTerminal.sessionHistory.start(tabId, { project: session.name, shell: '', cwd: session.path });
   }, [tabs]);
 
   // Open a new blank terminal
@@ -124,6 +125,7 @@ export default function App() {
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(tabId);
     setView('terminal');
+    window.nockTerminal.sessionHistory.start(tabId, { project: 'Terminal', shell: '', cwd: cwd || 'C:\\Users\\kkwil' });
   }, []);
 
   // Open a new terminal tab with Claude Code launched

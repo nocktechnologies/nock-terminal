@@ -11,6 +11,7 @@ const FileWatcher = require('./file-watcher');
 const ProcessDetector = require('./process-detector');
 const TelegramNotifier = require('./telegram-notifier');
 const ProjectProfiles = require('./project-profiles');
+const SessionHistory = require('./session-history');
 
 const store = new Store({
   defaults: {
@@ -89,6 +90,7 @@ let fileWatcher = null;
 let processDetector = null;
 let telegramNotifier = null;
 let projectProfiles = null;
+let sessionHistory = null;
 
 const isDev = !app.isPackaged;
 
@@ -204,6 +206,7 @@ function initServices() {
   processDetector = new ProcessDetector(terminalManager);
   telegramNotifier = new TelegramNotifier(store);
   projectProfiles = new ProjectProfiles();
+  sessionHistory = new SessionHistory(store);
 }
 
 function registerIPC() {
@@ -433,15 +436,34 @@ function registerIPC() {
   ipcMain.handle('profiles:list', () => {
     return projectProfiles.list();
   });
+
+  // Session history
+  ipcMain.handle('sessionHistory:list', () => {
+    return sessionHistory.list();
+  });
+  ipcMain.handle('sessionHistory:getOutput', (_, { startTime, tabId }) => {
+    return sessionHistory.getOutput(startTime, tabId);
+  });
+  ipcMain.handle('sessionHistory:start', (_, { tabId, metadata }) => {
+    return sessionHistory.startSession(tabId, metadata);
+  });
 }
 
 // Wire up terminal data events after services init
 function wireTerminalEvents() {
   terminalManager.on('data', (id, data) => {
     mainWindow?.webContents.send('terminal:data', { id, data });
+    // Capture output for session history
+    if (sessionHistory) {
+      sessionHistory.appendOutput(id, data);
+    }
   });
   terminalManager.on('exit', (id, code) => {
     mainWindow?.webContents.send('terminal:exit', { id, code });
+    // End session in history
+    if (sessionHistory) {
+      sessionHistory.endSession(id, code);
+    }
   });
 }
 

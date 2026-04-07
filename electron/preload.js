@@ -95,6 +95,13 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     list: () => ipcRenderer.invoke('profiles:list'),
   },
 
+  // Session history
+  sessionHistory: {
+    list: () => ipcRenderer.invoke('sessionHistory:list'),
+    getOutput: (startTime, tabId) => ipcRenderer.invoke('sessionHistory:getOutput', { startTime, tabId }),
+    start: (tabId, metadata) => ipcRenderer.invoke('sessionHistory:start', { tabId, metadata }),
+  },
+
   // File operations
   files: {
     tree: (dirPath) => ipcRenderer.invoke('files:tree', dirPath),
