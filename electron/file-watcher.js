@@ -33,13 +33,19 @@ class FileWatcher extends EventEmitter {
 
     this.watcher
       .on('error', (err) => console.error('FileWatcher: chokidar error:', err.message))
-      .on('add', (filePath) => this.emit('changed', { type: 'add', path: filePath }))
-      .on('unlink', (filePath) => this.emit('changed', { type: 'unlink', path: filePath }))
-      .on('addDir', (dirPath) => this.emit('changed', { type: 'addDir', path: dirPath }))
-      .on('unlinkDir', (dirPath) => this.emit('changed', { type: 'unlinkDir', path: dirPath }));
+      .on('add', (filePath) => this._emitChanged('add', filePath))
+      .on('unlink', (filePath) => this._emitChanged('unlink', filePath))
+      .on('addDir', (dirPath) => this._emitChanged('addDir', dirPath))
+      .on('unlinkDir', (dirPath) => this._emitChanged('unlinkDir', dirPath));
 
     this._pollGitStatus();
     this.gitPollInterval = setInterval(() => this._pollGitStatus(), 10000);
+  }
+
+  revalidate() {
+    if (this.currentRoot && !this.fileService.isAllowedPath(this.currentRoot)) {
+      this.stop();
+    }
   }
 
   stop() {
@@ -56,8 +62,23 @@ class FileWatcher extends EventEmitter {
 
   _pollGitStatus() {
     if (!this.currentRoot) return;
+    if (!this.fileService.isAllowedPath(this.currentRoot)) {
+      this.stop();
+      return;
+    }
+
     const status = this.fileService.gitStatus(this.currentRoot);
     this.emit('gitStatus', status);
+  }
+
+  _emitChanged(type, filePath) {
+    if (!this.currentRoot) return;
+    if (!this.fileService.isAllowedPath(this.currentRoot)) {
+      this.stop();
+      return;
+    }
+    if (!this.fileService.isAllowedPath(filePath)) return;
+    this.emit('changed', { type, path: filePath });
   }
 }
 

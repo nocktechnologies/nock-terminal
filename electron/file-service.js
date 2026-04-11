@@ -95,13 +95,36 @@ class FileService {
       return { success: false, error: 'Path not allowed' };
     }
 
+    if (typeof content !== 'string') {
+      return { success: false, error: 'Content must be a string' };
+    }
+
+    const tmpPath = filePath + '.nock-tmp';
+    if (!this._isAllowedPath(tmpPath)) {
+      return { success: false, error: 'Path not allowed' };
+    }
+
+    let fd;
     try {
-      const tmpPath = filePath + '.nock-tmp';
-      fs.writeFileSync(tmpPath, content, 'utf-8');
+      fd = fs.openSync(tmpPath, 'wx', 0o600);
+      fs.writeFileSync(fd, content, 'utf-8');
+      fs.fsyncSync(fd);
+      fs.closeSync(fd);
+      fd = undefined;
+
+      if (!this._isAllowedPath(tmpPath) || !this._isAllowedPath(filePath)) {
+        throw new Error('Path not allowed');
+      }
+
       fs.renameSync(tmpPath, filePath);
       return { success: true };
     } catch (err) {
-      try { fs.unlinkSync(filePath + '.nock-tmp'); } catch { /* ignore */ }
+      try {
+        if (fd !== undefined) fs.closeSync(fd);
+      } catch {
+        // ignore cleanup failure
+      }
+      try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
       return { success: false, error: err.message };
     }
   }

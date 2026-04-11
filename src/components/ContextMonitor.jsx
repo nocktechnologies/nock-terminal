@@ -7,6 +7,49 @@ function joinProjectPath(basePath, relativePath) {
   return `${cleanBase}${separator}${cleanRelative}`;
 }
 
+function getParentPath(currentPath) {
+  const normalized = currentPath.replace(/[\\/]+$/, '');
+  const lastSeparatorIndex = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+
+  if (lastSeparatorIndex <= 0) {
+    return null;
+  }
+
+  const parent = normalized.slice(0, lastSeparatorIndex);
+  if (/^[A-Za-z]:$/.test(parent)) {
+    return `${parent}\\`;
+  }
+
+  return parent || null;
+}
+
+async function findNearestContextFile(projectPath, relativePaths, maxDepth = 5) {
+  let currentPath = projectPath;
+
+  for (let depth = 0; depth <= maxDepth && currentPath; depth += 1) {
+    const candidatePaths = relativePaths.map((relativePath) => joinProjectPath(currentPath, relativePath));
+    const stats = await Promise.all(candidatePaths.map((candidatePath) => window.nockTerminal.files.stat(candidatePath)));
+    const existingIndex = stats.findIndex((stat) => stat?.exists);
+
+    if (existingIndex !== -1) {
+      return { ...stats[existingIndex], path: candidatePaths[existingIndex] };
+    }
+
+    const parentPath = getParentPath(currentPath);
+    if (!parentPath || parentPath === currentPath) {
+      break;
+    }
+    currentPath = parentPath;
+  }
+
+  return {
+    exists: false,
+    size: 0,
+    mtime: 0,
+    path: joinProjectPath(projectPath, relativePaths[0]),
+  };
+}
+
 export default function ContextMonitor({ projectPath, onEditFile }) {
   const [claudeMd, setClaudeMd] = useState(null);
   const [nockConfig, setNockConfig] = useState(null);
@@ -15,14 +58,12 @@ export default function ContextMonitor({ projectPath, onEditFile }) {
     if (!projectPath) return;
 
     const check = async () => {
-      const claudePath = joinProjectPath(projectPath, 'CLAUDE.md');
-      const nockPath = joinProjectPath(projectPath, '.nock/config.toml');
-      const [c, n] = await Promise.all([
-        window.nockTerminal.files.stat(claudePath),
-        window.nockTerminal.files.stat(nockPath),
+      const [claudeStat, nockStat] = await Promise.all([
+        findNearestContextFile(projectPath, ['CLAUDE.md', '.claude/CLAUDE.md']),
+        findNearestContextFile(projectPath, ['.nock/config.toml']),
       ]);
-      setClaudeMd({ ...c, path: claudePath });
-      setNockConfig({ ...n, path: nockPath });
+      setClaudeMd(claudeStat);
+      setNockConfig(nockStat);
     };
 
     check();

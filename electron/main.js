@@ -13,91 +13,24 @@ const TelegramNotifier = require('./telegram-notifier');
 const ProjectProfiles = require('./project-profiles');
 const SessionHistory = require('./session-history');
 const PromptStore = require('./prompt-store');
-const { sanitizeDevRoots, sanitizeStringList } = require('./security-utils');
-
-const DEFAULT_SETTINGS = {
-  windowBounds: { width: 1400, height: 900 },
-  // General
-  theme: 'dark',
-  startMinimized: false,
-  alwaysOnTop: false,
-  launchAtStartup: false,
-  windowOpacity: 100,
-  // AI / Models
-  ollamaUrl: 'http://localhost:11434',
-  defaultModel: 'qwen3.5:9b',
-  systemPrompt: '',
-  temperature: 0.7,
-  maxTokens: 4096,
-  showThinking: false,
-  // Claude Code
-  claudeCodePath: '',
-  maraBriefPath: '',
-  // Terminal
-  terminalFontSize: 16,
-  terminalFontFamily: "'JetBrains Mono', 'Consolas', monospace",
-  defaultShell: '',
-  shellArgs: '',
-  scrollbackSize: 5000,
-  cursorStyle: 'block',
-  cursorBlink: true,
-  bellSound: false,
-  copyOnSelect: false,
-  rightClickPaste: true,
-  // Editor
-  editorFontFamily: "'JetBrains Mono', 'Consolas', monospace",
-  editorFontSize: 15,
-  editorMinimap: false,
-  editorWordWrap: false,
-  // File Tree
-  fileTreeOpen: true,
-  showDotfiles: false,
-  // Notifications
-  desktopNotifications: true,
-  notificationSound: false,
-  notifyPrMerged: true,
-  notifyBuildComplete: true,
-  notifySessionEnded: true,
-  notifyFenceEvent: false,
-  // Telegram
-  telegramEnabled: false,
-  telegramBotToken: '',
-  telegramChatId: '',
-  telegramQuietStart: '22:00',
-  telegramQuietEnd: '07:00',
-  telegramNotifyPrMerged: true,
-  telegramNotifyBuildComplete: true,
-  telegramNotifySessionEnded: true,
-  telegramNotifyFenceEvent: false,
-  // Session
-  autoCaptureSessions: false,
-  // Layout
-  sidebarCollapsed: false,
-  // Projects
-  devRoots: process.platform === 'win32' ? ['C:\\Dev'] : [],
-  projectSkipList: ['Gym-App', 'github.com-kkwills13-nock-technologies-site'],
-};
+const { DEFAULT_SETTINGS, normalizeSettingValue, sanitizeStoredSettings } = require('./settings-utils');
 
 const store = new Store({
   defaults: DEFAULT_SETTINGS,
 });
 
-function normalizeSettingValue(key, value) {
-  if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) {
-    return { ok: false, value: undefined };
-  }
+function getSettingsSnapshot() {
+  return sanitizeStoredSettings(store.store);
+}
 
-  if (value === undefined) {
-    return { ok: true, value: undefined };
-  }
+function repairStoredSettings() {
+  const sanitized = getSettingsSnapshot();
 
-  switch (key) {
-    case 'devRoots':
-      return { ok: true, value: sanitizeDevRoots(value) };
-    case 'projectSkipList':
-      return { ok: true, value: sanitizeStringList(value, { maxItems: 200, maxLength: 120 }) };
-    default:
-      return { ok: true, value };
+  for (const [key, value] of Object.entries(sanitized)) {
+    const currentValue = store.get(key);
+    if (JSON.stringify(currentValue) !== JSON.stringify(value)) {
+      store.set(key, value);
+    }
   }
 }
 
@@ -119,7 +52,8 @@ let promptStore = null;
 const isDev = !app.isPackaged;
 
 function createWindow() {
-  const { width, height, x, y } = store.get('windowBounds');
+  const settings = getSettingsSnapshot();
+  const { width, height, x, y } = settings.windowBounds;
 
   mainWindow = new BrowserWindow({
     width,
@@ -148,12 +82,12 @@ function createWindow() {
   }
 
   // Apply stored window settings
-  if (store.get('alwaysOnTop')) mainWindow.setAlwaysOnTop(true);
-  const opacity = store.get('windowOpacity');
+  if (settings.alwaysOnTop) mainWindow.setAlwaysOnTop(true);
+  const opacity = settings.windowOpacity;
   if (opacity != null && opacity < 100) mainWindow.setOpacity(Math.max(0.7, opacity / 100));
 
   mainWindow.once('ready-to-show', () => {
-    if (!store.get('startMinimized')) mainWindow.show();
+    if (!settings.startMinimized) mainWindow.show();
   });
 
   mainWindow.on('close', (e) => {
@@ -222,13 +156,14 @@ function toggleWindow() {
 }
 
 function initServices() {
+  const settings = getSettingsSnapshot();
   terminalManager = new TerminalManager();
   sessionDiscovery = new SessionDiscovery({
-    devRoots: store.get('devRoots'),
-    skipList: store.get('projectSkipList'),
+    devRoots: settings.devRoots,
+    skipList: settings.projectSkipList,
   });
-  ollamaClient = new OllamaClient(store.get('ollamaUrl'));
-  claudeCodeClient = new ClaudeCodeClient(store.get('claudeCodePath'));
+  ollamaClient = new OllamaClient(settings.ollamaUrl);
+  claudeCodeClient = new ClaudeCodeClient(settings.claudeCodePath);
   portScanner = new PortScanner();
   fileService = new FileService(store);
   fileWatcher = new FileWatcher(fileService);
@@ -272,6 +207,7 @@ function registerIPC() {
   ipcMain.handle('sessions:discover', async () => {
     const sessions = await sessionDiscovery.discover();
     fileService.setGrantedRoots(sessions.map((session) => session.path));
+    fileWatcher.revalidate();
     return sessions;
   });
 
@@ -340,7 +276,7 @@ function registerIPC() {
 
   ipcMain.handle('system:ollamaVersion', async () => {
     try {
-      const url = store.get('ollamaUrl') || 'http://localhost:11434';
+      const url = getSettingsSnapshot().ollamaUrl || 'http://localhost:11434';
       const http = require('http');
       return await new Promise((resolve, reject) => {
         const req = http.get(`${url}/api/version`, { timeout: 3000 }, (res) => {
@@ -371,25 +307,27 @@ function registerIPC() {
   });
 
   ipcMain.handle('window:setOpacity', (_, value) => {
-    if (mainWindow) {
-      const clamped = Math.max(0.7, Math.min(1.0, value / 100));
+    const normalized = normalizeSettingValue('windowOpacity', value);
+    if (mainWindow && normalized.ok) {
+      const clamped = Math.max(0.7, Math.min(1.0, normalized.value / 100));
       mainWindow.setOpacity(clamped);
     }
   });
 
   // Settings
   ipcMain.handle('settings:get', (_, key) => {
-    return store.get(key);
+    if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) return undefined;
+    return getSettingsSnapshot()[key];
   });
   ipcMain.handle('settings:getAll', () => {
-    const all = { ...store.store };
+    const all = getSettingsSnapshot();
     if (all.telegramBotToken) all.telegramBotToken = '••••••••';
     return all;
   });
   ipcMain.handle('settings:getSecure', (_, key) => {
     const allowed = ['telegramBotToken'];
     if (!allowed.includes(key)) return null;
-    return store.get(key);
+    return getSettingsSnapshot()[key];
   });
   ipcMain.on('settings:set', (_, payload) => {
     if (!payload || typeof payload.key !== 'string') return;
@@ -399,7 +337,7 @@ function registerIPC() {
     if (!normalized.ok) return;
 
     store.set(key, normalized.value);
-    const currentValue = store.get(key);
+    const currentValue = getSettingsSnapshot()[key];
     // Update services when settings change
     if (key === 'ollamaUrl') {
       ollamaClient.setUrl(currentValue);
@@ -409,9 +347,10 @@ function registerIPC() {
     }
     if (key === 'devRoots' || key === 'projectSkipList') {
       sessionDiscovery.setConfig({
-        devRoots: store.get('devRoots'),
-        skipList: store.get('projectSkipList'),
+        devRoots: getSettingsSnapshot().devRoots,
+        skipList: getSettingsSnapshot().projectSkipList,
       });
+      fileWatcher.revalidate();
     }
     if (key === 'alwaysOnTop') {
       if (mainWindow) mainWindow.setAlwaysOnTop(!!currentValue);
@@ -548,6 +487,7 @@ function wireFileEvents() {
 }
 
 app.whenReady().then(() => {
+  repairStoredSettings();
   initServices();
   createWindow();
   createTray();
