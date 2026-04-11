@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 
+function joinProjectPath(basePath, relativePath) {
+  const separator = basePath.includes('\\') ? '\\' : '/';
+  const cleanBase = basePath.replace(/[\\/]+$/, '');
+  const cleanRelative = relativePath.replace(/^[\\/]+/, '').replace(/[\\/]+/g, separator);
+  return `${cleanBase}${separator}${cleanRelative}`;
+}
+
 export default function ContextMonitor({ projectPath, onEditFile }) {
   const [claudeMd, setClaudeMd] = useState(null);
   const [nockConfig, setNockConfig] = useState(null);
@@ -8,8 +15,8 @@ export default function ContextMonitor({ projectPath, onEditFile }) {
     if (!projectPath) return;
 
     const check = async () => {
-      const claudePath = projectPath + '\\CLAUDE.md';
-      const nockPath = projectPath + '\\.nock\\config.toml';
+      const claudePath = joinProjectPath(projectPath, 'CLAUDE.md');
+      const nockPath = joinProjectPath(projectPath, '.nock/config.toml');
       const [c, n] = await Promise.all([
         window.nockTerminal.files.stat(claudePath),
         window.nockTerminal.files.stat(nockPath),

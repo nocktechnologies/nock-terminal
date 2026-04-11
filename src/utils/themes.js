@@ -37,15 +37,3 @@ export const pitchBlack = {
     brightWhite: '#FFFFFF',
   },
 };
-
-export const statusColors = {
-  active: pitchBlack.green,
-  recent: pitchBlack.yellow,
-  inactive: pitchBlack.red,
-};
-
-export const statusLabels = {
-  active: 'Active',
-  recent: 'Recent',
-  inactive: 'Inactive',
-};

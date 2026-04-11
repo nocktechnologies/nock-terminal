@@ -13,71 +13,93 @@ const TelegramNotifier = require('./telegram-notifier');
 const ProjectProfiles = require('./project-profiles');
 const SessionHistory = require('./session-history');
 const PromptStore = require('./prompt-store');
+const { sanitizeDevRoots, sanitizeStringList } = require('./security-utils');
+
+const DEFAULT_SETTINGS = {
+  windowBounds: { width: 1400, height: 900 },
+  // General
+  theme: 'dark',
+  startMinimized: false,
+  alwaysOnTop: false,
+  launchAtStartup: false,
+  windowOpacity: 100,
+  // AI / Models
+  ollamaUrl: 'http://localhost:11434',
+  defaultModel: 'qwen3.5:9b',
+  systemPrompt: '',
+  temperature: 0.7,
+  maxTokens: 4096,
+  showThinking: false,
+  // Claude Code
+  claudeCodePath: '',
+  maraBriefPath: '',
+  // Terminal
+  terminalFontSize: 16,
+  terminalFontFamily: "'JetBrains Mono', 'Consolas', monospace",
+  defaultShell: '',
+  shellArgs: '',
+  scrollbackSize: 5000,
+  cursorStyle: 'block',
+  cursorBlink: true,
+  bellSound: false,
+  copyOnSelect: false,
+  rightClickPaste: true,
+  // Editor
+  editorFontFamily: "'JetBrains Mono', 'Consolas', monospace",
+  editorFontSize: 15,
+  editorMinimap: false,
+  editorWordWrap: false,
+  // File Tree
+  fileTreeOpen: true,
+  showDotfiles: false,
+  // Notifications
+  desktopNotifications: true,
+  notificationSound: false,
+  notifyPrMerged: true,
+  notifyBuildComplete: true,
+  notifySessionEnded: true,
+  notifyFenceEvent: false,
+  // Telegram
+  telegramEnabled: false,
+  telegramBotToken: '',
+  telegramChatId: '',
+  telegramQuietStart: '22:00',
+  telegramQuietEnd: '07:00',
+  telegramNotifyPrMerged: true,
+  telegramNotifyBuildComplete: true,
+  telegramNotifySessionEnded: true,
+  telegramNotifyFenceEvent: false,
+  // Session
+  autoCaptureSessions: false,
+  // Layout
+  sidebarCollapsed: false,
+  // Projects
+  devRoots: process.platform === 'win32' ? ['C:\\Dev'] : [],
+  projectSkipList: ['Gym-App', 'github.com-kkwills13-nock-technologies-site'],
+};
 
 const store = new Store({
-  defaults: {
-    windowBounds: { width: 1400, height: 900 },
-    // General
-    theme: 'dark',
-    startMinimized: false,
-    alwaysOnTop: false,
-    launchAtStartup: false,
-    windowOpacity: 100,
-    // AI / Models
-    ollamaUrl: 'http://localhost:11434',
-    defaultModel: 'qwen3.5:9b',
-    systemPrompt: '',
-    temperature: 0.7,
-    maxTokens: 4096,
-    showThinking: false,
-    // Claude Code
-    claudeCodePath: '',
-    maraBriefPath: '',
-    // Terminal
-    terminalFontSize: 16,
-    terminalFontFamily: "'JetBrains Mono', 'Consolas', monospace",
-    defaultShell: '',
-    shellArgs: '',
-    scrollbackSize: 5000,
-    cursorStyle: 'block',
-    cursorBlink: true,
-    bellSound: false,
-    copyOnSelect: false,
-    rightClickPaste: true,
-    // Editor
-    editorFontFamily: "'JetBrains Mono', 'Consolas', monospace",
-    editorFontSize: 15,
-    editorMinimap: false,
-    editorWordWrap: false,
-    // File Tree
-    fileTreeOpen: true,
-    showDotfiles: false,
-    // Notifications
-    desktopNotifications: true,
-    notificationSound: false,
-    notifyPrMerged: true,
-    notifyBuildComplete: true,
-    notifySessionEnded: true,
-    notifyFenceEvent: false,
-    // Telegram
-    telegramEnabled: false,
-    telegramBotToken: '',
-    telegramChatId: '',
-    telegramQuietStart: '22:00',
-    telegramQuietEnd: '07:00',
-    telegramNotifyPrMerged: true,
-    telegramNotifyBuildComplete: true,
-    telegramNotifySessionEnded: true,
-    telegramNotifyFenceEvent: false,
-    // Session
-    autoCaptureSessions: false,
-    // Layout
-    sidebarCollapsed: false,
-    // Projects
-    devRoots: process.platform === 'win32' ? ['C:\\Dev'] : [],
-    projectSkipList: ['Gym-App', 'github.com-kkwills13-nock-technologies-site'],
-  },
+  defaults: DEFAULT_SETTINGS,
 });
+
+function normalizeSettingValue(key, value) {
+  if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) {
+    return { ok: false, value: undefined };
+  }
+
+  if (value === undefined) {
+    return { ok: true, value: undefined };
+  }
+
+  switch (key) {
+    case 'devRoots':
+      return { ok: true, value: sanitizeDevRoots(value) };
+    case 'projectSkipList':
+      return { ok: true, value: sanitizeStringList(value, { maxItems: 200, maxLength: 120 }) };
+    default:
+      return { ok: true, value };
+  }
+}
 
 let mainWindow = null;
 let tray = null;
@@ -248,7 +270,9 @@ function registerIPC() {
 
   // Session discovery
   ipcMain.handle('sessions:discover', async () => {
-    return sessionDiscovery.discover();
+    const sessions = await sessionDiscovery.discover();
+    fileService.setGrantedRoots(sessions.map((session) => session.path));
+    return sessions;
   });
 
   // Ollama chat
@@ -367,14 +391,21 @@ function registerIPC() {
     if (!allowed.includes(key)) return null;
     return store.get(key);
   });
-  ipcMain.on('settings:set', (_, { key, value }) => {
-    store.set(key, value);
+  ipcMain.on('settings:set', (_, payload) => {
+    if (!payload || typeof payload.key !== 'string') return;
+
+    const { key } = payload;
+    const normalized = normalizeSettingValue(key, payload.value);
+    if (!normalized.ok) return;
+
+    store.set(key, normalized.value);
+    const currentValue = store.get(key);
     // Update services when settings change
     if (key === 'ollamaUrl') {
-      ollamaClient.setUrl(value);
+      ollamaClient.setUrl(currentValue);
     }
     if (key === 'claudeCodePath') {
-      claudeCodeClient.setBinaryPath(value);
+      claudeCodeClient.setBinaryPath(currentValue);
     }
     if (key === 'devRoots' || key === 'projectSkipList') {
       sessionDiscovery.setConfig({
@@ -383,16 +414,16 @@ function registerIPC() {
       });
     }
     if (key === 'alwaysOnTop') {
-      if (mainWindow) mainWindow.setAlwaysOnTop(!!value);
+      if (mainWindow) mainWindow.setAlwaysOnTop(!!currentValue);
     }
     if (key === 'windowOpacity') {
       if (mainWindow) {
-        const clamped = Math.max(0.7, Math.min(1.0, value / 100));
+        const clamped = Math.max(0.7, Math.min(1.0, currentValue / 100));
         mainWindow.setOpacity(clamped);
       }
     }
     if (key === 'launchAtStartup') {
-      app.setLoginItemSettings({ openAtLogin: !!value });
+      app.setLoginItemSettings({ openAtLogin: !!currentValue });
     }
   });
 
@@ -413,6 +444,7 @@ function registerIPC() {
     return fileService.gitStatus(dirPath);
   });
   ipcMain.on('files:watch', (_, dirPath) => {
+    if (!fileService.isAllowedPath(dirPath)) return;
     fileWatcher.watch(dirPath);
   });
   ipcMain.on('files:stopWatch', () => {
@@ -428,7 +460,7 @@ function registerIPC() {
 
   // Shell / show item in folder (Explorer / Finder)
   ipcMain.on('shell:showItemInFolder', (_, filePath) => {
-    if (typeof filePath === 'string' && filePath.length > 0) {
+    if (typeof filePath === 'string' && filePath.length > 0 && fileService.isAllowedPath(filePath)) {
       shell.showItemInFolder(filePath);
     }
   });

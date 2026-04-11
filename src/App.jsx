@@ -22,6 +22,7 @@ export default function App() {
   const [processStatus, setProcessStatus] = useState({});
   const [lastDataTimestamps, setLastDataTimestamps] = useState({});
   const [ollamaStatus, setOllamaStatus] = useState(false);
+  const [queuedPrompt, setQueuedPrompt] = useState(null);
 
   // Discover sessions on mount and periodically
   const refreshSessions = useCallback(async () => {
@@ -283,6 +284,13 @@ export default function App() {
     setTabs(prev => prev.map(tab => tab.id === activeTabId ? { ...tab, splitRatio: ratio } : tab));
   }, [activeTabId]);
 
+  const executePrompt = useCallback((promptText) => {
+    const text = typeof promptText === 'string' ? promptText.trim() : '';
+    if (!text) return;
+    setChatOpen(true);
+    setQueuedPrompt(text);
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -412,6 +420,7 @@ export default function App() {
           activeProjectPath={activeProjectPath}
           onFileClick={openFileInEditor}
           onCtrlPFocus={(fn) => { ctrlPFocusRef.current = fn; }}
+          onExecutePrompt={executePrompt}
         />
 
         {/* Main content — all views always mounted, visibility controlled by CSS */}
@@ -511,6 +520,8 @@ export default function App() {
             onClose={() => setChatOpen(false)}
             activeSession={activeTab}
             onOpenTerminalWithClaude={openTerminalWithClaude}
+            queuedPrompt={queuedPrompt}
+            onQueuedPromptHandled={() => setQueuedPrompt(null)}
           />
         </div>
       </div>

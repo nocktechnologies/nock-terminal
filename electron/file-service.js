@@ -1,10 +1,16 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { isPathWithinRoots, sanitizeDevRoots } = require('./security-utils');
 
 class FileService {
   constructor(store) {
     this.store = store;
+    this.grantedRoots = [];
+  }
+
+  setGrantedRoots(roots) {
+    this.grantedRoots = sanitizeDevRoots(roots || []);
   }
 
   tree(dirPath, depth = 0) {
@@ -101,6 +107,10 @@ class FileService {
   }
 
   stat(filePath) {
+    if (!this.isAllowedPath(filePath)) {
+      return { exists: false, size: 0, mtime: 0, error: 'Path not allowed' };
+    }
+
     try {
       const stat = fs.statSync(filePath);
       return { exists: true, size: stat.size, mtime: stat.mtimeMs };
@@ -113,6 +123,8 @@ class FileService {
   }
 
   gitStatus(dirPath) {
+    if (!this.isAllowedPath(dirPath)) return {};
+
     try {
       const output = execSync('git status --porcelain', {
         cwd: dirPath,
@@ -139,13 +151,17 @@ class FileService {
   }
 
   _isAllowedPath(filePath) {
-    const resolved = path.resolve(filePath);
-    const devRoots = this.store?.get('devRoots') || [];
-    if (devRoots.length === 0) {
-      console.warn('FileService: no devRoots configured — all paths rejected');
+    return this.isAllowedPath(filePath);
+  }
+
+  isAllowedPath(filePath) {
+    const configuredRoots = sanitizeDevRoots(this.store?.get('devRoots') || []);
+    const allowedRoots = [...new Set([...configuredRoots, ...this.grantedRoots])];
+    if (allowedRoots.length === 0 || typeof filePath !== 'string' || filePath.trim() === '') {
+      console.warn('FileService: no allowed roots configured — all paths rejected');
       return false;
     }
-    return devRoots.some(root => resolved.startsWith(path.resolve(root)));
+    return isPathWithinRoots(filePath, allowedRoots);
   }
 }
 

@@ -10,7 +10,13 @@ function formatSize(bytes) {
   return `${mb.toFixed(0)} MB`;
 }
 
-export default function AIChatPanel({ onClose, activeSession, onOpenTerminalWithClaude }) {
+export default function AIChatPanel({
+  onClose,
+  activeSession,
+  onOpenTerminalWithClaude,
+  queuedPrompt,
+  onQueuedPromptHandled,
+}) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState(null);
@@ -21,6 +27,11 @@ export default function AIChatPanel({ onClose, activeSession, onOpenTerminalWith
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
+  const messagesRef = useRef([]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Load saved model preference on mount
   useEffect(() => {
@@ -100,8 +111,8 @@ export default function AIChatPanel({ onClose, activeSession, onOpenTerminalWith
     }
   }, []);
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim();
+  const sendText = useCallback(async (rawText) => {
+    const text = typeof rawText === 'string' ? rawText.trim() : '';
     if (!text || isStreaming || !selectedModel) return;
 
     const userMsg = { role: 'user', content: text };
@@ -111,7 +122,7 @@ export default function AIChatPanel({ onClose, activeSession, onOpenTerminalWith
     setMessages(prev => [...prev, { role: 'assistant', content: '', streaming: true, model: selectedModel }]);
 
     try {
-      const chatMessages = [...messages, userMsg].map(m => ({ role: m.role, content: m.content }));
+      const chatMessages = [...messagesRef.current, userMsg].map(m => ({ role: m.role, content: m.content }));
       await window.nockTerminal.ai.ollama.chat(selectedModel, chatMessages);
     } catch (err) {
       setMessages(prev => {
@@ -129,7 +140,25 @@ export default function AIChatPanel({ onClose, activeSession, onOpenTerminalWith
       return prev;
     });
     setIsStreaming(false);
-  }, [input, isStreaming, selectedModel, messages]);
+  }, [isStreaming, selectedModel]);
+
+  const sendMessage = useCallback(async () => {
+    await sendText(input);
+  }, [input, sendText]);
+
+  useEffect(() => {
+    if (!queuedPrompt) return;
+    inputRef.current?.focus();
+
+    if (!selectedModel || isStreaming) {
+      setInput(prev => prev || queuedPrompt);
+      return;
+    }
+
+    sendText(queuedPrompt).finally(() => {
+      onQueuedPromptHandled?.();
+    });
+  }, [isStreaming, onQueuedPromptHandled, queuedPrompt, selectedModel, sendText]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
