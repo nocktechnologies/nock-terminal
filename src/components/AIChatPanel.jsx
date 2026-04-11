@@ -28,6 +28,7 @@ export default function AIChatPanel({
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
   const messagesRef = useRef([]);
+  const activeQueuedPromptIdRef = useRef(null);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -147,16 +148,27 @@ export default function AIChatPanel({
   }, [input, sendText]);
 
   useEffect(() => {
-    if (!queuedPrompt) return;
+    const queuedPromptId = queuedPrompt?.id;
+    const queuedPromptText = typeof queuedPrompt?.text === 'string' ? queuedPrompt.text.trim() : '';
+    if (!queuedPromptId || !queuedPromptText) return;
+
     inputRef.current?.focus();
 
-    if (!selectedModel || isStreaming) {
-      setInput(prev => prev || queuedPrompt);
+    if (!selectedModel) {
+      setInput(prev => prev || queuedPromptText);
       return;
     }
 
-    sendText(queuedPrompt).finally(() => {
-      onQueuedPromptHandled?.();
+    if (isStreaming || activeQueuedPromptIdRef.current === queuedPromptId) {
+      return;
+    }
+
+    activeQueuedPromptIdRef.current = queuedPromptId;
+    sendText(queuedPromptText).finally(() => {
+      if (activeQueuedPromptIdRef.current === queuedPromptId) {
+        activeQueuedPromptIdRef.current = null;
+      }
+      onQueuedPromptHandled?.(queuedPromptId);
     });
   }, [isStreaming, onQueuedPromptHandled, queuedPrompt, selectedModel, sendText]);
 

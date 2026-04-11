@@ -23,6 +23,7 @@ export default function App() {
   const [lastDataTimestamps, setLastDataTimestamps] = useState({});
   const [ollamaStatus, setOllamaStatus] = useState(false);
   const [queuedPrompt, setQueuedPrompt] = useState(null);
+  const queuedPromptIdRef = useRef(0);
 
   // Discover sessions on mount and periodically
   const refreshSessions = useCallback(async () => {
@@ -288,7 +289,8 @@ export default function App() {
     const text = typeof promptText === 'string' ? promptText.trim() : '';
     if (!text) return;
     setChatOpen(true);
-    setQueuedPrompt(text);
+    queuedPromptIdRef.current += 1;
+    setQueuedPrompt({ id: queuedPromptIdRef.current, text });
   }, []);
 
   // Keyboard shortcuts
@@ -521,7 +523,11 @@ export default function App() {
             activeSession={activeTab}
             onOpenTerminalWithClaude={openTerminalWithClaude}
             queuedPrompt={queuedPrompt}
-            onQueuedPromptHandled={() => setQueuedPrompt(null)}
+            onQueuedPromptHandled={(handledPromptId) => {
+              setQueuedPrompt((currentPrompt) => (
+                currentPrompt?.id === handledPromptId ? null : currentPrompt
+              ));
+            }}
           />
         </div>
       </div>
