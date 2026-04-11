@@ -108,8 +108,10 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
         ),
         onClick: async () => {
           try {
-            const content = await window.nockTerminal.files.read(node.path);
-            window.nockTerminal.clipboard.write(content || '');
+            const result = await window.nockTerminal.files.read(node.path);
+            if (typeof result?.content === 'string') {
+              window.nockTerminal.clipboard.write(result.content);
+            }
           } catch (err) {
             console.error('Failed to copy file content:', err);
           }

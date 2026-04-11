@@ -7,7 +7,8 @@
     "start": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "dev": "vite",
     "build": "vite build && electron-builder",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
@@ -25,17 +26,17 @@
     "xterm-addon-web-links": "^0.9.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.0",
+    "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.16",
     "concurrently": "^8.2.0",
-    "electron": "^28.0.0",
-    "electron-builder": "^24.9.0",
-    "png-to-ico": "^3.0.1",
+    "electron": "^41.2.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.28.0",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
-    "vite": "^5.0.0",
+    "vite": "^8.0.8",
     "vite-plugin-monaco-editor": "^1.1.0",
-    "wait-on": "^7.2.0"
+    "wait-on": "^9.0.5"
   },
   "build": {
     "appId": "com.nock.terminal",
@@ -54,6 +55,18 @@
     ],
     "asarUnpack": [
       "node_modules/node-pty/**"
+    ]
+  },
+  "overrides": {
+    "axios": "^1.15.0",
+    "dompurify": "^3.3.3"
+  },
+  "knip": {
+    "entry": [
+      "src/main.jsx",
+      "electron/main.js",
+      "electron/preload.js",
+      "test/**/*.test.cjs"
     ]
   }
 }

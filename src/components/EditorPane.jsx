@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const EXT_TO_LANG = {
   js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
@@ -177,26 +177,6 @@ export default function EditorPane({
       }
     }
   }, [files]);
-
-  const saveCurrentFile = useCallback(async () => {
-    if (!activeFile || !modelsRef.current[activeFile]) return;
-    const entry = modelsRef.current[activeFile];
-    const content = entry.model.getValue();
-    try {
-      const result = await window.nockTerminal.files.write(activeFile, content);
-      if (result.success) {
-        entry.modified = false;
-        setSaveError(null);
-        forceUpdate(n => n + 1);
-      } else {
-        console.error('Save failed:', result.error);
-        setSaveError(result.error);
-      }
-    } catch (err) {
-      console.error('Save IPC error:', err);
-      setSaveError(err.message);
-    }
-  }, [activeFile]);
 
   useEffect(() => {
     return () => {
