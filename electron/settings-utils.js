@@ -61,6 +61,9 @@ const DEFAULT_SETTINGS = {
   // Projects
   devRoots: process.platform === 'win32' ? ['C:\\Dev'] : [],
   projectSkipList: ['Gym-App', 'github.com-kkwills13-nock-technologies-site'],
+  // NockCC integration
+  nockccApiKey: '',
+  nockccUrl: 'https://cc.nocktechnologies.io',
 };
 
 function ok(value) {
@@ -199,6 +202,7 @@ const STRING_KEYS = {
   editorFontFamily: { maxLength: 200, trim: false },
   telegramBotToken: { maxLength: 500 },
   telegramChatId: { maxLength: 200 },
+  nockccApiKey: { maxLength: 500 },
 };
 
 function normalizeSettingValue(key, value) {
@@ -226,6 +230,7 @@ function normalizeSettingValue(key, value) {
     case 'windowOpacity':
       return normalizeInteger(value, { min: 70, max: 100 });
     case 'ollamaUrl':
+    case 'nockccUrl':
       return normalizeUrl(value);
     case 'temperature':
       return normalizeNumber(value, { min: 0, max: 2, decimals: 1 });
