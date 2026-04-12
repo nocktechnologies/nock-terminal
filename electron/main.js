@@ -14,6 +14,7 @@ const ProjectProfiles = require('./project-profiles');
 const SessionHistory = require('./session-history');
 const PromptStore = require('./prompt-store');
 const { DEFAULT_SETTINGS, normalizeSettingValue, sanitizeStoredSettings } = require('./settings-utils');
+const NockCCClient = require('./nockcc-client');
 
 const store = new Store({
   defaults: DEFAULT_SETTINGS,
@@ -48,6 +49,8 @@ let telegramNotifier = null;
 let projectProfiles = null;
 let sessionHistory = null;
 let promptStore = null;
+let nockccClient = null;
+let nockccHeartbeatInterval = null;
 
 const isDev = !app.isPackaged;
 
@@ -172,6 +175,7 @@ function initServices() {
   projectProfiles = new ProjectProfiles();
   sessionHistory = new SessionHistory(store);
   promptStore = new PromptStore();
+  nockccClient = new NockCCClient(store);
 }
 
 function registerIPC() {
@@ -325,7 +329,7 @@ function registerIPC() {
     return all;
   });
   ipcMain.handle('settings:getSecure', (_, key) => {
-    const allowed = ['telegramBotToken'];
+    const allowed = ['telegramBotToken', 'nockccApiKey'];
     if (!allowed.includes(key)) return null;
     return getSettingsSnapshot()[key];
   });
@@ -496,6 +500,13 @@ app.whenReady().then(() => {
   wireFileEvents();
   processDetector.start();
 
+  // NockCC session tracking
+  const { version: appVersion } = require('../package.json');
+  nockccClient.startSession({ machine: process.platform, appVersion });
+  nockccHeartbeatInterval = setInterval(() => {
+    nockccClient.heartbeat({ activeProjectCount: 0, activeClaudeSessionIds: [] });
+  }, 60_000);
+
   // Global shortcut: Ctrl+Shift+T to toggle window
   globalShortcut.register('Control+Shift+T', toggleWindow);
 
@@ -516,6 +527,8 @@ app.on('will-quit', () => {
   terminalManager?.destroyAll();
   fileWatcher?.stop();
   processDetector?.stop();
+  if (nockccHeartbeatInterval) clearInterval(nockccHeartbeatInterval);
+  nockccClient?.endSession();
 });
 
 app.on('before-quit', () => {
