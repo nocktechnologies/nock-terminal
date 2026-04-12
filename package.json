@@ -2,6 +2,10 @@
   "name": "nock-terminal",
   "version": "1.0.0",
   "description": "Nock Terminal — Cross-platform Claude Code session manager",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nocktechnologies/nock-terminal.git"
+  },
   "main": "electron/main.js",
   "scripts": {
     "start": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
