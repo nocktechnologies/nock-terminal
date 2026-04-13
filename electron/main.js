@@ -74,7 +74,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false, // Required for node-pty via preload
     },
-    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
+    icon: path.join(__dirname, '..', 'assets', process.platform === 'win32' ? 'icon.ico' : process.platform === 'darwin' ? 'icon.icns' : 'icon.png'),
     show: false,
   });
 
@@ -109,13 +109,28 @@ function createWindow() {
 }
 
 function createTray() {
-  // Load the Nock logo and resize for tray (16x16 on Windows)
+  // macOS: setTemplateImage(true) tells the OS to treat the icon as a template image,
+  // inverting it automatically for dark/light menu bar mode. No forced resize on macOS —
+  // the OS handles density scaling. Windows/Linux: 16×16 PNG.
   const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+  const fallbackIcon = () => nativeImage.createFromBuffer(Buffer.alloc(16 * 16 * 4, 0), { width: 16, height: 16 });
   let trayIcon;
-  try {
-    trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
-  } catch {
-    trayIcon = nativeImage.createFromBuffer(Buffer.alloc(16 * 16 * 4, 0), { width: 16, height: 16 });
+  if (process.platform === 'darwin') {
+    trayIcon = nativeImage.createFromPath(iconPath);
+    if (trayIcon.isEmpty()) {
+      console.error(`[tray] Failed to load icon from ${iconPath} — using fallback`);
+      trayIcon = fallbackIcon();
+    } else {
+      trayIcon.setTemplateImage(true);
+    }
+  } else {
+    const loaded = nativeImage.createFromPath(iconPath);
+    if (loaded.isEmpty()) {
+      console.error(`[tray] Failed to load icon from ${iconPath} — using fallback`);
+      trayIcon = fallbackIcon();
+    } else {
+      trayIcon = loaded.resize({ width: 16, height: 16 });
+    }
   }
   tray = new Tray(trayIcon);
 
