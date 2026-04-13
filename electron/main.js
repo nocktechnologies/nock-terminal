@@ -261,35 +261,81 @@ function registerIPC() {
   // System info
   ipcMain.handle('system:detectShells', async () => {
     const fs = require('fs');
-    const { execSync } = require('child_process');
+    const { execFileSync } = require('child_process');
     const shells = [];
-    // PowerShell 7
-    try {
-      const ver = execSync('pwsh -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"', { timeout: 5000, encoding: 'utf8' }).trim();
-      shells.push({ name: 'PowerShell 7', path: 'pwsh', version: ver });
-    } catch { /* not installed */ }
-    // Windows PowerShell
-    try {
-      const ver = execSync('powershell -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"', { timeout: 5000, encoding: 'utf8' }).trim();
-      shells.push({ name: 'Windows PowerShell', path: 'powershell', version: ver });
-    } catch { /* not available */ }
-    // CMD
-    if (process.env.ComSpec || fs.existsSync('C:\\Windows\\System32\\cmd.exe')) {
-      shells.push({ name: 'Command Prompt', path: process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe', version: '' });
-    }
-    // Git Bash
-    const gitBashPaths = ['C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe'];
-    for (const p of gitBashPaths) {
-      if (fs.existsSync(p)) {
-        shells.push({ name: 'Git Bash', path: p, version: '' });
-        break;
+
+    if (process.platform === 'win32') {
+      // PowerShell 7
+      try {
+        const ver = execFileSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()'], { timeout: 5000, encoding: 'utf8' }).trim();
+        shells.push({ name: 'PowerShell 7', path: 'pwsh', version: ver });
+      } catch { /* not installed */ }
+      // Windows PowerShell
+      try {
+        const ver = execFileSync('powershell', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()'], { timeout: 5000, encoding: 'utf8' }).trim();
+        shells.push({ name: 'Windows PowerShell', path: 'powershell', version: ver });
+      } catch { /* not available */ }
+      // CMD
+      if (process.env.ComSpec || fs.existsSync('C:\\Windows\\System32\\cmd.exe')) {
+        shells.push({ name: 'Command Prompt', path: process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe', version: '' });
+      }
+      // Git Bash
+      const gitBashPaths = ['C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe'];
+      for (const p of gitBashPaths) {
+        if (fs.existsSync(p)) {
+          shells.push({ name: 'Git Bash', path: p, version: '' });
+          break;
+        }
+      }
+      // WSL
+      try {
+        execFileSync('wsl', ['--status'], { timeout: 5000, encoding: 'utf8' });
+        shells.push({ name: 'WSL', path: 'wsl', version: '' });
+      } catch { /* not available */ }
+    } else {
+      // macOS / Linux: surface $SHELL (login shell) first, then known paths.
+      // execFileSync avoids shell injection — all paths come from known locations or $SHELL.
+      const seen = new Set();
+      const addShell = (name, shellPath) => {
+        if (!fs.existsSync(shellPath)) return;
+        // Resolve to canonical path to deduplicate symlinks (e.g. /bin/bash and
+        // /usr/bin/bash can point to the same binary on merged-/usr systems).
+        // If realpathSync throws the symlink is broken — skip the entry.
+        let canonical;
+        try { canonical = fs.realpathSync(shellPath); } catch { return; }
+        if (seen.has(canonical)) return;
+        seen.add(canonical);
+        let version = '';
+        try {
+          version = execFileSync(shellPath, ['--version'], { timeout: 3000, encoding: 'utf8' }).split('\n')[0].trim();
+        } catch (e) {
+          // Some shells (e.g. dash) don't support --version; grab stdout from the error
+          if (e.stdout) version = e.stdout.toString().split('\n')[0].trim();
+        }
+        shells.push({ name, path: shellPath, version });
+      };
+
+      // $SHELL is set by the OS to the user's login shell — show it first
+      const loginShell = process.env.SHELL;
+      if (loginShell) {
+        const base = path.basename(loginShell);
+        addShell(base.charAt(0).toUpperCase() + base.slice(1), loginShell);
+      }
+
+      // Scan well-known install locations (deduped via seen set)
+      const candidates = [
+        { name: 'Zsh',  paths: ['/bin/zsh', '/usr/bin/zsh', '/usr/local/bin/zsh', '/opt/homebrew/bin/zsh'] },
+        { name: 'Bash', paths: ['/bin/bash', '/usr/bin/bash', '/usr/local/bin/bash', '/opt/homebrew/bin/bash'] },
+        { name: 'Fish', paths: ['/usr/bin/fish', '/usr/local/bin/fish', '/opt/homebrew/bin/fish'] },
+        { name: 'Dash', paths: ['/bin/dash', '/usr/bin/dash'] },
+      ];
+      for (const { name, paths: candidatePaths } of candidates) {
+        for (const p of candidatePaths) {
+          addShell(name, p);
+        }
       }
     }
-    // WSL
-    try {
-      execSync('wsl --status', { timeout: 5000, encoding: 'utf8' });
-      shells.push({ name: 'WSL', path: 'wsl', version: '' });
-    } catch { /* not available */ }
+
     return shells;
   });
 
