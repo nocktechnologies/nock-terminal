@@ -510,8 +510,22 @@ app.whenReady().then(() => {
     nockccClient.heartbeat({ activeProjectCount: 0, activeClaudeSessionIds: [] });
   }, 60_000);
 
-  // Global shortcut: Ctrl+Shift+T to toggle window
-  globalShortcut.register('Control+Shift+T', toggleWindow);
+  // Global shortcut: try candidates in order, take the first one that registers.
+  // register() returns false if the shortcut is already claimed by another app —
+  // we never leave the user without feedback in that case.
+  const shortcutCandidates = ['Control+Shift+T', 'Control+Shift+Space', 'Control+Alt+T'];
+  let registeredShortcut = null;
+  for (const candidate of shortcutCandidates) {
+    if (globalShortcut.register(candidate, toggleWindow)) {
+      registeredShortcut = candidate;
+      break;
+    }
+  }
+  if (registeredShortcut) {
+    tray.setToolTip(`Nock Terminal (${registeredShortcut})`);
+  } else {
+    tray.setToolTip('Nock Terminal — no global shortcut (all candidates taken by other apps)');
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
