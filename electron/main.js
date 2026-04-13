@@ -386,6 +386,9 @@ function registerIPC() {
   ipcMain.handle('files:gitStatus', (_, dirPath) => {
     return fileService.gitStatus(dirPath);
   });
+  ipcMain.handle('files:gitOp', (_, { dirPath, operation }) => {
+    return fileService.gitOp(dirPath, operation);
+  });
   ipcMain.on('files:watch', (_, dirPath) => {
     if (!fileService.isAllowedPath(dirPath)) return;
     fileWatcher.watch(dirPath);

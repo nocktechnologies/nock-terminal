@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, execFile } = require('child_process');
+const { promisify } = require('util');
+
+const execFileAsync = promisify(execFile);
 const { isPathWithinRoots, sanitizeDevRoots } = require('./security-utils');
 
 class FileService {
@@ -142,6 +145,24 @@ class FileService {
         console.error(`FileService.stat error for ${filePath}:`, err.message);
       }
       return { exists: false, size: 0, mtime: 0 };
+    }
+  }
+
+  async gitOp(dirPath, operation) {
+    const ALLOWED_OPS = new Set(['pull', 'push', 'fetch']);
+    if (!ALLOWED_OPS.has(operation)) return { success: false, error: 'Unknown operation' };
+    if (!this.isAllowedPath(dirPath)) return { success: false, error: 'Path not allowed' };
+
+    try {
+      const { stdout } = await execFileAsync('git', [operation], {
+        cwd: dirPath,
+        encoding: 'utf-8',
+        timeout: 30000,
+      });
+      return { success: true, output: stdout.trim() };
+    } catch (err) {
+      const msg = ((err.stdout?.toString() || '') + (err.stderr?.toString() || '')).trim() || err.message;
+      return { success: false, error: msg };
     }
   }
 
