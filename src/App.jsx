@@ -461,6 +461,7 @@ export default function App() {
                 sidebarOpen={!sidebarCollapsed}
                 chatOpen={chatOpen}
                 hasSplit={!!activeTab?.splitContent}
+                cwd={activeTab?.cwd}
               />
             </div>
             <div className="flex-1 overflow-hidden relative">

@@ -119,6 +119,7 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     write: (filePath, content) => ipcRenderer.invoke('files:write', { filePath, content }),
     stat: (filePath) => ipcRenderer.invoke('files:stat', filePath),
     gitStatus: (dirPath) => ipcRenderer.invoke('files:gitStatus', dirPath),
+    gitOp: (dirPath, operation) => ipcRenderer.invoke('files:gitOp', { dirPath, operation }),
     watch: (dirPath) => ipcRenderer.send('files:watch', dirPath),
     stopWatch: () => ipcRenderer.send('files:stopWatch'),
     onChanged: (callback) => {
