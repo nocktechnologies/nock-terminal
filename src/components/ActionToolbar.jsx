@@ -1,5 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 
+const GIT_OPS = [
+  { op: 'pull',  icon: '↓', label: 'Pull'  },
+  { op: 'push',  icon: '↑', label: 'Push'  },
+  { op: 'fetch', icon: '⟳', label: 'Fetch' },
+];
+
 export default function ActionToolbar({
   onSplit,
   onToggleSidebar,
@@ -12,14 +18,22 @@ export default function ActionToolbar({
 }) {
   const [gitStatus, setGitStatus] = useState(null); // { op, state: 'running'|'ok'|'err', msg }
   const clearTimerRef = useRef(null);
+  const mountedRef = useRef(true);
 
-  // Clear stale status when active tab changes
+  // Clear stale status (and any pending timer) when active tab changes
   useEffect(() => {
+    clearTimeout(clearTimerRef.current);
     setGitStatus(null);
   }, [cwd]);
 
-  // Cancel pending auto-clear timer on unmount
-  useEffect(() => () => clearTimeout(clearTimerRef.current), []);
+  // Track mount state; cancel timer on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(clearTimerRef.current);
+    };
+  }, []);
 
   const runGitOp = useCallback(async (op) => {
     if (!cwd || gitStatus?.state === 'running') return;
@@ -29,16 +43,22 @@ export default function ActionToolbar({
 
     try {
       const result = await window.nockTerminal.files.gitOp(cwd, op);
-      setGitStatus({
-        op,
-        state: result.success ? 'ok' : 'err',
-        msg: result.success ? (result.output || 'Done') : (result.error || 'Failed'),
-      });
+      if (mountedRef.current) {
+        setGitStatus({
+          op,
+          state: result.success ? 'ok' : 'err',
+          msg: result.success ? (result.output || 'Done') : (result.error || 'Failed'),
+        });
+      }
     } catch (err) {
-      setGitStatus({ op, state: 'err', msg: err?.message || 'IPC error' });
+      if (mountedRef.current) {
+        setGitStatus({ op, state: 'err', msg: err?.message || 'IPC error' });
+      }
     }
 
-    clearTimerRef.current = setTimeout(() => setGitStatus(null), 3000);
+    if (mountedRef.current) {
+      clearTimerRef.current = setTimeout(() => setGitStatus(null), 3000);
+    }
   }, [cwd, gitStatus?.state]);
 
   const gitBusy = gitStatus?.state === 'running';
@@ -76,27 +96,16 @@ export default function ActionToolbar({
 
       <div className="w-px h-4 bg-nock-border mx-1 shrink-0" />
 
-      <ToolbarButton
-        icon={gitBusy && gitStatus.op === 'pull' ? '↓…' : '↓'}
-        label="Pull"
-        shortcut=""
-        onClick={() => runGitOp('pull')}
-        disabled={gitDisabled}
-      />
-      <ToolbarButton
-        icon={gitBusy && gitStatus.op === 'push' ? '↑…' : '↑'}
-        label="Push"
-        shortcut=""
-        onClick={() => runGitOp('push')}
-        disabled={gitDisabled}
-      />
-      <ToolbarButton
-        icon={gitBusy && gitStatus.op === 'fetch' ? '⟳…' : '⟳'}
-        label="Fetch"
-        shortcut=""
-        onClick={() => runGitOp('fetch')}
-        disabled={gitDisabled}
-      />
+      {GIT_OPS.map(({ op, icon, label }) => (
+        <ToolbarButton
+          key={op}
+          icon={gitBusy && gitStatus.op === op ? `${icon}…` : icon}
+          label={label}
+          shortcut=""
+          onClick={() => runGitOp(op)}
+          disabled={gitDisabled}
+        />
+      ))}
 
       {gitStatus && gitStatus.state !== 'running' && (
         <span
