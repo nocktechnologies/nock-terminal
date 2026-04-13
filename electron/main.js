@@ -282,8 +282,14 @@ function registerIPC() {
       // execFileSync avoids shell injection — all paths come from known locations or $SHELL.
       const seen = new Set();
       const addShell = (name, shellPath) => {
-        if (seen.has(shellPath) || !fs.existsSync(shellPath)) return;
-        seen.add(shellPath);
+        if (!fs.existsSync(shellPath)) return;
+        // Resolve to canonical path to deduplicate symlinks (e.g. /bin/bash and
+        // /usr/bin/bash can point to the same binary on merged-/usr systems).
+        // If realpathSync throws the symlink is broken — skip the entry.
+        let canonical;
+        try { canonical = fs.realpathSync(shellPath); } catch { return; }
+        if (seen.has(canonical)) return;
+        seen.add(canonical);
         let version = '';
         try {
           version = execFileSync(shellPath, ['--version'], { timeout: 3000, encoding: 'utf8' }).split('\n')[0].trim();
