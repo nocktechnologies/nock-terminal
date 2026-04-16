@@ -27,7 +27,7 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: node --test 'test/**/*.test.cjs'
+        run: npm test
 
   build-frontend:
     name: Build (Vite)
