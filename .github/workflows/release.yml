@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-mac:
-    name: Build macOS (signed + notarized)
+    name: Build macOS (signed)
     runs-on: macos-latest
     permissions:
       contents: read
@@ -31,9 +31,6 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx electron-builder --mac --publish never
 
       - name: Upload macOS artifact
