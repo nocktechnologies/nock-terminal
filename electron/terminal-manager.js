@@ -167,11 +167,12 @@ class TerminalManager extends EventEmitter {
       }
       return [];
     }
-    // -l launches as a login shell, sourcing ~/.zshrc / ~/.bash_profile so
-    // Homebrew, cc, ncc, mara and other PATH additions are available.
+    // -i makes the shell interactive so ~/.zshrc / ~/.bashrc load (aliases like
+    // cc, mara, kit live there). -l also makes it a login shell, so ~/.zprofile /
+    // ~/.bash_profile run for PATH (Homebrew, etc.). Both are needed.
     const base = shell.split('/').pop();
     if (base === 'zsh' || base === 'bash') {
-      return ['-l'];
+      return ['-i', '-l'];
     }
     return [];
   }
