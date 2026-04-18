@@ -127,6 +127,20 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
       term.open(containerRef.current);
       fitAddon.fit();
 
+      // Mouse wheel in the alt-screen buffer (TUIs like claude, vim, less) is
+      // translated by xterm into arrow keys, which makes claude cycle its
+      // input history into the chat bar on scroll. Intercept in capture phase
+      // and scroll the viewport instead so wheel = scroll, never = input nav.
+      const handleWheel = (e) => {
+        if (term.buffer.active.type !== 'alternate') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const step = e.deltaMode === 1 ? 1 : 24;
+        term.scrollLines(Math.round(e.deltaY / step));
+      };
+      containerRef.current.addEventListener('wheel', handleWheel, { capture: true, passive: false });
+      term._wheelCleanup = () => containerRef.current?.removeEventListener('wheel', handleWheel, { capture: true });
+
       terminalRef.current = term;
       fitAddonRef.current = fitAddon;
 
@@ -181,6 +195,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
       if (cleanupData) cleanupData();
       if (cleanupExit) cleanupExit();
       if (term) {
+        term._wheelCleanup?.();
         term.dispose();
         terminalRef.current = null;
       }
