@@ -86,7 +86,7 @@ function Slider({ min, max, step = 1, value, onChange, suffix = '' }) {
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="flex-1 accent-[#3B6FD4]"
+        className="flex-1 accent-nock-accent-blue"
       />
       <span className="font-mono text-sm text-nock-text tabular-nums w-16 text-right">
         {value}{suffix}
@@ -316,7 +316,7 @@ export default function Settings() {
                 label="Start minimized to tray"
               />
             </Field>
-            <Field label="Launch at Startup" description="Start Nock Terminal with Windows">
+            <Field label="Launch at Startup" description="Open at login">
               <Toggle
                 checked={settings.launchAtStartup ?? false}
                 onChange={(v) => updateSetting('launchAtStartup', v)}
@@ -397,7 +397,7 @@ export default function Settings() {
                 value={settings.maraBriefPath || ''}
                 onChange={(e) => updateSetting('maraBriefPath', e.target.value)}
                 className="settings-input font-mono"
-                placeholder="C:\path\to\mara-brief.md"
+                placeholder="~/.claude/mara-brief.md"
               />
             </Field>
           </SettingsSection>
@@ -846,7 +846,7 @@ export default function Settings() {
           <span className="font-mono text-[10px] text-nock-accent-cyan tracking-widest uppercase block mb-1">
             // Configuration
           </span>
-          <h1 className="font-display font-bold text-lg tracking-tight leading-none nock-gradient-text">
+          <h1 className="font-display font-bold text-lg tracking-tight leading-none text-nock-text">
             Settings
           </h1>
         </div>

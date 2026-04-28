@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import monacoEditorPlugin from 'vite-plugin-monaco-editor';
+// monacoEditorPlugin disabled: uses deprecated fs.rmdirSync({recursive}) removed in Node 16+
+// import monacoEditorPlugin from 'vite-plugin-monaco-editor';
 
 export default defineConfig({
   plugins: [
     react(),
-    monacoEditorPlugin({ languageWorkers: ['editorWorkerService', 'typescript', 'json', 'css', 'html'] }),
+    // monacoEditorPlugin({ languageWorkers: ['editorWorkerService', 'typescript', 'json', 'css', 'html'] }),
   ],
   base: './',
   build: {
