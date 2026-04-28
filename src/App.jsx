@@ -547,6 +547,7 @@ export default function App() {
           onClick={() => setChatOpen(true)}
           className="fixed bottom-4 right-4 w-12 h-12 rounded-full nock-gradient-bg flex items-center justify-center shadow-lg hover:opacity-90 transition-opacity z-50"
           title="Open AI Chat (Ctrl+Shift+A)"
+          aria-label="Open AI Chat"
         >
           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />

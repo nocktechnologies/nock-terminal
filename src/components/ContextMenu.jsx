@@ -34,6 +34,7 @@ export default function ContextMenu({ x, y, items, onClose }) {
   return (
     <div
       ref={menuRef}
+      role="menu"
       className="fixed bg-nock-card border border-nock-border rounded-lg shadow-2xl py-1 z-50 min-w-[170px] backdrop-blur-sm"
       style={{ left: clampedX, top: clampedY }}
       onMouseDown={(e) => e.stopPropagation()}
@@ -49,6 +50,8 @@ export default function ContextMenu({ x, y, items, onClose }) {
         return (
           <button
             key={item.label}
+            role="menuitem"
+            aria-disabled={disabled || undefined}
             onClick={() => {
               if (!disabled) {
                 item.onClick?.();

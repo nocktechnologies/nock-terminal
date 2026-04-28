@@ -2,15 +2,9 @@ import React, { useState, useEffect } from 'react';
 
 export default function TitleBar({ sessionCount = 0, activeCount = 0 }) {
   const [isMaximized, setIsMaximized] = useState(false);
-  const [time, setTime] = useState(() => new Date());
 
   useEffect(() => {
     window.nockTerminal.window.isMaximized().then(setIsMaximized);
-  }, []);
-
-  useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(t);
   }, []);
 
   const handleMinimize = () => window.nockTerminal.window.minimize();
@@ -19,8 +13,6 @@ export default function TitleBar({ sessionCount = 0, activeCount = 0 }) {
     setIsMaximized(await window.nockTerminal.window.isMaximized());
   };
   const handleClose = () => window.nockTerminal.window.close();
-
-  const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
   return (
     <div className="titlebar-drag h-10 bg-nock-bg border-b border-nock-border flex items-center justify-between px-3 select-none shrink-0 relative">
@@ -57,10 +49,6 @@ export default function TitleBar({ sessionCount = 0, activeCount = 0 }) {
         <span className="font-mono text-[10px] text-nock-text-dim tracking-wider uppercase tabular-nums">
           {sessionCount} sessions
         </span>
-        <div className="w-px h-3 bg-nock-border" />
-        <span className="font-mono text-[10px] text-nock-text tracking-wider tabular-nums">
-          {timeStr}
-        </span>
       </div>
 
       {/* Right: Window controls */}
@@ -69,6 +57,7 @@ export default function TitleBar({ sessionCount = 0, activeCount = 0 }) {
           onClick={handleMinimize}
           className="w-9 h-7 flex items-center justify-center hover:bg-white/5 rounded transition-colors text-nock-text-dim hover:text-nock-text"
           title="Minimize"
+          aria-label="Minimize"
         >
           <svg className="w-3 h-0.5" fill="currentColor" viewBox="0 0 12 2">
             <rect width="12" height="2" rx="1" />
@@ -78,6 +67,7 @@ export default function TitleBar({ sessionCount = 0, activeCount = 0 }) {
           onClick={handleMaximize}
           className="w-9 h-7 flex items-center justify-center hover:bg-white/5 rounded transition-colors text-nock-text-dim hover:text-nock-text"
           title={isMaximized ? 'Restore' : 'Maximize'}
+          aria-label={isMaximized ? 'Restore' : 'Maximize'}
         >
           {isMaximized ? (
             <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 12 12">
@@ -94,6 +84,7 @@ export default function TitleBar({ sessionCount = 0, activeCount = 0 }) {
           onClick={handleClose}
           className="w-9 h-7 flex items-center justify-center hover:bg-red-500/80 rounded transition-colors text-nock-text-dim hover:text-white"
           title="Close"
+          aria-label="Close window"
         >
           <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 12 12">
             <path d="M2 2l8 8M10 2l-8 8" />

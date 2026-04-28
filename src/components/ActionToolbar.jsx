@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Columns2, PanelLeft, MessageSquare, LayoutDashboard, ArrowDown, ArrowUp, RefreshCw, Loader2 } from 'lucide-react';
 
 const GIT_OPS = [
-  { op: 'pull',  icon: '↓', label: 'Pull'  },
-  { op: 'push',  icon: '↑', label: 'Push'  },
-  { op: 'fetch', icon: '⟳', label: 'Fetch' },
+  { op: 'pull',  Icon: ArrowDown,  label: 'Pull'  },
+  { op: 'push',  Icon: ArrowUp,    label: 'Push'  },
+  { op: 'fetch', Icon: RefreshCw,  label: 'Fetch' },
 ];
 
 export default function ActionToolbar({
@@ -67,28 +68,28 @@ export default function ActionToolbar({
   return (
     <div className="flex items-center gap-1 px-2 shrink-0">
       <ToolbarButton
-        icon="⊞"
+        Icon={Columns2}
         label="Split"
         shortcut="Ctrl+Shift+D"
         onClick={onSplit}
         active={hasSplit}
       />
       <ToolbarButton
-        icon="◧"
+        Icon={PanelLeft}
         label="Sidebar"
         shortcut="Ctrl+B"
         onClick={onToggleSidebar}
         active={sidebarOpen}
       />
       <ToolbarButton
-        icon="💬"
+        Icon={MessageSquare}
         label="Chat"
         shortcut="Ctrl+Shift+A"
         onClick={onToggleChat}
         active={chatOpen}
       />
       <ToolbarButton
-        icon="⊟"
+        Icon={LayoutDashboard}
         label="Dash"
         shortcut="Ctrl+D"
         onClick={onDashboard}
@@ -96,12 +97,12 @@ export default function ActionToolbar({
 
       <div className="w-px h-4 bg-nock-border mx-1 shrink-0" />
 
-      {GIT_OPS.map(({ op, icon, label }) => (
+      {GIT_OPS.map(({ op, Icon, label }) => (
         <ToolbarButton
           key={op}
-          icon={gitBusy && gitStatus.op === op ? `${icon}…` : icon}
+          Icon={gitBusy && gitStatus.op === op ? Loader2 : Icon}
+          spinning={gitBusy && gitStatus.op === op}
           label={label}
-          shortcut=""
           onClick={() => runGitOp(op)}
           disabled={gitDisabled}
         />
@@ -123,7 +124,7 @@ export default function ActionToolbar({
   );
 }
 
-function ToolbarButton({ icon, label, shortcut, onClick, active, disabled }) {
+function ToolbarButton({ Icon, label, shortcut, onClick, active, disabled, spinning }) {
   return (
     <button
       onClick={onClick}
@@ -136,8 +137,9 @@ function ToolbarButton({ icon, label, shortcut, onClick, active, disabled }) {
           : 'bg-nock-card border-nock-border text-nock-text-dim hover:text-nock-text hover:border-nock-border-bright'
       }`}
       title={shortcut ? `${label} (${shortcut})` : label}
+      aria-label={label}
     >
-      <span>{icon}</span>
+      <Icon className={`w-3 h-3 shrink-0 ${spinning ? 'animate-spin' : ''}`} />
       <span className="hidden sm:inline">{label}</span>
     </button>
   );

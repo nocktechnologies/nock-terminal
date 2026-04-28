@@ -190,7 +190,7 @@ export default function AIChatPanel({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="font-mono text-[9px] text-nock-accent-cyan tracking-widest uppercase">// 02</span>
-            <span className="font-display font-semibold text-[13px] nock-gradient-text tracking-wide">AI Chat</span>
+            <span className="font-display font-semibold text-[13px] text-nock-text tracking-wide">AI Chat</span>
             {isOllamaModel && (
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
