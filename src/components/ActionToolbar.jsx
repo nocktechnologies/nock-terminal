@@ -137,7 +137,7 @@ function ToolbarButton({ Icon, label, shortcut, onClick, active, disabled, spinn
           : 'bg-nock-card border-nock-border text-nock-text-dim hover:text-nock-text hover:border-nock-border-bright'
       }`}
       title={shortcut ? `${label} (${shortcut})` : label}
-      aria-label={label}
+      aria-label={shortcut ? `${label} (${shortcut})` : label}
     >
       <Icon className={`w-3 h-3 shrink-0 ${spinning ? 'animate-spin' : ''}`} />
       <span className="hidden sm:inline">{label}</span>
