@@ -42,7 +42,7 @@ export default function Sidebar({
       {!collapsed && (
         <div className="flex-1 overflow-y-auto">
           {activeProjectPath && (
-            <div className="px-1 pt-3 pb-2 border-b border-nock-border" style={{ maxHeight: '40%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="px-1 pt-3 pb-2 border-b border-nock-border max-h-[40%] overflow-hidden flex flex-col">
               <div className="px-2 mb-2 flex items-center justify-between">
                 <span className="font-mono text-[9px] text-nock-text-muted uppercase tracking-widest">
                   // Files
@@ -120,12 +120,12 @@ export default function Sidebar({
           </div>
 
           {/* Session history */}
-          <div className="border-t border-nock-border" style={{ maxHeight: '30%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div className="border-t border-nock-border max-h-[30%] overflow-hidden flex flex-col">
             <SessionHistory />
           </div>
 
           {/* Prompt library */}
-          <div className="border-t border-nock-border" style={{ maxHeight: '30%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div className="border-t border-nock-border max-h-[30%] overflow-hidden flex flex-col">
             <PromptLibrary onExecutePrompt={onExecutePrompt} />
           </div>
         </div>

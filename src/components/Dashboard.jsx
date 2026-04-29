@@ -99,8 +99,8 @@ export default function Dashboard({ sessions, onSessionClick, onNewTerminal, onR
                   // 01 — Fleet Overview
                 </span>
               </div>
-              <h1 className="font-display font-bold text-4xl tracking-tight leading-none">
-                <span className="nock-gradient-text">Sessions</span>
+              <h1 className="font-display font-bold text-4xl tracking-tight leading-none text-nock-text">
+                Sessions
               </h1>
               <p className="font-mono text-xs text-nock-text-dim mt-2 tracking-wide">
                 Claude Code sessions + git repos from configured dev roots
