@@ -66,7 +66,7 @@ NOCK_TERMINAL_MOCK = """
 
 def discover_monaco_vite_url():
     """Read the Vite-transformed EditorPane to find the actual resolved monaco-editor URL."""
-    with urllib.request.urlopen(f'{APP_URL}/src/components/EditorPane.jsx') as resp:
+    with urllib.request.urlopen(f'{APP_URL}/src/components/EditorPane.jsx', timeout=10) as resp:
         body = resp.read().decode()
     match = re.search(r'import\(["\']([^"\']*monaco-editor[^"\']*)["\']', body)
     if not match:
@@ -93,54 +93,57 @@ def run():
         page.goto(APP_URL, wait_until='networkidle', timeout=TIMEOUT_MS)
 
         print(f'Running import({monaco_url!r}) in page context…')
-        result = page.evaluate(f"""
-          async () => {{
-            try {{
-              const monaco = await import('{monaco_url}');
+        result = page.evaluate(
+            """
+            async (url) => {
+              try {
+                const monaco = await import(url);
 
-              const container = document.createElement('div');
-              container.style.cssText = [
-                'position:fixed', 'top:0', 'left:0',
-                'width:800px', 'height:400px', 'z-index:99999',
-              ].join(';');
-              document.body.appendChild(container);
+                const container = document.createElement('div');
+                container.style.cssText = [
+                  'position:fixed', 'top:0', 'left:0',
+                  'width:800px', 'height:400px', 'z-index:99999',
+                ].join(';');
+                document.body.appendChild(container);
 
-              monaco.editor.defineTheme('smoke-dark', {{
-                base: 'vs-dark', inherit: true, rules: [],
-                colors: {{ 'editor.background': '#0D0D12' }},
-              }});
+                monaco.editor.defineTheme('smoke-dark', {
+                  base: 'vs-dark', inherit: true, rules: [],
+                  colors: { 'editor.background': '#0D0D12' },
+                });
 
-              const editor = monaco.editor.create(container, {{
-                value: [
-                  'interface NockSession {{',
-                  '  id: string;',
-                  '  name: string;',
-                  '}}',
-                  '',
-                  'async function getSession(id: string): Promise<NockSession | null> {{',
-                  '  return null;',
-                  '}}',
-                ].join('\\n'),
-                language: 'typescript',
-                theme: 'smoke-dark',
-                fontSize: 13,
-                automaticLayout: false,
-              }});
+                const editor = monaco.editor.create(container, {
+                  value: [
+                    'interface NockSession {',
+                    '  id: string;',
+                    '  name: string;',
+                    '}',
+                    '',
+                    'async function getSession(id: string): Promise<NockSession | null> {',
+                    '  return null;',
+                    '}',
+                  ].join('\\n'),
+                  language: 'typescript',
+                  theme: 'smoke-dark',
+                  fontSize: 13,
+                  automaticLayout: false,
+                });
 
-              editor.focus();
-              editor.trigger('smoke', 'type', {{ text: '// smoke-verified\\n' }});
+                editor.focus();
+                editor.trigger('smoke', 'type', { text: '// smoke-verified\\n' });
 
-              const model = editor.getModel();
-              return {{
-                ok: true,
-                lang: model.getLanguageId(),
-                lineCount: model.getLineCount(),
-              }};
-            }} catch (e) {{
-              return {{ ok: false, error: e.message }};
-            }}
-          }}
-        """)
+                const model = editor.getModel();
+                return {
+                  ok: true,
+                  lang: model.getLanguageId(),
+                  lineCount: model.getLineCount(),
+                };
+              } catch (e) {
+                return { ok: false, error: e.message };
+              }
+            }
+            """,
+            monaco_url,
+        )
 
         shot_path = str(SCREENSHOT_DIR / 'monaco-smoke.png')
         page.screenshot(path=shot_path, full_page=False)
