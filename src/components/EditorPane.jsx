@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 const EXT_TO_LANG = {
   js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
@@ -48,16 +48,29 @@ export default function EditorPane({
   onActiveFileChange,
   onClose,
   onCloseFile,
+  onUnsavedFilesChange,
 }) {
   const editorRef = useRef(null);
   const containerRef = useRef(null);
   const monacoRef = useRef(null);
   const modelsRef = useRef({});
   const activeFileRef = useRef(activeFile);
+  const onUnsavedFilesChangeRef = useRef(onUnsavedFilesChange);
   const [loading, setLoading] = useState(true);
   const [fileContents, setFileContents] = useState({});
   const [saveError, setSaveError] = useState(null);
   const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    onUnsavedFilesChangeRef.current = onUnsavedFilesChange;
+  }, [onUnsavedFilesChange]);
+
+  const notifyUnsavedFiles = useCallback(() => {
+    const unsavedFiles = Object.entries(modelsRef.current)
+      .filter(([, entry]) => entry.modified)
+      .map(([filePath]) => filePath);
+    onUnsavedFilesChangeRef.current?.(unsavedFiles);
+  }, []);
 
   // Keep ref in sync so Monaco command closure reads current value
   useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
@@ -96,6 +109,7 @@ export default function EditorPane({
               if (result.success) {
                 entry.modified = false;
                 setSaveError(null);
+                notifyUnsavedFiles();
                 forceUpdate(n => n + 1);
               } else {
                 console.error('Save failed:', result.error);
@@ -153,7 +167,10 @@ export default function EditorPane({
       const model = monaco.editor.createModel(content.content, language);
 
       model.onDidChangeContent(() => {
-        modelsRef.current[activeFile].modified = true;
+        const entry = modelsRef.current[activeFile];
+        if (!entry || entry.modified) return;
+        entry.modified = true;
+        notifyUnsavedFiles();
         forceUpdate(n => n + 1);
       });
 
@@ -176,7 +193,8 @@ export default function EditorPane({
         delete modelsRef.current[path];
       }
     }
-  }, [files]);
+    notifyUnsavedFiles();
+  }, [files, notifyUnsavedFiles]);
 
   useEffect(() => {
     return () => {
@@ -212,8 +230,10 @@ export default function EditorPane({
               {modified && <span className="text-nock-yellow text-[8px]">●</span>}
               {hasError && <span className="text-red-400 text-[8px]">!</span>}
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); onCloseFile(filePath); }}
-                className="opacity-0 hover:opacity-100 transition-opacity ml-0.5"
+                className="min-h-5 min-w-5 inline-flex items-center justify-center opacity-0 hover:opacity-100 focus:opacity-100 transition-opacity ml-0.5"
+                aria-label={`Close ${getFileName(filePath)}`}
               >
                 <svg className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 12 12">
                   <path d="M2 2l8 8M10 2l-8 8" />
@@ -224,9 +244,11 @@ export default function EditorPane({
         })}
         <div className="flex-1" />
         <button
+          type="button"
           onClick={onClose}
           className="px-2 h-7 text-nock-text-muted hover:text-nock-text transition-colors shrink-0"
           title="Close Editor (Ctrl+W)"
+          aria-label="Close editor"
         >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" />
@@ -249,7 +271,7 @@ export default function EditorPane({
       {saveError && (
         <div className="px-3 py-1.5 bg-red-400/10 border-b border-red-400/20 text-[10px] text-red-400 font-mono flex items-center justify-between">
           <span>Save failed: {saveError}</span>
-          <button onClick={() => setSaveError(null)} className="text-red-400 hover:text-red-300 ml-2">✕</button>
+          <button type="button" onClick={() => setSaveError(null)} className="min-h-6 min-w-6 text-red-400 hover:text-red-300 ml-2" aria-label="Dismiss save error">✕</button>
         </div>
       )}
 

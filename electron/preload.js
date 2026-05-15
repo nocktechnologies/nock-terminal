@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('nockTerminal', {
   // System info
   system: {
     detectShells: () => ipcRenderer.invoke('system:detectShells'),
+    detectAgents: () => ipcRenderer.invoke('system:detectAgents'),
     ollamaVersion: () => ipcRenderer.invoke('system:ollamaVersion'),
     appVersion: () => ipcRenderer.invoke('system:appVersion'),
   },
@@ -87,6 +88,11 @@ contextBridge.exposeInMainWorld('nockTerminal', {
   telegram: {
     test: () => ipcRenderer.invoke('telegram:test'),
     notify: (eventType, details) => ipcRenderer.invoke('telegram:notify', { eventType, details }),
+  },
+
+  // NockCC activity heartbeat
+  nockcc: {
+    updateActivity: (activity) => ipcRenderer.send('nockcc:updateActivity', activity),
   },
 
   // Project profiles

@@ -58,6 +58,7 @@ const DEFAULT_SETTINGS = {
   autoCaptureSessions: false,
   // Layout
   sidebarCollapsed: false,
+  onboardingComplete: false,
   // Projects
   devRoots: process.platform === 'win32' ? ['C:\\Dev'] : [],
   projectSkipList: ['Gym-App', 'github.com-kkwills13-nock-technologies-site'],
@@ -188,6 +189,7 @@ const BOOLEAN_KEYS = new Set([
   'telegramNotifyFenceEvent',
   'autoCaptureSessions',
   'sidebarCollapsed',
+  'onboardingComplete',
 ]);
 
 const STRING_KEYS = {

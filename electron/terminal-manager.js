@@ -14,7 +14,7 @@ class TerminalManager extends EventEmitter {
     }
   }
 
-  create(id, cwd, shellPath) {
+  create(id, cwd, launchOptions = {}) {
     if (!this.pty) {
       return { success: false, error: 'node-pty not available' };
     }
@@ -23,8 +23,15 @@ class TerminalManager extends EventEmitter {
       this.destroy(id);
     }
 
-    const shell = shellPath || this._defaultShell();
-    const args = this._defaultArgs(shell);
+    const options = typeof launchOptions === 'string'
+      ? { shell: launchOptions }
+      : (launchOptions || {});
+    const shell = options.shell || this._defaultShell();
+    const args = [
+      ...this._defaultArgs(shell),
+      ...this._parseShellArgs(options.shellArgs),
+    ];
+    const envVars = this._parseEnvVars(options.envVars);
 
     try {
       const ptyProcess = this.pty.spawn(shell, args, {
@@ -32,7 +39,7 @@ class TerminalManager extends EventEmitter {
         cols: 120,
         rows: 30,
         cwd: cwd || os.homedir(),
-        env: { ...process.env, TERM: 'xterm-256color' },
+        env: { ...process.env, ...envVars, TERM: 'xterm-256color' },
         // ConPTY's console list agent crashes with AttachConsole on Node 18+
         // (Electron 28). Disable it to use the stable winpty backend instead.
         useConpty: process.platform !== 'win32',
@@ -175,6 +182,75 @@ class TerminalManager extends EventEmitter {
       return ['-i', '-l'];
     }
     return [];
+  }
+
+  _parseShellArgs(value) {
+    if (typeof value !== 'string' || value.trim() === '') return [];
+    if (value.length > 1000) return [];
+
+    const args = [];
+    let current = '';
+    let quote = null;
+    let escaped = false;
+
+    for (let i = 0; i < value.length; i += 1) {
+      const char = value[i];
+      const next = value[i + 1];
+      if (char === '\\') {
+        const escapesQuote = quote && next === quote;
+        const escapesCommon = next === '\\' || next === '"' || next === "'";
+        const escapesWhitespace = !quote && next && /\s/.test(next);
+        if (next && (escapesQuote || escapesCommon || escapesWhitespace)) {
+          current += next;
+          i += 1;
+        } else {
+          current += char;
+        }
+        continue;
+      }
+      if (quote) {
+        if (char === quote) {
+          quote = null;
+        } else {
+          current += char;
+        }
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        quote = char;
+        continue;
+      }
+      if (/\s/.test(char)) {
+        if (current) {
+          args.push(current);
+          current = '';
+        }
+        continue;
+      }
+      current += char;
+    }
+
+    if (current) args.push(current);
+    return args.slice(0, 50);
+  }
+
+  _parseEnvVars(value) {
+    if (typeof value !== 'string' || value.trim() === '') return {};
+
+    const env = {};
+    for (const rawLine of value.split(/\r?\n/).slice(0, 100)) {
+      if (!rawLine || /^\s*#/.test(rawLine)) continue;
+      const separator = rawLine.indexOf('=');
+      if (separator <= 0) continue;
+
+      const key = rawLine.slice(0, separator);
+      const envValue = rawLine.slice(separator + 1);
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+      if (key.length > 128 || envValue.length > 4000) continue;
+
+      env[key] = envValue;
+    }
+    return env;
   }
 }
 

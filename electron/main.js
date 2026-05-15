@@ -14,6 +14,7 @@ const ProjectProfiles = require('./project-profiles');
 const SessionHistory = require('./session-history');
 const PromptStore = require('./prompt-store');
 const { DEFAULT_SETTINGS, normalizeSettingValue, sanitizeStoredSettings } = require('./settings-utils');
+const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
 
 const store = new Store({
@@ -51,6 +52,11 @@ let sessionHistory = null;
 let promptStore = null;
 let nockccClient = null;
 let nockccHeartbeatInterval = null;
+let nockccActivity = {
+  activeProjectCount: 0,
+  activeClaudeSessionIds: [],
+  activeAgentSessionIds: [],
+};
 
 const isDev = !app.isPackaged;
 
@@ -207,8 +213,12 @@ function registerIPC() {
   ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false);
 
   // Terminal management
-  ipcMain.handle('terminal:create', async (_, { id, cwd, shell: shellPath }) => {
-    return terminalManager.create(id, cwd, shellPath);
+  ipcMain.handle('terminal:create', async (_, { id, cwd, shell: shellPath, shellArgs, envVars }) => {
+    return terminalManager.create(id, cwd, {
+      shell: shellPath,
+      shellArgs,
+      envVars,
+    });
   });
   ipcMain.on('terminal:write', (_, { id, data }) => {
     terminalManager.write(id, data);
@@ -367,6 +377,48 @@ function registerIPC() {
     return app.getVersion();
   });
 
+  ipcMain.handle('system:detectAgents', async () => {
+    const fs = require('fs');
+    const { execFile } = require('child_process');
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
+
+    const findCommand = async (command) => {
+      const candidates = process.platform === 'win32'
+        ? [`${command}.cmd`, `${command}.exe`, command]
+        : [command];
+
+      for (const candidate of candidates) {
+        try {
+          const { stdout } = await execFileAsync(process.platform === 'win32' ? 'where' : 'which', [candidate], {
+            encoding: 'utf8',
+            timeout: 3000,
+            windowsHide: true,
+          });
+          const output = stdout.trim();
+          const firstLine = output.split(/\r?\n/).find(Boolean);
+          if (firstLine) return firstLine;
+        } catch {
+          // try next candidate
+        }
+      }
+
+      const absoluteCandidates = process.platform === 'win32'
+        ? []
+        : [`/usr/local/bin/${command}`, `/opt/homebrew/bin/${command}`, path.join(process.env.HOME || '', '.local', 'bin', command)];
+      for (const candidate of absoluteCandidates) {
+        if (fs.existsSync(candidate)) return candidate;
+      }
+      return null;
+    };
+
+    const agents = await Promise.all(getAgentAdapters().map(async ({ id, label, command }) => {
+      const agentPath = command ? await findCommand(command) : null;
+      return { id, label, command, path: agentPath };
+    }));
+    return agents.map(agent => ({ ...agent, installed: !!agent.path }));
+  });
+
   ipcMain.handle('window:setAlwaysOnTop', (_, value) => {
     if (mainWindow) mainWindow.setAlwaysOnTop(!!value);
   });
@@ -484,6 +536,24 @@ function registerIPC() {
     return telegramNotifier.notify(eventType, details);
   });
 
+  ipcMain.on('nockcc:updateActivity', (_, activity = {}) => {
+    if (!activity || typeof activity !== 'object') activity = {};
+    const activeProjectCount = Number.isFinite(activity.activeProjectCount)
+      ? Math.max(0, Math.round(activity.activeProjectCount))
+      : 0;
+    const sanitizeList = (value) => (
+      Array.isArray(value)
+        ? value.filter(item => typeof item === 'string' && item.length <= 200).slice(0, 100)
+        : []
+    );
+
+    nockccActivity = {
+      activeProjectCount,
+      activeClaudeSessionIds: sanitizeList(activity.activeClaudeSessionIds),
+      activeAgentSessionIds: sanitizeList(activity.activeAgentSessionIds),
+    };
+  });
+
   // Project profiles
   ipcMain.handle('profiles:get', (_, projectPath) => {
     return projectProfiles.get(projectPath);
@@ -568,7 +638,7 @@ app.whenReady().then(() => {
   const { version: appVersion } = require('../package.json');
   nockccClient.startSession({ machine: process.platform, appVersion });
   nockccHeartbeatInterval = setInterval(() => {
-    nockccClient.heartbeat({ activeProjectCount: 0, activeClaudeSessionIds: [] });
+    nockccClient.heartbeat(nockccActivity);
   }, 60_000);
 
   // Global shortcut: try candidates in order, take the first one that registers.

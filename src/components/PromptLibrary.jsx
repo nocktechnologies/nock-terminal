@@ -119,18 +119,22 @@ export default function PromptLibrary({ onExecutePrompt }) {
             Back
           </button>
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={executePrompt}
-              className="text-nock-green hover:text-green-400 transition-colors"
-              title="Execute prompt"
-            >
+          <button
+            type="button"
+            onClick={executePrompt}
+            className="min-h-7 min-w-7 inline-flex items-center justify-center rounded text-nock-green hover:text-green-400 hover:bg-nock-card transition-colors"
+            title="Execute prompt"
+            aria-label="Execute prompt"
+          >
               <Play className="w-3.5 h-3.5" />
             </button>
-            <button
-              onClick={deletePrompt}
-              className="text-nock-text-muted hover:text-red-400 transition-colors"
-              title="Delete prompt"
-            >
+          <button
+            type="button"
+            onClick={deletePrompt}
+            className="min-h-7 min-w-7 inline-flex items-center justify-center rounded text-nock-text-muted hover:text-red-400 hover:bg-nock-card transition-colors"
+            title="Delete prompt"
+            aria-label="Delete prompt"
+          >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -184,9 +188,11 @@ export default function PromptLibrary({ onExecutePrompt }) {
           // Prompts
         </span>
         <button
+          type="button"
           onClick={createPrompt}
-          className="text-nock-text-muted hover:text-nock-text transition-colors"
+          className="min-h-7 min-w-7 inline-flex items-center justify-center rounded text-nock-text-muted hover:text-nock-text hover:bg-nock-card transition-colors"
           title="New prompt"
+          aria-label="New prompt"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>
@@ -199,6 +205,7 @@ export default function PromptLibrary({ onExecutePrompt }) {
           <div className="space-y-0.5">
             {prompts.map((prompt) => (
               <button
+                type="button"
                 key={prompt.id}
                 onClick={() => openPrompt(prompt)}
                 className="w-full text-left px-2 py-1.5 rounded hover:bg-nock-card transition-colors group"

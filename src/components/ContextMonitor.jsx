@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AGENT_CONTEXT_GROUPS } from '../utils/agentContext.mjs';
 
 function joinProjectPath(basePath, relativePath) {
   const separator = basePath.includes('\\') ? '\\' : '/';
@@ -51,19 +52,19 @@ async function findNearestContextFile(projectPath, relativePaths, maxDepth = 5) 
 }
 
 export default function ContextMonitor({ projectPath, onEditFile }) {
-  const [claudeMd, setClaudeMd] = useState(null);
-  const [nockConfig, setNockConfig] = useState(null);
+  const [contextRows, setContextRows] = useState([]);
 
   useEffect(() => {
     if (!projectPath) return;
 
     const check = async () => {
-      const [claudeStat, nockStat] = await Promise.all([
-        findNearestContextFile(projectPath, ['CLAUDE.md', '.claude/CLAUDE.md']),
-        findNearestContextFile(projectPath, ['.nock/config.toml']),
-      ]);
-      setClaudeMd(claudeStat);
-      setNockConfig(nockStat);
+      const rows = await Promise.all(
+        AGENT_CONTEXT_GROUPS.map(async (group) => ({
+          ...group,
+          stat: await findNearestContextFile(projectPath, group.paths),
+        }))
+      );
+      setContextRows(rows);
     };
 
     check();
@@ -91,20 +92,16 @@ export default function ContextMonitor({ projectPath, onEditFile }) {
       <span className="font-mono text-[9px] text-nock-text-muted uppercase tracking-widest mb-2 block">
         // Context
       </span>
-      <ContextRow
-        label="CLAUDE.md"
-        stat={claudeMd}
-        onEdit={() => claudeMd?.exists && onEditFile(claudeMd.path)}
-        formatTime={formatTime}
-        formatSize={formatSize}
-      />
-      <ContextRow
-        label=".nock/config.toml"
-        stat={nockConfig}
-        onEdit={() => nockConfig?.exists && onEditFile(nockConfig.path)}
-        formatTime={formatTime}
-        formatSize={formatSize}
-      />
+      {contextRows.map(({ label, stat }) => (
+        <ContextRow
+          key={label}
+          label={label}
+          stat={stat}
+          onEdit={() => stat?.exists && onEditFile(stat.path)}
+          formatTime={formatTime}
+          formatSize={formatSize}
+        />
+      ))}
     </div>
   );
 }
@@ -122,8 +119,10 @@ function ContextRow({ label, stat, onEdit, formatTime, formatSize }) {
           <span className="font-mono text-[8px] text-nock-text-muted">{formatSize(stat.size)}</span>
           <span className="font-mono text-[8px] text-nock-text-muted">{formatTime(stat.mtime)}</span>
           <button
+            type="button"
             onClick={onEdit}
-            className="text-[8px] text-nock-accent-blue opacity-0 group-hover:opacity-100 transition-opacity"
+            className="min-h-6 px-1.5 rounded text-[8px] text-nock-accent-blue opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-nock-card transition-opacity"
+            aria-label={`Edit ${label}`}
           >
             Edit
           </button>

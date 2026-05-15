@@ -85,6 +85,9 @@ export default function ProjectSettingsModal({ projectPath, projectName, onClose
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onClick={handleBackdropClick}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${displayName} project settings`}
     >
       <div
         ref={cardRef}
@@ -110,8 +113,10 @@ export default function ProjectSettingsModal({ projectPath, projectName, onClose
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1 rounded hover:bg-nock-card text-nock-text-muted hover:text-nock-text transition-colors"
+            aria-label="Close project settings"
           >
             <X size={16} />
           </button>
@@ -146,6 +151,16 @@ export default function ProjectSettingsModal({ projectPath, projectName, onClose
               placeholder="Auto-detect"
               value={profile.defaultShell}
               onChange={(e) => updateField('defaultShell', e.target.value)}
+            />
+          </Field>
+
+          <Field label="Shell Arguments" description="Project-specific arguments appended to the selected shell">
+            <input
+              type="text"
+              className="settings-input font-mono"
+              placeholder="-NoLogo"
+              value={profile.shellArgs}
+              onChange={(e) => updateField('shellArgs', e.target.value)}
             />
           </Field>
 
