@@ -68,25 +68,27 @@ function getAssetPath(fileName) {
 
 function getPlatformIconPath() {
   if (process.platform === 'win32') return getAssetPath('icon.ico');
-  if (process.platform === 'darwin') return getAssetPath('icon.icns');
+  if (process.platform === 'darwin') {
+    return app.isPackaged ? path.join(process.resourcesPath, 'icon.icns') : getAssetPath('icon.icns');
+  }
   return getAssetPath('icon.png');
 }
 
-function getMacMetadataIconPath() {
-  return app.isPackaged ? path.join(process.resourcesPath, 'icon.icns') : getAssetPath('icon.png');
-}
-
 function configureAppBranding() {
-  if (process.platform !== 'darwin') return;
+  const iconPath = getPlatformIconPath();
 
-  const iconPath = getMacMetadataIconPath();
-  app.dock?.setIcon(iconPath);
-  app.setAboutPanelOptions({
-    applicationName: APP_NAME,
-    applicationVersion: app.getVersion(),
-    iconPath,
-    copyright: 'Copyright Nock Technologies (K Wills Technologies LLC)',
-  });
+  if (process.platform === 'darwin') {
+    app.dock?.setIcon(iconPath);
+  }
+
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    app.setAboutPanelOptions({
+      applicationName: APP_NAME,
+      applicationVersion: app.getVersion(),
+      iconPath,
+      copyright: 'Copyright Nock Technologies (K Wills Technologies LLC)',
+    });
+  }
 }
 
 function createWindow() {
