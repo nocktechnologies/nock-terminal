@@ -2,6 +2,7 @@ const AGENT_ADAPTERS = [
   {
     id: 'claude',
     label: 'Claude Code',
+    command: 'claude',
     processNames: ['claude', 'claude.exe', 'claude.cmd'],
     contextGroups: [
       {
@@ -13,6 +14,7 @@ const AGENT_ADAPTERS = [
   {
     id: 'codex',
     label: 'Codex',
+    command: 'codex',
     processNames: ['codex', 'codex.exe', 'codex.cmd'],
     contextGroups: [
       {

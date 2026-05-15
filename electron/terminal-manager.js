@@ -193,14 +193,19 @@ class TerminalManager extends EventEmitter {
     let quote = null;
     let escaped = false;
 
-    for (const char of value) {
-      if (escaped) {
-        current += char;
-        escaped = false;
-        continue;
-      }
+    for (let i = 0; i < value.length; i += 1) {
+      const char = value[i];
+      const next = value[i + 1];
       if (char === '\\') {
-        escaped = true;
+        const escapesQuote = quote && next === quote;
+        const escapesCommon = next === '\\' || next === '"' || next === "'";
+        const escapesWhitespace = !quote && next && /\s/.test(next);
+        if (next && (escapesQuote || escapesCommon || escapesWhitespace)) {
+          current += next;
+          i += 1;
+        } else {
+          current += char;
+        }
         continue;
       }
       if (quote) {
@@ -225,7 +230,6 @@ class TerminalManager extends EventEmitter {
       current += char;
     }
 
-    if (escaped) current += '\\';
     if (current) args.push(current);
     return args.slice(0, 50);
   }

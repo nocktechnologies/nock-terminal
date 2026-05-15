@@ -35,6 +35,18 @@ test('create applies explicit shell and parsed shell args', () => {
   assert.deepEqual(calls[0].args, ['-i', '-l', '--login', '--command', 'echo ok']);
 });
 
+test('create preserves literal backslashes in shell args', () => {
+  const { manager, calls } = createManagerWithFakePty();
+
+  const result = manager.create('tab-1', '/tmp', {
+    shell: '/bin/zsh',
+    shellArgs: '--path "C:\\Users\\kevin\\Dev" plain\\ value',
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(calls[0].args, ['-i', '-l', '--path', 'C:\\Users\\kevin\\Dev', 'plain value']);
+});
+
 test('create injects only valid project environment variables', () => {
   const { manager, calls } = createManagerWithFakePty();
 

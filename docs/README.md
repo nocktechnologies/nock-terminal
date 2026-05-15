@@ -11,8 +11,8 @@ Root docs:
 - [README](../README.md) - project overview, setup, commands, and current status.
 - [Architecture](../ARCHITECTURE.md) - current Electron/React architecture and known gaps.
 - [Changelog](../CHANGELOG.md) - repo history and documentation updates.
-- [AGENTS](../AGENTS.md) - instructions for Codex-style agents working in this repo.
-- [CLAUDE](../CLAUDE.md) - instructions for Claude-style agents working in this repo.
+- [AGENTS](../AGENTS.md) - canonical instructions for agents working in this repo.
+- [CLAUDE](../CLAUDE.md) - thin Claude-specific pointer back to `AGENTS.md`.
 
 Historical docs:
 

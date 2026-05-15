@@ -14,13 +14,20 @@ export default function OnboardingPanel({
   const [agents, setAgents] = useState([]);
 
   const refresh = async () => {
-    const [allSettings, detectedAgents] = await Promise.all([
-      window.nockTerminal.settings.getAll(),
-      window.nockTerminal.system.detectAgents?.() || Promise.resolve([]),
-    ]);
-    setComplete(allSettings?.onboardingComplete === true);
-    setDevRoots(Array.isArray(allSettings?.devRoots) ? allSettings.devRoots : []);
-    setAgents(Array.isArray(detectedAgents) ? detectedAgents : []);
+    try {
+      const [allSettings, detectedAgents] = await Promise.all([
+        window.nockTerminal.settings.getAll(),
+        window.nockTerminal.system.detectAgents?.() || Promise.resolve([]),
+      ]);
+      setComplete(allSettings?.onboardingComplete === true);
+      setDevRoots(Array.isArray(allSettings?.devRoots) ? allSettings.devRoots : []);
+      setAgents(Array.isArray(detectedAgents) ? detectedAgents : []);
+    } catch (err) {
+      console.error('Failed to refresh onboarding state:', err);
+      setComplete(false);
+      setDevRoots([]);
+      setAgents([]);
+    }
   };
 
   useEffect(() => {

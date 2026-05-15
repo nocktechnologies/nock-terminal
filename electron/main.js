@@ -14,6 +14,7 @@ const ProjectProfiles = require('./project-profiles');
 const SessionHistory = require('./session-history');
 const PromptStore = require('./prompt-store');
 const { DEFAULT_SETTINGS, normalizeSettingValue, sanitizeStoredSettings } = require('./settings-utils');
+const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
 
 const store = new Store({
@@ -411,10 +412,10 @@ function registerIPC() {
       return null;
     };
 
-    const agents = await Promise.all([
-      findCommand('claude').then(agentPath => ({ id: 'claude', label: 'Claude Code', command: 'claude', path: agentPath })),
-      findCommand('codex').then(agentPath => ({ id: 'codex', label: 'Codex', command: 'codex', path: agentPath })),
-    ]);
+    const agents = await Promise.all(getAgentAdapters().map(async ({ id, label, command }) => {
+      const agentPath = command ? await findCommand(command) : null;
+      return { id, label, command, path: agentPath };
+    }));
     return agents.map(agent => ({ ...agent, installed: !!agent.path }));
   });
 
@@ -536,6 +537,7 @@ function registerIPC() {
   });
 
   ipcMain.on('nockcc:updateActivity', (_, activity = {}) => {
+    if (!activity || typeof activity !== 'object') activity = {};
     const activeProjectCount = Number.isFinite(activity.activeProjectCount)
       ? Math.max(0, Math.round(activity.activeProjectCount))
       : 0;

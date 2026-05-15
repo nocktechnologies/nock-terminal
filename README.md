@@ -74,7 +74,7 @@ npm start
 
 ## Repository Structure
 
-```
+```text
 electron/       Main process services, IPC handlers, PTY, files, settings, sessions
 src/            React renderer app and desktop UI
 src/components/ Dashboard, terminal workbench, editor, settings, chat, sidebar
@@ -93,7 +93,7 @@ docs/           Product audit, launch readiness, roadmap, historical specs
 - [docs/ROADMAP.md](docs/ROADMAP.md) lists product directions and prioritization.
 - [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md) documents the release gate and packaged smoke checklist.
 - [CHANGELOG.md](CHANGELOG.md) summarizes repo history.
-- [AGENTS.md](AGENTS.md) and [CLAUDE.md](CLAUDE.md) provide agent instructions for future work in this repo.
+- [AGENTS.md](AGENTS.md) is the canonical agent instruction file; [CLAUDE.md](CLAUDE.md) points Claude users back to it with Claude-specific context.
 
 ## License
 

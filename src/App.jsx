@@ -190,6 +190,7 @@ export default function App() {
 
   const closeTab = useCallback((tabId) => {
     const tabToClose = tabs.find(t => t.id === tabId);
+    if (tabToClose?.pinned) return;
     if (tabToClose?.splitContent?.type === 'editor') {
       const message = buildUnsavedFilesMessage(tabToClose.splitContent.unsavedFiles);
       if (message && !window.confirm(message)) return;
@@ -209,11 +210,7 @@ export default function App() {
       }
       return filtered;
     });
-    // Destroy the terminal process (only if not pinned — the setTabs above is a no-op for pinned)
-    const tab = tabs.find(t => t.id === tabId);
-    if (!tab?.pinned) {
-      window.nockTerminal.terminal.destroy(tabId);
-    }
+    window.nockTerminal.terminal.destroy(tabId);
   }, [activeTabId, tabs]);
 
   const renameTab = useCallback((tabId, title) => {
