@@ -167,7 +167,9 @@ export default function EditorPane({
       const model = monaco.editor.createModel(content.content, language);
 
       model.onDidChangeContent(() => {
-        modelsRef.current[activeFile].modified = true;
+        const entry = modelsRef.current[activeFile];
+        if (!entry || entry.modified) return;
+        entry.modified = true;
         notifyUnsavedFiles();
         forceUpdate(n => n + 1);
       });

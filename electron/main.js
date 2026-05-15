@@ -378,20 +378,23 @@ function registerIPC() {
 
   ipcMain.handle('system:detectAgents', async () => {
     const fs = require('fs');
-    const { execFileSync } = require('child_process');
+    const { execFile } = require('child_process');
+    const { promisify } = require('util');
+    const execFileAsync = promisify(execFile);
 
-    const findCommand = (command) => {
+    const findCommand = async (command) => {
       const candidates = process.platform === 'win32'
         ? [`${command}.cmd`, `${command}.exe`, command]
         : [command];
 
       for (const candidate of candidates) {
         try {
-          const output = execFileSync(process.platform === 'win32' ? 'where' : 'which', [candidate], {
+          const { stdout } = await execFileAsync(process.platform === 'win32' ? 'where' : 'which', [candidate], {
             encoding: 'utf8',
             timeout: 3000,
             windowsHide: true,
-          }).trim();
+          });
+          const output = stdout.trim();
           const firstLine = output.split(/\r?\n/).find(Boolean);
           if (firstLine) return firstLine;
         } catch {
@@ -408,10 +411,11 @@ function registerIPC() {
       return null;
     };
 
-    return [
-      { id: 'claude', label: 'Claude Code', command: 'claude', path: findCommand('claude') },
-      { id: 'codex', label: 'Codex', command: 'codex', path: findCommand('codex') },
-    ].map(agent => ({ ...agent, installed: !!agent.path }));
+    const agents = await Promise.all([
+      findCommand('claude').then(agentPath => ({ id: 'claude', label: 'Claude Code', command: 'claude', path: agentPath })),
+      findCommand('codex').then(agentPath => ({ id: 'codex', label: 'Codex', command: 'codex', path: agentPath })),
+    ]);
+    return agents.map(agent => ({ ...agent, installed: !!agent.path }));
   });
 
   ipcMain.handle('window:setAlwaysOnTop', (_, value) => {
