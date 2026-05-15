@@ -50,13 +50,24 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
 
       if (!containerRef.current) return;
 
-      // Load font settings (fall back to defaults)
+      // Load settings and project profile overrides (fall back to defaults)
       const settings = await window.nockTerminal.settings.getAll();
+      let profile = null;
+      if (cwd) {
+        try {
+          profile = await window.nockTerminal.profiles.get(cwd);
+        } catch {
+          profile = null;
+        }
+      }
       const fontSize = settings?.terminalFontSize ?? 16;
       const fontFamily = settings?.terminalFontFamily ?? "'JetBrains Mono', 'Consolas', monospace";
       const cursorStyle = settings?.cursorStyle || 'block';
       const cursorBlink = settings?.cursorBlink ?? true;
       const scrollback = settings?.scrollbackSize || 5000;
+      const shell = profile?.defaultShell || settings?.defaultShell || undefined;
+      const shellArgs = profile?.shellArgs || settings?.shellArgs || '';
+      const envVars = profile?.envVars || '';
 
       term = new Terminal({
         cursorBlink,
@@ -148,6 +159,9 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
       const result = await window.nockTerminal.terminal.create({
         id: tabId,
         cwd: cwd,
+        shell,
+        shellArgs,
+        envVars,
       });
 
       if (!result.success) {

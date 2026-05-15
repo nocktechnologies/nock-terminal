@@ -1,5 +1,7 @@
 # Nock Terminal Windows — Phase 2: Product Features Design Spec
 
+> **Historical note (2026-05-15):** This spec describes the Windows/Phase 2 product expansion. It is retained as historical design context. Use `docs/PRODUCT_AUDIT_GTM_READINESS.md` and `docs/ROADMAP.md` for the current cross-platform product audit, GTM readiness, and future direction.
+
 **Date:** 2026-04-05
 **Status:** Approved
 **Scope:** Phase 2a — Bug fix, File Tree, Monaco Editor, Split Terminal, Port Monitor, Context Monitor, Session Status, Keyboard Shortcuts, Settings

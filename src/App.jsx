@@ -10,6 +10,7 @@ import AIChatPanel from './components/AIChatPanel';
 import EditorPane from './components/EditorPane';
 import Settings from './components/Settings';
 import StatusBar from './components/StatusBar';
+import { buildUnsavedFilesMessage, normalizeUnsavedFiles } from './utils/unsavedFiles.mjs';
 
 export default function App() {
   const [view, setView] = useState('dashboard'); // dashboard | terminal | settings
@@ -83,6 +84,31 @@ export default function App() {
     return cleanup;
   }, []);
 
+  useEffect(() => {
+    const projectPaths = new Set(tabs.map(tab => tab.cwd).filter(Boolean));
+    const activeAgentSessionIds = [];
+    const activeClaudeSessionIds = [];
+
+    for (const tab of tabs) {
+      const status = processStatus[tab.id];
+      const activeAgents = Array.isArray(status?.activeAgents) ? [...status.activeAgents] : [];
+      if (status?.hasClaude && !activeAgents.includes('claude')) {
+        activeAgents.push('claude');
+      }
+
+      for (const agentId of activeAgents) {
+        activeAgentSessionIds.push(`${agentId}:${tab.id}`);
+        if (agentId === 'claude') activeClaudeSessionIds.push(tab.id);
+      }
+    }
+
+    window.nockTerminal.nockcc?.updateActivity({
+      activeProjectCount: projectPaths.size,
+      activeClaudeSessionIds,
+      activeAgentSessionIds,
+    });
+  }, [tabs, processStatus]);
+
   // Open a terminal tab for a session
   const openTerminalTab = useCallback((session) => {
     const existingTab = tabs.find(t => t.sessionId === session.id);
@@ -131,7 +157,19 @@ export default function App() {
   }, []);
 
   // Open a new terminal tab with Claude Code launched
-  const openTerminalWithClaude = useCallback((cwd) => {
+  const openTerminalWithClaude = useCallback(async (cwd) => {
+    let launchCommand = 'claude';
+    if (cwd) {
+      try {
+        const profile = await window.nockTerminal.profiles.get(cwd);
+        if (profile?.claudeCommand?.trim()) {
+          launchCommand = profile.claudeCommand.trim();
+        }
+      } catch {
+        launchCommand = 'claude';
+      }
+    }
+
     const tabId = `tab-${Date.now()}`;
     const newTab = {
       id: tabId,
@@ -142,15 +180,21 @@ export default function App() {
       cwd: cwd || undefined,
       splitContent: null,
       splitRatio: 0.5,
-      launchCommand: 'claude',
+      launchCommand,
     };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(tabId);
     setView('terminal');
-    window.nockTerminal.sessionHistory.start(tabId, { project: 'Kit (Claude)', shell: 'claude', cwd: cwd || undefined });
+    window.nockTerminal.sessionHistory.start(tabId, { project: 'Kit (Claude)', shell: launchCommand, cwd: cwd || undefined });
   }, []);
 
   const closeTab = useCallback((tabId) => {
+    const tabToClose = tabs.find(t => t.id === tabId);
+    if (tabToClose?.splitContent?.type === 'editor') {
+      const message = buildUnsavedFilesMessage(tabToClose.splitContent.unsavedFiles);
+      if (message && !window.confirm(message)) return;
+    }
+
     setTabs(prev => {
       const tab = prev.find(t => t.id === tabId);
       if (tab?.pinned) return prev; // Don't close pinned tabs
@@ -212,12 +256,13 @@ export default function App() {
       if (existingFiles.includes(filePath)) {
         return {
           ...tab,
-          splitContent: { type: 'editor', files: existingFiles, activeFile: filePath },
+          splitContent: { ...tab.splitContent, type: 'editor', files: existingFiles, activeFile: filePath },
         };
       }
       return {
         ...tab,
         splitContent: {
+          ...(tab.splitContent?.type === 'editor' ? tab.splitContent : {}),
           type: 'editor',
           files: [...existingFiles, filePath],
           activeFile: filePath,
@@ -228,6 +273,12 @@ export default function App() {
 
   const toggleTerminalSplit = useCallback(() => {
     if (!activeTabId) return;
+    const active = tabs.find(t => t.id === activeTabId);
+    if (active?.splitContent?.type === 'editor') {
+      const message = buildUnsavedFilesMessage(active.splitContent.unsavedFiles);
+      if (message && !window.confirm(message)) return;
+    }
+
     setTabs(prev => prev.map(tab => {
       if (tab.id !== activeTabId) return tab;
       if (tab.splitContent?.type === 'terminal') {
@@ -240,10 +291,16 @@ export default function App() {
         splitContent: { type: 'terminal', id: splitId },
       };
     }));
-  }, [activeTabId]);
+  }, [activeTabId, tabs]);
 
   const closeSplit = useCallback(() => {
     if (!activeTabId) return;
+    const active = tabs.find(t => t.id === activeTabId);
+    if (active?.splitContent?.type === 'editor') {
+      const message = buildUnsavedFilesMessage(active.splitContent.unsavedFiles);
+      if (message && !window.confirm(message)) return;
+    }
+
     setTabs(prev => prev.map(tab => {
       if (tab.id !== activeTabId) return tab;
       if (tab.splitContent?.type === 'terminal') {
@@ -251,10 +308,17 @@ export default function App() {
       }
       return { ...tab, splitContent: null };
     }));
-  }, [activeTabId]);
+  }, [activeTabId, tabs]);
 
   const closeEditorFile = useCallback((filePath) => {
     if (!activeTabId) return;
+    const active = tabs.find(t => t.id === activeTabId);
+    const unsavedFiles = normalizeUnsavedFiles(active?.splitContent?.unsavedFiles);
+    if (unsavedFiles.includes(filePath)) {
+      const message = buildUnsavedFilesMessage([filePath]);
+      if (message && !window.confirm(message)) return;
+    }
+
     setTabs(prev => prev.map(tab => {
       if (tab.id !== activeTabId || tab.splitContent?.type !== 'editor') return tab;
       const remaining = tab.splitContent.files.filter(f => f !== filePath);
@@ -262,12 +326,25 @@ export default function App() {
         return { ...tab, splitContent: null };
       }
       const activeFile = tab.splitContent.activeFile === filePath ? remaining[remaining.length - 1] : tab.splitContent.activeFile;
+      const remainingUnsaved = normalizeUnsavedFiles(tab.splitContent.unsavedFiles)
+        .filter(f => f !== filePath);
       return {
         ...tab,
-        splitContent: { ...tab.splitContent, files: remaining, activeFile },
+        splitContent: { ...tab.splitContent, files: remaining, activeFile, unsavedFiles: remainingUnsaved },
       };
     }));
-  }, [activeTabId]);
+  }, [activeTabId, tabs]);
+
+  const updateEditorUnsavedFiles = useCallback((tabId, unsavedFiles) => {
+    const normalized = normalizeUnsavedFiles(unsavedFiles);
+    setTabs(prev => prev.map(tab => {
+      if (tab.id !== tabId || tab.splitContent?.type !== 'editor') return tab;
+      return {
+        ...tab,
+        splitContent: { ...tab.splitContent, unsavedFiles: normalized },
+      };
+    }));
+  }, []);
 
   const setActiveEditorFile = useCallback((filePath) => {
     if (!activeTabId) return;
@@ -388,7 +465,8 @@ export default function App() {
   const getSessionStatus = useCallback((tabId) => {
     const proc = processStatus[tabId];
     const lastData = lastDataTimestamps[tabId] || 0;
-    if (!proc?.hasClaude) return 'inactive';
+    const hasAgent = proc?.hasClaude || (Array.isArray(proc?.activeAgents) && proc.activeAgents.length > 0);
+    if (!hasAgent) return 'inactive';
     if (Date.now() - lastData < 2000) return 'active';
     return 'ready';
   }, [processStatus, lastDataTimestamps]);
@@ -434,6 +512,9 @@ export default function App() {
               onSessionClick={openTerminalTab}
               onNewTerminal={openNewTab}
               onRefresh={refreshSessions}
+              onOpenSettings={() => setView('settings')}
+              activeProjectPath={activeProjectPath}
+              ollamaStatus={ollamaStatus}
             />
           </div>
 
@@ -487,6 +568,7 @@ export default function App() {
                           onActiveFileChange={setActiveEditorFile}
                           onClose={closeSplit}
                           onCloseFile={closeEditorFile}
+                          onUnsavedFilesChange={(unsavedFiles) => updateEditorUnsavedFiles(tab.id, unsavedFiles)}
                         />
                       ) : null
                     }

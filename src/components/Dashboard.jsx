@@ -2,8 +2,17 @@ import React, { useMemo, useState, useCallback } from 'react';
 import ProjectCard from './ProjectCard';
 import ContextMenu from './ContextMenu';
 import ProjectSettingsModal from './ProjectSettingsModal';
+import OnboardingPanel from './OnboardingPanel';
 
-export default function Dashboard({ sessions, onSessionClick, onNewTerminal, onRefresh }) {
+export default function Dashboard({
+  sessions,
+  onSessionClick,
+  onNewTerminal,
+  onRefresh,
+  onOpenSettings,
+  activeProjectPath,
+  ollamaStatus,
+}) {
   const [contextMenu, setContextMenu] = useState(null);
   const [settingsProject, setSettingsProject] = useState(null);
 
@@ -140,6 +149,15 @@ export default function Dashboard({ sessions, onSessionClick, onNewTerminal, onR
 
       {/* Cards grid */}
       <div className="px-8 py-6">
+        <OnboardingPanel
+          sessions={sessions}
+          activeProjectPath={activeProjectPath}
+          ollamaStatus={ollamaStatus}
+          onOpenSettings={onOpenSettings}
+          onNewTerminal={onNewTerminal}
+          onRefresh={onRefresh}
+        />
+
         {sessions.length > 0 ? (
           <>
             <div className="flex items-center gap-2 mb-4">

@@ -36,6 +36,7 @@ NOCK_TERMINAL_MOCK = """
                     onData: () => () => {}, onExit: () => () => {} },
     system:       { appVersion: () => Promise.resolve('smoke-test'),
                     detectShells: () => Promise.resolve([]),
+                    detectAgents: () => Promise.resolve([]),
                     ollamaVersion: () => Promise.resolve('') },
     window:       { minimize: () => {}, maximize: () => {}, close: () => {},
                     isMaximized: () => Promise.resolve(false),
@@ -60,6 +61,7 @@ NOCK_TERMINAL_MOCK = """
     shell:        { openExternal: () => {}, showItemInFolder: () => {} },
     clipboard:    { read: () => Promise.resolve(''), write: () => {} },
     telegram:     { test: () => Promise.resolve(null), notify: () => Promise.resolve(null) },
+    nockcc:       { updateActivity: () => {} },
   };
 """
 

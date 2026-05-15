@@ -6,6 +6,7 @@ const DEFAULT_PROFILE = {
   preferredModel: '',
   systemPrompt: '',
   defaultShell: '',
+  shellArgs: '',
   envVars: '',
   claudeCommand: '',
   notes: '',

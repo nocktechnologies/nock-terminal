@@ -1,5 +1,7 @@
 # Phase 2: Product Features Implementation Plan
 
+> **Historical note (2026-05-15):** This plan documents the Phase 2 implementation push that added the file tree, Monaco editor, split panes, port monitor, context monitor, process status, keyboard shortcuts, and settings. It is retained for implementation history, not current launch guidance. Use `docs/PRODUCT_AUDIT_GTM_READINESS.md` and `docs/ROADMAP.md` for current product and GTM decisions.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Transform Nock Terminal from a terminal wrapper into a development environment with file tree, Monaco editor, split panes, port monitor, context monitor, session status detection, and action toolbar.

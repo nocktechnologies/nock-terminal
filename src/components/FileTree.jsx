@@ -190,10 +190,12 @@ function TreeNode({ node, depth, gitStatus, rootPath, onFileClick, onContextMenu
     return (
       <div>
         <button
+          type="button"
           onClick={() => setExpanded(!expanded)}
           onContextMenu={(e) => onContextMenu(e, node)}
-          className="w-full text-left flex items-center gap-1 py-0.5 hover:bg-nock-card/50 rounded transition-colors"
+          className="w-full min-h-6 text-left flex items-center gap-1 py-0.5 hover:bg-nock-card/50 rounded transition-colors"
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${node.name}`}
         >
           <span className="text-[10px] text-nock-accent-blue w-3 shrink-0">
             {expanded ? '▾' : '▸'}
@@ -217,10 +219,12 @@ function TreeNode({ node, depth, gitStatus, rootPath, onFileClick, onContextMenu
 
   return (
     <button
+      type="button"
       onClick={() => onFileClick(node.path)}
       onContextMenu={(e) => onContextMenu(e, node)}
-      className="w-full text-left flex items-center gap-1.5 py-0.5 hover:bg-nock-card/50 rounded transition-colors"
+      className="w-full min-h-6 text-left flex items-center gap-1.5 py-0.5 hover:bg-nock-card/50 rounded transition-colors"
       style={{ paddingLeft: `${depth * 12 + 16}px` }}
+      aria-label={`Open ${node.name}`}
     >
       <span className="text-[10px] text-nock-text truncate">{node.name}</span>
       {statusCode && (

@@ -63,9 +63,11 @@ export default function Sidebar({
                 // Sessions
               </span>
               <button
+                type="button"
                 onClick={onRefresh}
-                className="text-nock-text-muted hover:text-nock-text transition-colors"
+                className="min-h-7 min-w-7 inline-flex items-center justify-center rounded text-nock-text-muted hover:text-nock-text hover:bg-nock-card transition-colors"
                 title="Refresh"
+                aria-label="Refresh sessions"
               >
                 <RefreshIcon />
               </button>
@@ -139,8 +141,10 @@ export default function Sidebar({
 
       {/* Collapse toggle */}
       <button
+        type="button"
         onClick={onToggle}
         className="p-2.5 border-t border-nock-border text-nock-text-muted hover:text-nock-text transition-colors flex items-center justify-center"
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         <svg
           className={`w-3.5 h-3.5 transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}
@@ -156,6 +160,7 @@ export default function Sidebar({
 function NavButton({ icon, label, collapsed, active, onClick }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`flex items-center gap-2.5 px-2.5 py-2 rounded transition-all ${
         active

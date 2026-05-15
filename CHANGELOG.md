@@ -2,6 +2,24 @@
 
 This changelog is summarized from git history. The repository has no version tags; `package.json` currently reports version `1.0.0`.
 
+## Unreleased
+
+### 2026-05-15
+
+- Added a full product, technical, and GTM readiness audit in `docs/PRODUCT_AUDIT_GTM_READINESS.md`.
+- Added a product roadmap and positioning plan in `docs/ROADMAP.md`.
+- Added a docs index in `docs/README.md`.
+- Refreshed `README.md`, `ARCHITECTURE.md`, `AGENTS.md`, and `CLAUDE.md` to distinguish the current Claude/Ollama implementation from the strategic Codex-ready direction.
+- Marked the historical Phase 2 superpowers plan/spec as implemented historical context and linked them to the current audit.
+- Fixed dependency audit blockers with patched transitive packages and updated dependency overrides.
+- Wired global and project shell settings into PTY creation, including shell arguments and environment variables.
+- Added unsaved Monaco editor close protection.
+- Added an initial Claude/Codex agent adapter registry for process detection and project context checks.
+- Populated NockCC heartbeat activity from active renderer state.
+- Added first-run onboarding checks for dev roots, installed agents, context files, sessions, and Ollama.
+- Improved accessible labels and hit targets across sidebar, file tree, editor, prompt library, project settings, and context monitor controls.
+- Added bundle-budget checks, CI audit/budget gates, release workflow preflight, Linux artifacts, signing/notarization secret checks, artifact checksums, and `docs/RELEASE_READINESS.md`.
+
 ## 1.0.0 - Current
 
 ### 2026-04-28

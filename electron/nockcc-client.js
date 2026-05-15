@@ -124,12 +124,18 @@ class NockCCClient {
    * @param {object} opts
    * @param {number} [opts.activeProjectCount]
    * @param {string[]} [opts.activeClaudeSessionIds]
+   * @param {string[]} [opts.activeAgentSessionIds]
    */
-  heartbeat({ activeProjectCount = 0, activeClaudeSessionIds = [] } = {}) {
+  heartbeat({
+    activeProjectCount = 0,
+    activeClaudeSessionIds = [],
+    activeAgentSessionIds = [],
+  } = {}) {
     if (!this._sessionId) return;
     this._request('PATCH', `/api/terminal/sessions/${this._sessionId}/`, {
       active_project_count: activeProjectCount,
       active_claude_session_ids: activeClaudeSessionIds,
+      active_agent_session_ids: activeAgentSessionIds,
     });
   }
 
