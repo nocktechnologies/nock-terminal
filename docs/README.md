@@ -5,6 +5,7 @@ Current docs:
 - [Product Audit And GTM Readiness](PRODUCT_AUDIT_GTM_READINESS.md) - May 15, 2026 technical audit, market read, launch decision, and GTM readiness.
 - [Product Roadmap](ROADMAP.md) - recommended positioning, roadmap, GTM experiments, and product ideas.
 - [Release Readiness](RELEASE_READINESS.md) - release gate, signing/notarization requirements, artifact checksums, and packaged smoke checklist.
+- [Brand Assets](BRAND_ASSETS.md) - current green Nock asset sources and app-surface mapping.
 
 Root docs:
 

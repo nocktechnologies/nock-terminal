@@ -17,6 +17,8 @@ const { DEFAULT_SETTINGS, normalizeSettingValue, sanitizeStoredSettings } = requ
 const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
 
+const APP_NAME = 'Nock Terminal';
+
 const store = new Store({
   defaults: DEFAULT_SETTINGS,
 });
@@ -60,6 +62,33 @@ let nockccActivity = {
 
 const isDev = !app.isPackaged;
 
+function getAssetPath(fileName) {
+  return path.join(__dirname, '..', 'assets', fileName);
+}
+
+function getPlatformIconPath() {
+  if (process.platform === 'win32') return getAssetPath('icon.ico');
+  if (process.platform === 'darwin') return getAssetPath('icon.icns');
+  return getAssetPath('icon.png');
+}
+
+function getMacMetadataIconPath() {
+  return app.isPackaged ? path.join(process.resourcesPath, 'icon.icns') : getAssetPath('icon.png');
+}
+
+function configureAppBranding() {
+  if (process.platform !== 'darwin') return;
+
+  const iconPath = getMacMetadataIconPath();
+  app.dock?.setIcon(iconPath);
+  app.setAboutPanelOptions({
+    applicationName: APP_NAME,
+    applicationVersion: app.getVersion(),
+    iconPath,
+    copyright: 'Copyright Nock Technologies (K Wills Technologies LLC)',
+  });
+}
+
 function createWindow() {
   const settings = getSettingsSnapshot();
   const { width, height, x, y } = settings.windowBounds;
@@ -80,7 +109,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false, // Required for node-pty via preload
     },
-    icon: path.join(__dirname, '..', 'assets', process.platform === 'win32' ? 'icon.ico' : process.platform === 'darwin' ? 'icon.icns' : 'icon.png'),
+    icon: getPlatformIconPath(),
     show: false,
   });
 
@@ -115,10 +144,9 @@ function createWindow() {
 }
 
 function createTray() {
-  // macOS: setTemplateImage(true) tells the OS to treat the icon as a template image,
-  // inverting it automatically for dark/light menu bar mode. No forced resize on macOS —
-  // the OS handles density scaling. Windows/Linux: 16×16 PNG.
-  const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+  // macOS menu-bar icons need a monochrome template source so the OS can tint
+  // it for light/dark menu bars. Windows/Linux keep the full-color app tile.
+  const iconPath = getAssetPath(process.platform === 'darwin' ? 'tray-template.png' : 'icon.png');
   const fallbackIcon = () => nativeImage.createFromBuffer(Buffer.alloc(16 * 16 * 4, 0), { width: 16, height: 16 });
   let trayIcon;
   if (process.platform === 'darwin') {
@@ -161,7 +189,7 @@ function createTray() {
     },
   ]);
 
-  tray.setToolTip('Nock Terminal');
+  tray.setToolTip(APP_NAME);
   tray.setContextMenu(contextMenu);
   tray.on('click', () => toggleWindow());
 }
@@ -626,6 +654,7 @@ function wireFileEvents() {
 
 app.whenReady().then(() => {
   repairStoredSettings();
+  configureAppBranding();
   initServices();
   createWindow();
   createTray();

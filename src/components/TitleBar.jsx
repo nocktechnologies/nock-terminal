@@ -24,7 +24,7 @@ export default function TitleBar({ sessionCount = 0, activeCount = 0 }) {
         <img
           src="./nock-logo.png"
           alt="Nock"
-          className="w-5 h-5 drop-shadow-[0_0_8px_rgba(124,92,252,0.5)]"
+          className="w-5 h-5 rounded-[5px] border border-nock-border/70 bg-nock-bg drop-shadow-[0_0_8px_rgba(31,184,128,0.45)]"
           draggable={false}
         />
         <div className="flex items-baseline gap-2">

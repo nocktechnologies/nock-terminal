@@ -783,6 +783,22 @@ export default function Settings() {
         return (
           <SettingsSection title="About" description="Nock Terminal information">
             <div className="bg-nock-card/40 border border-nock-border rounded-lg p-4">
+              <div className="flex items-center gap-3 pb-4 mb-2 border-b border-nock-border/50">
+                <img
+                  src="./nock-logo.png"
+                  alt=""
+                  className="h-12 w-12 rounded-xl border border-nock-border/70 bg-nock-bg shadow-[0_0_18px_rgba(31,184,128,0.16)]"
+                  draggable={false}
+                />
+                <div>
+                  <p className="font-display text-sm font-semibold text-nock-text tracking-wide">
+                    Nock Terminal
+                  </p>
+                  <p className="font-mono text-[10px] uppercase tracking-wider text-nock-text-muted">
+                    Local agent cockpit
+                  </p>
+                </div>
+              </div>
               <InfoRow label="App Version" value={appVersion} mono />
               <InfoRow
                 label="Ollama"
