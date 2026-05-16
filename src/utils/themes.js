@@ -15,7 +15,7 @@ export const pitchBlack = {
   red: '#F87171',
   terminal: {
     bg: '#0A0A0F',
-    foreground: '#E0E0E0',
+    foreground: '#F2F2F7',
     cursor: '#7C5CFC',
     cursorAccent: '#0A0A0F',
     selectionBackground: '#3B6FD440',
@@ -26,7 +26,7 @@ export const pitchBlack = {
     blue: '#3B6FD4',
     magenta: '#7C5CFC',
     cyan: '#22D3EE',
-    white: '#E0E0E0',
+    white: '#F2F2F7',
     brightBlack: '#555555',
     brightRed: '#FCA5A5',
     brightGreen: '#6EE7B7',

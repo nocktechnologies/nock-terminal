@@ -62,6 +62,41 @@ test('discovers agent folders from existing config.json files', async () => {
   assert.equal(mira.launch.cwd, agentPath);
 });
 
+test('upgrades Claude transcript paths to agent folders even without dev roots', async () => {
+  const root = makeTempDir();
+  const claudeDir = path.join(root, '.claude');
+  const agentPath = path.join(root, 'Dev', 'claude-remote-manager', 'agents', 'mira');
+  const claudeProjectPath = path.join(claudeDir, 'projects', 'transcript-for-mira');
+  const fileBusRoot = path.join(root, '.claude-remote', 'default');
+
+  writeJson(path.join(agentPath, 'config.json'), {
+    agent_name: 'mira',
+    enabled: true,
+    model: 'claude-opus-4-6',
+  });
+  writeFile(
+    path.join(claudeProjectPath, 'session.jsonl'),
+    `${JSON.stringify({ type: 'user', cwd: agentPath, message: { role: 'user', content: [] } })}\n`
+  );
+
+  const discovery = new SessionDiscovery({
+    claudeDir,
+    devRoots: [],
+    fileBusRoot,
+  });
+
+  const sessions = await discovery.discover();
+  const mira = sessions.find(session => session.path === agentPath);
+
+  assert.ok(mira);
+  assert.equal(mira.kind, 'agent');
+  assert.equal(mira.id, `agent:${agentPath}`);
+  assert.equal(mira.name, 'Mira');
+  assert.equal(mira.claudeSessionId, 'transcript-for-mira');
+  assert.equal(mira.launch.command, 'mira');
+  assert.equal(mira.launch.cwd, agentPath);
+});
+
 test('marks disabled agent folders as inactive without launch defaults', async () => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');

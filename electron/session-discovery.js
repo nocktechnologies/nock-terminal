@@ -50,7 +50,7 @@ class SessionDiscovery {
 
     // 3. Scan existing agent folders. These are not repos: opening them means
     // launching or inspecting that local agent persona.
-    const agentFolders = await this._discoverAgentFolders();
+    const agentFolders = await this._discoverAgentFolders(sessions.map(session => session.path));
 
     // 4. Merge by path (case-insensitive on Windows); session data wins for
     // generic project records, while agent folder metadata upgrades matching
@@ -172,8 +172,18 @@ class SessionDiscovery {
     return projects;
   }
 
-  async _discoverAgentFolders() {
+  async _discoverAgentFolders(sessionPaths = []) {
     const configPaths = new Set();
+    const sessionConfigPaths = new Set();
+    for (const sessionPath of sessionPaths) {
+      const normalizedPath = this._safeString(sessionPath, 1000);
+      if (!normalizedPath || !path.isAbsolute(normalizedPath)) continue;
+      sessionConfigPaths.add(path.join(normalizedPath, 'config.json'));
+    }
+    await this._mapLimit([...sessionConfigPaths], 5, (configPath) =>
+      this._addConfigIfReadable(configPaths, configPath)
+    );
+
     for (const root of this.devRoots) {
       try {
         await fsp.access(root);
