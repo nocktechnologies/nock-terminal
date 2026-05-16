@@ -1,8 +1,10 @@
 import React, { useMemo, useState, useCallback } from 'react';
+import { Search, X } from 'lucide-react';
 import ProjectCard from './ProjectCard';
 import ContextMenu from './ContextMenu';
 import ProjectSettingsModal from './ProjectSettingsModal';
 import OnboardingPanel from './OnboardingPanel';
+import { filterSessionsBySearch } from '../utils/sessionSearch.mjs';
 
 export default function Dashboard({
   sessions,
@@ -16,6 +18,7 @@ export default function Dashboard({
 }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [settingsProject, setSettingsProject] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const stats = useMemo(() => {
     const agents = sessions.filter(s => s.kind === 'agent').length;
@@ -25,10 +28,17 @@ export default function Dashboard({
     return { agents, repos, active, dirty };
   }, [sessions]);
 
+  const visibleSessions = useMemo(
+    () => filterSessionsBySearch(sessions, searchQuery),
+    [sessions, searchQuery]
+  );
+
   const groupedSessions = useMemo(() => ({
-    agents: sessions.filter(session => session.kind === 'agent'),
-    projects: sessions.filter(session => session.kind !== 'agent'),
-  }), [sessions]);
+    agents: visibleSessions.filter(session => session.kind === 'agent'),
+    projects: visibleSessions.filter(session => session.kind !== 'agent'),
+  }), [visibleSessions]);
+
+  const searchActive = searchQuery.trim().length > 0;
 
   const handleCardContextMenu = useCallback((e, session) => {
     e.preventDefault();
@@ -128,8 +138,8 @@ export default function Dashboard({
         />
 
         <div className="relative px-8 py-7">
-          <div className="flex items-end justify-between mb-6">
-            <div>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between mb-6">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 mb-2">
                 <span className="font-mono text-[10px] text-nock-accent-cyan tracking-widest uppercase">
                   // 01 — Fleet Overview
@@ -143,24 +153,32 @@ export default function Dashboard({
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onRefresh}
-                className="group px-3 py-2 text-[11px] font-mono tracking-wider uppercase border border-nock-border rounded hover:border-nock-accent-blue/50 hover:bg-nock-card transition-all text-nock-text-dim hover:text-nock-text"
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <svg className="w-3 h-3 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh
-                </span>
-              </button>
-              <button
-                onClick={() => onNewTerminal()}
-                className="px-3.5 py-2 text-[11px] font-mono tracking-wider uppercase nock-gradient-bg rounded text-white font-semibold hover:shadow-glow-purple transition-shadow"
-              >
-                + New Terminal
-              </button>
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center xl:w-auto xl:justify-end">
+              <SessionSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                resultCount={visibleSessions.length}
+                totalCount={sessions.length}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onRefresh}
+                  className="group px-3 py-2 text-[11px] font-mono tracking-wider uppercase border border-nock-border rounded hover:border-nock-accent-blue/50 hover:bg-nock-card transition-all text-nock-text-dim hover:text-nock-text"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <svg className="w-3 h-3 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </span>
+                </button>
+                <button
+                  onClick={() => onNewTerminal()}
+                  className="px-3.5 py-2 text-[11px] font-mono tracking-wider uppercase nock-gradient-bg rounded text-white font-semibold hover:shadow-glow-purple transition-shadow"
+                >
+                  + New Terminal
+                </button>
+              </div>
             </div>
           </div>
 
@@ -185,7 +203,7 @@ export default function Dashboard({
           onRefresh={onRefresh}
         />
 
-        {sessions.length > 0 ? (
+        {sessions.length > 0 && visibleSessions.length > 0 ? (
           <>
             <SessionSection
               label="// Agents"
@@ -202,6 +220,8 @@ export default function Dashboard({
               onContextMenu={handleCardContextMenu}
             />
           </>
+        ) : sessions.length > 0 && searchActive ? (
+          <NoSearchResults query={searchQuery} onClear={() => setSearchQuery('')} />
         ) : (
           <EmptyState />
         )}
@@ -224,6 +244,35 @@ export default function Dashboard({
           projectName={settingsProject.name}
           onClose={() => setSettingsProject(null)}
         />
+      )}
+    </div>
+  );
+}
+
+function SessionSearch({ value, onChange, resultCount, totalCount }) {
+  const hasValue = value.trim().length > 0;
+  return (
+    <div className="relative w-full sm:w-80 xl:w-96">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-nock-text-muted" aria-hidden="true" />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Search repos..."
+        aria-label="Search repos and agents"
+        className="h-9 w-full rounded border border-nock-border bg-nock-card/80 pl-9 pr-20 font-mono text-[11px] text-nock-text outline-none transition-colors placeholder:text-nock-text-muted focus:border-nock-accent-blue/60 focus:bg-nock-card"
+      />
+      <span className="pointer-events-none absolute right-9 top-1/2 -translate-y-1/2 font-mono text-[9px] text-nock-text-muted tabular-nums">
+        {resultCount}/{totalCount}
+      </span>
+      {hasValue && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-nock-text-muted transition-colors hover:bg-white/5 hover:text-nock-text"
+          aria-label="Clear repo search"
+        >
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
       )}
     </div>
   );
@@ -276,6 +325,26 @@ function StatCell({ label, value, accent, pulse }) {
         <p className={`font-display font-bold text-3xl tabular-nums ${colors[accent]} ${pulse ? 'animate-pulse-glow' : ''}`}>
           {String(value).padStart(2, '0')}
         </p>
+      </div>
+    </div>
+  );
+}
+
+function NoSearchResults({ query, onClear }) {
+  return (
+    <div className="flex items-center justify-center h-80">
+      <div className="text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded border border-nock-border bg-nock-card/70">
+          <Search className="h-5 w-5 text-nock-text-muted" aria-hidden="true" />
+        </div>
+        <p className="font-display text-sm text-nock-text mb-1 tracking-wide">No matches for "{query.trim()}"</p>
+        <button
+          type="button"
+          onClick={onClear}
+          className="font-mono text-[10px] text-nock-text-muted transition-colors hover:text-nock-text uppercase tracking-wider"
+        >
+          Clear search
+        </button>
       </div>
     </div>
   );
