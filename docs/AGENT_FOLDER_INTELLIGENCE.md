@@ -12,7 +12,7 @@ Nock Terminal now treats local agent folders as first-class cockpit entries inst
 - `<root>/agents/<agent>/config.json`
 - `<root>/<workspace>/agents/<agent>/config.json`
 
-A folder is accepted when `config.json` is valid JSON and contains a safe `agent_name` value, or when the folder basename can be used as the agent name.
+A folder is accepted when `config.json` is valid JSON and contains a safe `agent_name` value. When `agent_name` is absent, Nock only falls back to the folder basename if the config also contains an agent-specific field such as `model`; generic `config.json` files are ignored.
 
 ## Config Fields Used
 

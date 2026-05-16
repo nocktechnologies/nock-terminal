@@ -12,6 +12,10 @@ import Settings from './components/Settings';
 import StatusBar from './components/StatusBar';
 import { buildUnsavedFilesMessage, normalizeUnsavedFiles } from './utils/unsavedFiles.mjs';
 
+function createTabId(prefix = 'tab') {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export default function App() {
   const [view, setView] = useState('dashboard'); // dashboard | terminal | settings
   const [tabs, setTabs] = useState([]);
@@ -127,7 +131,7 @@ export default function App() {
       return;
     }
 
-    const tabId = `tab-${Date.now()}`;
+    const tabId = createTabId();
     const isAgent = session.kind === 'agent';
     const launchCommand = shouldLaunchAgent(session, launchFresh) ? session.launch.command : undefined;
     const cwd = isAgent ? (session.launch?.cwd || session.path) : session.path;
@@ -159,7 +163,7 @@ export default function App() {
 
   // Open a new blank terminal
   const openNewTab = useCallback((cwd) => {
-    const tabId = `tab-${Date.now()}`;
+    const tabId = createTabId();
     const newTab = {
       id: tabId,
       sessionId: null,
@@ -191,7 +195,7 @@ export default function App() {
       }
     }
 
-    const tabId = `tab-${Date.now()}`;
+    const tabId = createTabId();
     const newTab = {
       id: tabId,
       sessionId: null,
@@ -243,7 +247,7 @@ export default function App() {
   }, []);
 
   const duplicateTab = useCallback((tab) => {
-    const tabId = `tab-${Date.now()}`;
+    const tabId = createTabId();
     const newTab = { ...tab, id: tabId, pinned: false };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(tabId);
@@ -303,7 +307,7 @@ export default function App() {
         window.nockTerminal.terminal.destroy(tab.splitContent.id);
         return { ...tab, splitContent: null };
       }
-      const splitId = `${tab.id}-split-${Date.now()}`;
+      const splitId = createTabId(`${tab.id}-split`);
       return {
         ...tab,
         splitContent: { type: 'terminal', id: splitId },

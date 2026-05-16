@@ -249,7 +249,9 @@ class SessionDiscovery {
       const config = JSON.parse(await fsp.readFile(configPath, 'utf-8'));
       if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
 
-      const agentName = this._safeAgentName(config.agent_name || dirName);
+      const agentName = config.agent_name
+        ? this._safeAgentName(config.agent_name)
+        : (config.model ? this._safeAgentName(dirName) : '');
       if (!agentName) return null;
 
       const enabled = config.enabled !== false;
@@ -493,8 +495,8 @@ class SessionDiscovery {
     try {
       process.kill(pid, 0);
       return true;
-    } catch {
-      return false;
+    } catch (err) {
+      return err?.code === 'EPERM';
     }
   }
 
@@ -502,8 +504,10 @@ class SessionDiscovery {
     const text = String(value || '').trim();
     if (!text) return null;
 
-    const parsedDate = Date.parse(text);
-    if (Number.isFinite(parsedDate)) return parsedDate;
+    if (!/^\d+$/.test(text)) {
+      const parsedDate = Date.parse(text);
+      if (Number.isFinite(parsedDate)) return parsedDate;
+    }
 
     const match = text.match(/\d{10,13}/);
     if (!match) return null;

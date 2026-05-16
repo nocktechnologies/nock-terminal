@@ -107,3 +107,48 @@ test('ignores malformed agent configs instead of failing discovery', async () =>
 
   assert.equal(sessions.some(session => session.path === agentPath), false);
 });
+
+test('ignores generic config.json files without agent-specific fields', async () => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const projectPath = path.join(devRoot, 'generic-tool');
+
+  writeJson(path.join(projectPath, 'config.json'), {
+    name: 'generic-tool',
+    version: 1,
+  });
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [devRoot],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+
+  assert.equal(sessions.some(session => session.path === projectPath), false);
+});
+
+test('pid checks treat EPERM as an alive process', () => {
+  const originalKill = process.kill;
+  const discovery = new SessionDiscovery();
+
+  process.kill = () => {
+    const err = new Error('operation not permitted');
+    err.code = 'EPERM';
+    throw err;
+  };
+
+  try {
+    assert.equal(discovery._pidIsAlive(123), true);
+  } finally {
+    process.kill = originalKill;
+  }
+});
+
+test('timestamp parsing does not treat short numeric pid strings as dates', () => {
+  const discovery = new SessionDiscovery();
+
+  assert.equal(discovery._timestampFromText('73622'), null);
+  assert.equal(discovery._timestampFromText('1778890762'), 1778890762000);
+});
