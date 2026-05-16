@@ -113,13 +113,8 @@ export default function App() {
     });
   }, [tabs, processStatus]);
 
-  const shouldLaunchAgent = (session, forceLaunch = false) => {
-    if (session?.kind !== 'agent' || !session.agent?.enabled || !session.launch?.command) {
-      return false;
-    }
-    if (forceLaunch) return true;
-    return !['running', 'idle'].includes(session.agent.lifecycle);
-  };
+  const shouldLaunchAgent = (session) =>
+    session?.kind === 'agent' && session.agent?.enabled && Boolean(session.launch?.command);
 
   // Open a terminal tab for a session or agent folder
   const openTerminalTab = useCallback((session, options = {}) => {
@@ -135,7 +130,7 @@ export default function App() {
 
     const tabId = createTabId();
     const isAgent = session.kind === 'agent';
-    const launchCommand = shouldLaunchAgent(session, launchFresh) ? session.launch.command : undefined;
+    const launchCommand = shouldLaunchAgent(session) ? session.launch.command : undefined;
     const cwd = isAgent ? (session.launch?.cwd || session.path) : session.path;
     const newTab = {
       id: tabId,
