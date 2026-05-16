@@ -137,9 +137,18 @@ function createWindow() {
   const opacity = settings.windowOpacity;
   if (opacity != null && opacity < 100) mainWindow.setOpacity(Math.max(0.7, opacity / 100));
 
-  mainWindow.once('ready-to-show', () => {
-    if (!settings.startMinimized) mainWindow.show();
+  let initialShowDone = false;
+  const showInitialWindow = () => {
+    if (settings.startMinimized || initialShowDone || !mainWindow || mainWindow.isDestroyed()) return;
+    initialShowDone = true;
+    showMainWindow();
+  };
+
+  mainWindow.once('ready-to-show', showInitialWindow);
+  mainWindow.webContents.once('did-finish-load', () => {
+    setTimeout(showInitialWindow, 100);
   });
+  setTimeout(showInitialWindow, 2500);
 
   mainWindow.on('close', (e) => {
     // Save window bounds before closing
@@ -215,9 +224,17 @@ function toggleWindow() {
   if (mainWindow.isVisible()) {
     mainWindow.hide();
   } else {
-    mainWindow.show();
-    mainWindow.focus();
+    showMainWindow();
   }
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.show();
+  mainWindow.focus();
 }
 
 function initServices() {
@@ -701,7 +718,11 @@ app.whenReady().then(() => {
   }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    } else {
+      showMainWindow();
+    }
   });
 });
 
