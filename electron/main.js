@@ -74,11 +74,22 @@ function getPlatformIconPath() {
   return getAssetPath('icon.png');
 }
 
+function getBrandingIconPath() {
+  return process.platform === 'darwin' ? getAssetPath('icon.png') : getPlatformIconPath();
+}
+
 function configureAppBranding() {
-  const iconPath = getPlatformIconPath();
+  const iconPath = getBrandingIconPath();
 
   if (process.platform === 'darwin') {
-    app.dock?.setIcon(iconPath);
+    try {
+      const dockIcon = nativeImage.createFromPath(iconPath);
+      if (!dockIcon.isEmpty()) {
+        app.dock?.setIcon(dockIcon);
+      }
+    } catch (err) {
+      console.error(`[branding] Failed to set dock icon from ${iconPath}:`, err.message);
+    }
   }
 
   if (process.platform === 'darwin' || process.platform === 'linux') {
