@@ -235,10 +235,16 @@ class SessionDiscovery {
 
   async _addConfigIfReadable(configs, configPath) {
     try {
-      const stat = await fsp.stat(configPath);
-      if (stat.isFile()) configs.add(configPath);
-    } catch {
-      // Missing config files are expected for normal repos.
+      const config = JSON.parse(await fsp.readFile(configPath, 'utf-8'));
+      if (this._agentNameFromConfig(config)) {
+        configs.add(configPath);
+        return;
+      }
+      this._debugIgnoredAgentConfig(configPath, 'missing valid agent_name');
+    } catch (err) {
+      if (!['ENOENT', 'ENOTDIR'].includes(err?.code)) {
+        this._debugIgnoredAgentConfig(configPath, 'unreadable or invalid JSON');
+      }
     }
   }
 
@@ -247,12 +253,11 @@ class SessionDiscovery {
       const agentPath = path.dirname(configPath);
       const dirName = path.basename(agentPath);
       const config = JSON.parse(await fsp.readFile(configPath, 'utf-8'));
-      if (!config || typeof config !== 'object' || Array.isArray(config)) return null;
-
-      const agentName = config.agent_name
-        ? this._safeAgentName(config.agent_name)
-        : (config.model ? this._safeAgentName(dirName) : '');
-      if (!agentName) return null;
+      const agentName = this._agentNameFromConfig(config);
+      if (!agentName) {
+        this._debugIgnoredAgentConfig(configPath, 'missing valid agent_name');
+        return null;
+      }
 
       const enabled = config.enabled !== false;
       const launchCwd = this._resolveAgentLaunchCwd(config, agentPath);
@@ -297,6 +302,17 @@ class SessionDiscovery {
     return /^[a-z0-9_-]{1,100}$/.test(normalized) ? normalized : '';
   }
 
+  _agentNameFromConfig(config) {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) return '';
+    return this._safeAgentName(config.agent_name);
+  }
+
+  _debugIgnoredAgentConfig(configPath, reason) {
+    if (process.env.NOCK_DEBUG_DISCOVERY === '1') {
+      console.debug(`[session-discovery] Ignored agent config (${reason}): ${configPath}`);
+    }
+  }
+
   _safeString(value, maxLength = 500) {
     if (typeof value !== 'string') return '';
     return value.trim().slice(0, maxLength);
@@ -323,7 +339,7 @@ class SessionDiscovery {
       const command = this._safeString(candidate, 500);
       if (command) return command;
     }
-    return this._formatAgentName(agentName).replace(/\s+/g, '');
+    return this._safeAgentName(agentName) || this._formatAgentName(agentName).replace(/\s+/g, '');
   }
 
   _resolveAgentLaunchCwd(config, agentPath) {

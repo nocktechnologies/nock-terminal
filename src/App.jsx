@@ -124,7 +124,9 @@ export default function App() {
   // Open a terminal tab for a session or agent folder
   const openTerminalTab = useCallback((session, options = {}) => {
     const launchFresh = options?.launchFresh === true;
-    const existingTab = !launchFresh ? tabs.find(t => t.sessionId === session.id) : null;
+    const existingTab = !launchFresh
+      ? [...tabs].reverse().find(t => t.sessionId === session.id)
+      : null;
     if (existingTab) {
       setActiveTabId(existingTab.id);
       setView('terminal');

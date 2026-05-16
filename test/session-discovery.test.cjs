@@ -58,7 +58,7 @@ test('discovers agent folders from existing config.json files', async () => {
   assert.equal(mira.agent.lifecycle, 'idle');
   assert.equal(mira.agent.model, 'claude-opus-4-6');
   assert.equal(mira.agent.unreadCount, 1);
-  assert.equal(mira.launch.command, 'Mira');
+  assert.equal(mira.launch.command, 'mira');
   assert.equal(mira.launch.cwd, agentPath);
 });
 
@@ -108,14 +108,18 @@ test('ignores malformed agent configs instead of failing discovery', async () =>
   assert.equal(sessions.some(session => session.path === agentPath), false);
 });
 
-test('ignores generic config.json files without agent-specific fields', async () => {
+test('ignores config.json files without a valid agent_name', async () => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');
   const projectPath = path.join(devRoot, 'generic-tool');
+  const modelOnlyPath = path.join(devRoot, 'model-only');
 
   writeJson(path.join(projectPath, 'config.json'), {
     name: 'generic-tool',
     version: 1,
+  });
+  writeJson(path.join(modelOnlyPath, 'config.json'), {
+    model: 'claude-opus-4-6',
   });
 
   const discovery = new SessionDiscovery({
@@ -127,6 +131,7 @@ test('ignores generic config.json files without agent-specific fields', async ()
   const sessions = await discovery.discover();
 
   assert.equal(sessions.some(session => session.path === projectPath), false);
+  assert.equal(sessions.some(session => session.path === modelOnlyPath), false);
 });
 
 test('pid checks treat EPERM as an alive process', () => {

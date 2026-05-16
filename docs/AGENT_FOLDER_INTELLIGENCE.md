@@ -12,7 +12,7 @@ Nock Terminal now treats local agent folders as first-class cockpit entries inst
 - `<root>/agents/<agent>/config.json`
 - `<root>/<workspace>/agents/<agent>/config.json`
 
-A folder is accepted when `config.json` is valid JSON and contains a safe `agent_name` value. When `agent_name` is absent, Nock only falls back to the folder basename if the config also contains an agent-specific field such as `model`; generic `config.json` files are ignored.
+A folder is accepted when `config.json` is valid JSON and contains a safe `agent_name` value. Generic `config.json` files and model-only configs are ignored so normal project configuration files do not become agent cards.
 
 ## Config Fields Used
 
@@ -26,7 +26,7 @@ Nock reads existing fields only. It does not introduce a parallel metadata forma
 - `launch_command`, `launchCommand`, `command`, `start_command`, `startCommand`, or `launch.command` - optional explicit launch command.
 - `passive_frozen_threshold` or `stale_threshold_seconds` - heartbeat freshness threshold.
 
-When no explicit launch command exists, enabled agents derive a command from the agent name, such as `Mira` for `mira`.
+When no explicit launch command exists, enabled agents derive a command from the raw agent name, such as `mira`.
 
 ## Runtime State
 
