@@ -4,7 +4,7 @@ Nock Terminal is a cross-platform Electron cockpit for local agentic coding work
 
 ## Product Posture
 
-- Be honest about current capabilities: Claude Code transcript discovery, Claude/Codex process and context adapters, Claude launch flows, Ollama chat, Monaco editing, git/file controls, prompt library, session history, Telegram, NockCC heartbeats, and first-run onboarding.
+- Be honest about current capabilities: Claude Code transcript discovery, local agent-folder discovery from existing `config.json` files, local NockCC file-bus state checks, Claude/Codex process and context adapters, Claude launch flows, Ollama chat, Monaco editing, git/file controls, prompt library, session history, Telegram, NockCC heartbeats, and first-run onboarding.
 - Treat Codex transcript discovery and Codex launch flows as strategic direction until the code has real Codex session discovery and launch adapters.
 - The best product wedge is local-first agent observability and orchestration, not a generic AI IDE clone.
 - Maintain a quiet, dense, cockpit-like UI for repeated developer work.
@@ -57,7 +57,7 @@ Nock Terminal is a cross-platform Electron cockpit for local agentic coding work
 
 ## What The App Does Today
 
-- Discovers Claude Code sessions and git projects, then presents them as dashboard cards and sidebar entries.
+- Discovers Claude Code sessions, local agent folders, and git projects, then presents agents separately from repos in dashboard cards and sidebar entries.
 - Opens PTY-backed terminal tabs, applies global/project shell settings, supports splits, keeps terminals mounted across view switches, and launches `claude` from a new tab.
 - Provides sidebar file browsing, git status markers, Monaco editing with unsaved-change protection, and project context checks for `CLAUDE.md`, `AGENTS.md`, Codex config, and `.nock/config.toml`.
 - Shows first-run onboarding for dev roots, agent binaries, sessions, context files, and Ollama status.

@@ -49,7 +49,17 @@ Still required before public beta:
 
 Goal: stop hard-coding Claude Code assumptions throughout the app.
 
-Initial adapter foundations now exist for process detection and project context checks. Extend the adapter contract for:
+Initial adapter foundations now exist for process detection and project context checks. Agent folders are now first-class discovered entries when existing `agents/*/config.json` files are present, with local NockCC file-bus state used for enabled/running/stale/offline status.
+
+Completed in the agent-folder intelligence pass:
+
+- Detect existing agent folders from configured dev roots.
+- Read `config.json` as the source of truth instead of creating a parallel metadata format.
+- Show agent cards separately from repo cards in the dashboard and sidebar.
+- Resolve conservative launch defaults from config or the agent name.
+- Avoid auto-launching duplicate processes when an agent appears running or idle.
+
+Extend the adapter contract for:
 
 - Agent display name and status labels.
 - Session transcript discovery paths.
@@ -62,6 +72,7 @@ Initial adapter foundations now exist for process detection and project context 
 Current adapter posture:
 
 - Claude Code: current transcript discovery and launch behavior remain preserved.
+- Local agent folders: discovered from config and file-bus state; true reconnect/attach remains future work.
 - Codex CLI: context/process foundations exist; first-class discovery and launch support remain next work after confirming the desired Codex integration surface.
 
 ### 3. Worktree Lanes

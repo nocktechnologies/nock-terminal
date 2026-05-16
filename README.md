@@ -12,6 +12,7 @@ As of the May 15, 2026 audit/remediation pass, this repo is ready for renewed do
 
 - Passing: `npm test`, `npm audit --audit-level=moderate`, `npx vite build`, `npm run check:bundle`, and the Monaco browser smoke test.
 - Fixed in the remediation pass: dependency audit blockers, shell/profile settings application, unsaved editor protection, agent context/process adapters, NockCC heartbeat activity, first-run onboarding, hit-target/accessibility polish, and release gate scripts.
+- New agent-folder intelligence: Nock discovers existing `agents/*/config.json` folders, reads local NockCC file-bus state, and presents agents separately from repos.
 - Strategic gap: Claude Code remains the only transcript-discovery source. Codex support now has context/process foundations, but full Codex session discovery and launch behavior are still roadmap work.
 - Launch gap: release workflows now enforce signing/notarization secrets and checksums, but packaged-app smoke tests, update distribution, crash/error reporting, and support flow still need a release pass.
 
@@ -21,6 +22,7 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 
 - Discovers Claude Code session transcripts from `~/.claude/projects`.
 - Scans configured development roots for git repositories.
+- Discovers local agent folders from existing `config.json` files and shows enabled/running/stale/offline state from the NockCC file bus.
 - Opens xterm.js terminal tabs through `node-pty`, including splits.
 - Keeps terminal sessions mounted while switching between dashboard, terminal, and settings views.
 - Provides a sidebar file tree, git status markers, context checks, and Monaco editing.
@@ -91,6 +93,7 @@ docs/           Product audit, launch readiness, roadmap, historical specs
 - [ARCHITECTURE.md](ARCHITECTURE.md) explains the current Electron/React system.
 - [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_GTM_READINESS.md) is the current audit and launch-readiness report.
 - [docs/ROADMAP.md](docs/ROADMAP.md) lists product directions and prioritization.
+- [docs/AGENT_FOLDER_INTELLIGENCE.md](docs/AGENT_FOLDER_INTELLIGENCE.md) documents agent folder detection, state mapping, and launch behavior.
 - [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md) documents the release gate and packaged smoke checklist.
 - [CHANGELOG.md](CHANGELOG.md) summarizes repo history.
 - [AGENTS.md](AGENTS.md) is the canonical agent instruction file; [CLAUDE.md](CLAUDE.md) points Claude users back to it with Claude-specific context.

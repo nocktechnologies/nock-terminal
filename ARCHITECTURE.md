@@ -2,7 +2,7 @@
 
 Nock Terminal is an Electron desktop app with a React 18 renderer. The renderer owns the cockpit UI; the Electron main process owns privileged work: PTYs, filesystem access, settings, process discovery, network clients, notifications, and OS integrations.
 
-This document describes the current codebase, not the aspirational Codex roadmap. Today, the implementation is Claude Code-oriented with Ollama support, with an initial agent-adapter layer for process and project-context awareness. The next architecture step is real Codex discovery and launch support behind the same adapter model.
+This document describes the current codebase, not the aspirational Codex roadmap. Today, the implementation is Claude Code-oriented with Ollama support, plus first-class local agent-folder discovery for existing `agents/*/config.json` folders. The next architecture step is real Codex discovery and launch support behind the same adapter model.
 
 ## Process Model
 
@@ -14,14 +14,14 @@ This document describes the current codebase, not the aspirational Codex roadmap
 
 ## Main Surfaces
 
-- **Dashboard**: `Dashboard`, `ProjectCard`, `OnboardingPanel`, and `Sidebar` show discovered Claude Code sessions, git repositories, status counts, ports, project context, prompt library entries, first-run setup status, and session history.
+- **Dashboard**: `Dashboard`, `ProjectCard`, `OnboardingPanel`, and `Sidebar` show discovered agent folders, Claude Code sessions, git repositories, status counts, ports, project context, prompt library entries, first-run setup status, and session history.
 - **Nock Command**: `TabBar`, `ActionToolbar`, `TerminalView`, `SplitPane`, `EditorPane`, and `AIChatPanel` form the terminal workbench for shells, Claude Code launch, split terminals, file editing, git actions, and AI chat.
 - **Settings**: `Settings` edits electron-store-backed preferences for window behavior, AI/model settings, terminal/editor options, file-tree roots, notifications, Telegram, data import/export, and app info.
 
 ## Main-Process Services
 
 - `TerminalManager` wraps `node-pty`, chooses a platform shell, applies global/project shell overrides, parses shell arguments and environment variables, relays terminal data, resizes PTYs, chunks large writes on Windows, and destroys processes.
-- `SessionDiscovery` reads Claude Code transcripts from `~/.claude/projects`, scans configured dev roots for git repos, merges them by path, and annotates branch, dirty state, and activity metadata.
+- `SessionDiscovery` reads Claude Code transcripts from `~/.claude/projects`, scans configured dev roots for git repos and `agents/*/config.json` folders, merges them by path, and annotates branch, dirty state, activity metadata, agent runtime state, and launch defaults.
 - `PortScanner` finds local development servers for the sidebar.
 - `FileService` reads/writes files, builds trees, reads git status, and runs `pull`, `push`, and `fetch` only inside allowed roots.
 - `FileWatcher` emits file and git status changes for the active project tree.
@@ -37,7 +37,7 @@ This document describes the current codebase, not the aspirational Codex roadmap
 ### Session Discovery
 
 1. `App` calls `window.nockTerminal.sessions.discover()` on mount and every 30 seconds.
-2. `SessionDiscovery` reads Claude transcripts, scans configured dev roots, and returns normalized sessions/projects.
+2. `SessionDiscovery` reads Claude transcripts, scans configured dev roots, reads agent `config.json` files, checks local NockCC file-bus state, and returns normalized sessions/projects/agents.
 3. `main.js` grants discovered project paths to `FileService` and revalidates `FileWatcher`.
 4. Dashboard and sidebar render sessions, project status, file trees, context checks, and cards from the returned data.
 
@@ -91,6 +91,7 @@ When configured:
 ## Known Architectural Gaps
 
 - Claude Code transcript discovery is still hard-coded around `~/.claude/projects`; Codex needs first-class transcript/session discovery and launch adapters.
+- Agent folder state is read-only and local-file-bus based. True reconnect/attach still needs a runtime adapter that can choose tmux attach, transcript resume, or another agent-specific reconnect path.
 - Monaco is lazy-loaded and now budgeted in CI, but targeted worker/language loading is still worth tightening if startup or update size becomes a problem.
 - The app has CI for tests, dependency audit, renderer builds, and bundle budgets, but no automated packaged Electron smoke test, crash reporting, or update channel validation.
 

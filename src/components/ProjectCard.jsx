@@ -6,8 +6,24 @@ const STATUS_CONFIG = {
   inactive: { dot: 'bg-nock-text-muted', label: 'IDLE', glowClass: 'status-inactive', text: 'text-nock-text-muted' },
 };
 
+const AGENT_LIFECYCLE_LABELS = {
+  running: { label: 'RUNNING', text: 'text-nock-green' },
+  idle: { label: 'IDLE', text: 'text-nock-green' },
+  stale: { label: 'STALE', text: 'text-nock-yellow' },
+  offline: { label: 'OFFLINE', text: 'text-nock-text-muted' },
+  disabled: { label: 'DISABLED', text: 'text-nock-red' },
+};
+
 export default function ProjectCard({ session, index, onClick }) {
   const cfg = STATUS_CONFIG[session.status] || STATUS_CONFIG.inactive;
+  const isAgent = session.kind === 'agent';
+  const lifecycle = AGENT_LIFECYCLE_LABELS[session.agent?.lifecycle] || null;
+  const primaryLabel = lifecycle?.label || cfg.label;
+  const primaryText = lifecycle?.text || cfg.text;
+  const actionLabel = isAgent
+    ? (['running', 'idle'].includes(session.agent?.lifecycle) ? 'OPEN' : 'LAUNCH')
+    : 'OPEN';
+  const agentSignalCount = (session.agent?.unreadCount || 0) + (session.agent?.inflightCount || 0);
 
   return (
     <button
@@ -28,19 +44,43 @@ export default function ProjectCard({ session, index, onClick }) {
         </span>
         <div className="flex items-center gap-1.5">
           <span className={`status-dot ${cfg.glowClass} w-1.5 h-1.5 ${cfg.dot}`} />
-          <span className={`font-mono text-[9px] tracking-widest ${cfg.text}`}>
-            {cfg.label}
+          <span className={`font-mono text-[9px] tracking-widest ${primaryText}`}>
+            {primaryLabel}
           </span>
         </div>
       </div>
+
+      {isAgent && (
+        <div className="relative flex items-center gap-1.5 mb-2">
+          <span className="font-mono text-[9px] tracking-widest uppercase text-nock-green border border-nock-green/30 rounded px-1.5 py-0.5 bg-nock-green/5">
+            Agent
+          </span>
+          {session.agent?.model && (
+            <span className="font-mono text-[9px] tracking-tight text-nock-text-muted truncate">
+              {session.agent.model}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Project name */}
       <h3 className="relative font-display font-semibold text-[15px] text-nock-text group-hover:text-white transition-colors truncate mb-2.5 leading-tight">
         {session.name}
       </h3>
 
-      {/* Branch line */}
-      {session.branch ? (
+      {/* Branch or agent signal line */}
+      {isAgent ? (
+        <div className="relative flex items-center gap-2 mb-2 min-h-4">
+          <span className="font-mono text-[10px] text-nock-accent-blue truncate tracking-tight">
+            {session.launch?.command ? `cmd: ${session.launch.command}` : 'launch disabled'}
+          </span>
+          {agentSignalCount > 0 && (
+            <span className="font-mono text-[9px] text-nock-accent-amber tracking-widest ml-auto">
+              {agentSignalCount} MSG
+            </span>
+          )}
+        </div>
+      ) : session.branch ? (
         <div className="relative flex items-center gap-1.5 mb-2">
           <svg className="w-3 h-3 text-nock-accent-blue shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <circle cx="6" cy="3" r="2" />
@@ -72,7 +112,7 @@ export default function ProjectCard({ session, index, onClick }) {
           {session.lastActivityFormatted}
         </span>
         <span className="font-mono text-[9px] text-nock-accent-purple tracking-wider uppercase opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-          OPEN
+          {actionLabel}
           <svg className="w-2.5 h-2.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>

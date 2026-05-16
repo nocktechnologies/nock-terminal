@@ -12,6 +12,10 @@ import Settings from './components/Settings';
 import StatusBar from './components/StatusBar';
 import { buildUnsavedFilesMessage, normalizeUnsavedFiles } from './utils/unsavedFiles.mjs';
 
+function createTabId(prefix = 'tab') {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export default function App() {
   const [view, setView] = useState('dashboard'); // dashboard | terminal | settings
   const [tabs, setTabs] = useState([]);
@@ -109,36 +113,59 @@ export default function App() {
     });
   }, [tabs, processStatus]);
 
-  // Open a terminal tab for a session
-  const openTerminalTab = useCallback((session) => {
-    const existingTab = tabs.find(t => t.sessionId === session.id);
+  const shouldLaunchAgent = (session, forceLaunch = false) => {
+    if (session?.kind !== 'agent' || !session.agent?.enabled || !session.launch?.command) {
+      return false;
+    }
+    if (forceLaunch) return true;
+    return !['running', 'idle'].includes(session.agent.lifecycle);
+  };
+
+  // Open a terminal tab for a session or agent folder
+  const openTerminalTab = useCallback((session, options = {}) => {
+    const launchFresh = options?.launchFresh === true;
+    const existingTab = !launchFresh
+      ? [...tabs].reverse().find(t => t.sessionId === session.id)
+      : null;
     if (existingTab) {
       setActiveTabId(existingTab.id);
       setView('terminal');
       return;
     }
 
-    const tabId = `tab-${Date.now()}`;
+    const tabId = createTabId();
+    const isAgent = session.kind === 'agent';
+    const launchCommand = shouldLaunchAgent(session, launchFresh) ? session.launch.command : undefined;
+    const cwd = isAgent ? (session.launch?.cwd || session.path) : session.path;
     const newTab = {
       id: tabId,
       sessionId: session.id,
       title: session.name,
       branch: session.branch,
       status: session.status,
-      cwd: session.path,
+      cwd,
       splitContent: null,
       splitRatio: 0.5,
+      launchCommand,
     };
 
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(tabId);
     setView('terminal');
-    window.nockTerminal.sessionHistory.start(tabId, { project: session.name, shell: '', cwd: session.path });
+    window.nockTerminal.sessionHistory.start(tabId, {
+      project: session.name,
+      shell: launchCommand || '',
+      cwd,
+    });
   }, [tabs]);
+
+  const launchAgentFresh = useCallback((session) => {
+    openTerminalTab(session, { launchFresh: true });
+  }, [openTerminalTab]);
 
   // Open a new blank terminal
   const openNewTab = useCallback((cwd) => {
-    const tabId = `tab-${Date.now()}`;
+    const tabId = createTabId();
     const newTab = {
       id: tabId,
       sessionId: null,
@@ -170,7 +197,7 @@ export default function App() {
       }
     }
 
-    const tabId = `tab-${Date.now()}`;
+    const tabId = createTabId();
     const newTab = {
       id: tabId,
       sessionId: null,
@@ -222,7 +249,7 @@ export default function App() {
   }, []);
 
   const duplicateTab = useCallback((tab) => {
-    const tabId = `tab-${Date.now()}`;
+    const tabId = createTabId();
     const newTab = { ...tab, id: tabId, pinned: false };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(tabId);
@@ -282,7 +309,7 @@ export default function App() {
         window.nockTerminal.terminal.destroy(tab.splitContent.id);
         return { ...tab, splitContent: null };
       }
-      const splitId = `${tab.id}-split-${Date.now()}`;
+      const splitId = createTabId(`${tab.id}-split`);
       return {
         ...tab,
         splitContent: { type: 'terminal', id: splitId },
@@ -507,6 +534,7 @@ export default function App() {
             <Dashboard
               sessions={sessions}
               onSessionClick={openTerminalTab}
+              onLaunchAgentFresh={launchAgentFresh}
               onNewTerminal={openNewTab}
               onRefresh={refreshSessions}
               onOpenSettings={() => setView('settings')}

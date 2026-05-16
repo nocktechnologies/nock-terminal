@@ -8,8 +8,9 @@ const execAsync = promisify(exec);
 
 class SessionDiscovery {
   constructor(opts = {}) {
-    this.claudeDir = path.join(os.homedir(), '.claude');
+    this.claudeDir = opts.claudeDir || path.join(os.homedir(), '.claude');
     this.projectsDir = path.join(this.claudeDir, 'projects');
+    this.fileBusRoot = opts.fileBusRoot || this._defaultFileBusRoot();
     // Dev root directories to scan for git projects (merged with sessions)
     this.devRoots = opts.devRoots || this._defaultDevRoots();
     // Project names to hide from dashboard (case-insensitive)
@@ -34,6 +35,12 @@ class SessionDiscovery {
     ];
   }
 
+  _defaultFileBusRoot() {
+    if (process.env.CRM_ROOT) return process.env.CRM_ROOT;
+    const instanceId = process.env.CRM_INSTANCE_ID || 'default';
+    return path.join(os.homedir(), '.claude-remote', instanceId);
+  }
+
   async discover() {
     // 1. Parse Claude Code sessions (authoritative cwd + activity timestamps)
     const sessions = await this._discoverSessions();
@@ -41,7 +48,13 @@ class SessionDiscovery {
     // 2. Scan dev roots for git repos — adds projects without sessions
     const devProjects = await this._discoverDevProjects();
 
-    // 3. Merge by path (case-insensitive on Windows); session data wins
+    // 3. Scan existing agent folders. These are not repos: opening them means
+    // launching or inspecting that local agent persona.
+    const agentFolders = await this._discoverAgentFolders();
+
+    // 4. Merge by path (case-insensitive on Windows); session data wins for
+    // generic project records, while agent folder metadata upgrades matching
+    // Claude transcript rows into first-class agent rows.
     const byPath = new Map();
     for (const s of sessions) {
       byPath.set(this._pathKey(s.path), s);
@@ -52,8 +65,27 @@ class SessionDiscovery {
         byPath.set(key, p);
       }
     }
+    for (const a of agentFolders) {
+      const key = this._pathKey(a.path);
+      const existing = byPath.get(key);
+      if (!existing) {
+        byPath.set(key, a);
+        continue;
+      }
+      const lastActivity = Math.max(existing.lastActivity || 0, a.lastActivity || 0);
+      byPath.set(key, {
+        ...existing,
+        ...a,
+        branch: a.branch || existing.branch,
+        dirty: Boolean(existing.dirty || a.dirty),
+        lastActivity,
+        lastActivityFormatted: this._formatTime(lastActivity),
+        status: this._strongestStatus(existing.status, a.status),
+        claudeSessionId: existing.kind === 'agent' ? existing.claudeSessionId : existing.id,
+      });
+    }
 
-    // 4. Apply skip list (match against basename)
+    // 5. Apply skip list (match against basename)
     const all = [...byPath.values()].filter(
       s => !this.skipList.includes(s.name.toLowerCase())
     );
@@ -66,6 +98,11 @@ class SessionDiscovery {
       return a.name.localeCompare(b.name);
     });
     return all;
+  }
+
+  _strongestStatus(a, b) {
+    const rank = { active: 3, recent: 2, inactive: 1 };
+    return (rank[a] || 0) >= (rank[b] || 0) ? a : b;
   }
 
   _pathKey(p) {
@@ -133,6 +170,366 @@ class SessionDiscovery {
       }
     }
     return projects;
+  }
+
+  async _discoverAgentFolders() {
+    const configPaths = new Set();
+    for (const root of this.devRoots) {
+      try {
+        await fsp.access(root);
+      } catch {
+        continue;
+      }
+      for (const configPath of await this._candidateAgentConfigPaths(root)) {
+        configPaths.add(configPath);
+      }
+    }
+
+    const results = await this._mapLimit([...configPaths], 5, (configPath) =>
+      this._parseAgentFolder(configPath)
+    );
+    return results.filter(Boolean);
+  }
+
+  async _candidateAgentConfigPaths(root) {
+    const configs = new Set();
+    await this._addConfigIfReadable(configs, path.join(root, 'config.json'));
+    await this._addAgentConfigsFromRoot(configs, root);
+    await this._addAgentConfigsFromRoot(configs, path.join(root, 'agents'));
+
+    let entries = [];
+    try {
+      entries = await fsp.readdir(root, { withFileTypes: true });
+    } catch {
+      return [...configs];
+    }
+
+    const ignored = new Set(['.git', 'node_modules', 'dist', 'dist-react', 'build']);
+    await this._mapLimit(
+      entries.filter(entry => entry.isDirectory() && !entry.name.startsWith('.') && !ignored.has(entry.name)),
+      5,
+      async (entry) => {
+        await this._addAgentConfigsFromRoot(configs, path.join(root, entry.name, 'agents'));
+      }
+    );
+
+    return [...configs];
+  }
+
+  async _addAgentConfigsFromRoot(configs, agentsRoot) {
+    let entries = [];
+    try {
+      entries = await fsp.readdir(agentsRoot, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    await this._mapLimit(
+      entries.filter(entry => entry.isDirectory() && !entry.name.startsWith('.')),
+      5,
+      async (entry) => {
+        await this._addConfigIfReadable(configs, path.join(agentsRoot, entry.name, 'config.json'));
+      }
+    );
+  }
+
+  async _addConfigIfReadable(configs, configPath) {
+    try {
+      const config = JSON.parse(await fsp.readFile(configPath, 'utf-8'));
+      if (this._agentNameFromConfig(config)) {
+        configs.add(configPath);
+        return;
+      }
+      this._debugIgnoredAgentConfig(configPath, 'missing valid agent_name');
+    } catch (err) {
+      if (!['ENOENT', 'ENOTDIR'].includes(err?.code)) {
+        this._debugIgnoredAgentConfig(configPath, 'unreadable or invalid JSON');
+      }
+    }
+  }
+
+  async _parseAgentFolder(configPath) {
+    try {
+      const agentPath = path.dirname(configPath);
+      const dirName = path.basename(agentPath);
+      const config = JSON.parse(await fsp.readFile(configPath, 'utf-8'));
+      const agentName = this._agentNameFromConfig(config);
+      if (!agentName) {
+        this._debugIgnoredAgentConfig(configPath, 'missing valid agent_name');
+        return null;
+      }
+
+      const enabled = config.enabled !== false;
+      const launchCwd = this._resolveAgentLaunchCwd(config, agentPath);
+      const launchCommand = enabled ? this._resolveAgentLaunchCommand(config, agentName) : '';
+      const runtime = await this._getAgentRuntimeState(agentName, dirName, config, enabled);
+      const gitInfo = await this._getGitInfo(agentPath);
+      const lastActivity = runtime.lastActivity || 0;
+
+      return {
+        id: `agent:${agentPath}`,
+        kind: 'agent',
+        name: this._formatAgentName(agentName),
+        path: agentPath,
+        branch: gitInfo.branch,
+        status: this._statusFromAgentLifecycle(runtime.lifecycle),
+        lastActivity,
+        lastActivityFormatted: this._formatTime(lastActivity),
+        dirty: gitInfo.dirty,
+        agent: {
+          name: agentName,
+          enabled,
+          lifecycle: runtime.lifecycle,
+          model: this._safeString(config.model, 120),
+          cronCount: Array.isArray(config.crons) ? config.crons.length : 0,
+          unreadCount: runtime.unreadCount,
+          inflightCount: runtime.inflightCount,
+          aliases: runtime.aliases,
+          lastHeartbeat: runtime.lastHeartbeat,
+        },
+        launch: {
+          command: launchCommand,
+          cwd: launchCwd,
+        },
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  _safeAgentName(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return /^[a-z0-9_-]{1,100}$/.test(normalized) ? normalized : '';
+  }
+
+  _agentNameFromConfig(config) {
+    if (!config || typeof config !== 'object' || Array.isArray(config)) return '';
+    return this._safeAgentName(config.agent_name);
+  }
+
+  _debugIgnoredAgentConfig(configPath, reason) {
+    if (process.env.NOCK_DEBUG_DISCOVERY === '1') {
+      console.debug(`[session-discovery] Ignored agent config (${reason}): ${configPath}`);
+    }
+  }
+
+  _safeString(value, maxLength = 500) {
+    if (typeof value !== 'string') return '';
+    return value.trim().slice(0, maxLength);
+  }
+
+  _formatAgentName(agentName) {
+    return String(agentName || '')
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+
+  _resolveAgentLaunchCommand(config, agentName) {
+    const candidates = [
+      config.launch_command,
+      config.launchCommand,
+      config.command,
+      config.start_command,
+      config.startCommand,
+      config.launch?.command,
+    ];
+    for (const candidate of candidates) {
+      const command = this._safeString(candidate, 500);
+      if (command) return command;
+    }
+    return this._safeAgentName(agentName) || this._formatAgentName(agentName).replace(/\s+/g, '');
+  }
+
+  _resolveAgentLaunchCwd(config, agentPath) {
+    const raw = this._safeString(config.working_directory || config.workingDirectory, 1000);
+    if (!raw) return agentPath;
+    return path.isAbsolute(raw) ? raw : path.resolve(agentPath, raw);
+  }
+
+  async _getAgentRuntimeState(agentName, dirName, config, enabled) {
+    const aliases = this._agentAliases(agentName, dirName, config);
+    if (!enabled) {
+      return {
+        aliases,
+        lifecycle: 'disabled',
+        unreadCount: 0,
+        inflightCount: 0,
+        lastActivity: 0,
+        lastHeartbeat: null,
+      };
+    }
+
+    const [inbox, inflight, heartbeat, stats, livePid] = await Promise.all([
+      this._countBusFiles('inbox', aliases),
+      this._countBusFiles('inflight', aliases),
+      this._latestHeartbeat(aliases),
+      this._readAgentStats(aliases),
+      this._hasLiveAgentPid(aliases),
+    ]);
+    const lastHeartbeat = heartbeat || stats.lastChecked || null;
+    const lastActivity = Math.max(
+      lastHeartbeat || 0,
+      inbox.lastActivity || 0,
+      inflight.lastActivity || 0
+    );
+    const thresholdMs = this._agentStaleThresholdMs(config);
+    const heartbeatAge = lastHeartbeat ? Date.now() - lastHeartbeat : Infinity;
+
+    let lifecycle = 'offline';
+    if (lastHeartbeat && heartbeatAge <= thresholdMs) {
+      lifecycle = stats.agentState === 'idle' ? 'idle' : 'running';
+    } else if (livePid) {
+      lifecycle = stats.agentState === 'idle' ? 'idle' : 'running';
+    } else if (lastHeartbeat && heartbeatAge <= 24 * 60 * 60 * 1000) {
+      lifecycle = 'stale';
+    }
+
+    return {
+      aliases,
+      lifecycle,
+      unreadCount: inbox.count,
+      inflightCount: inflight.count,
+      lastActivity,
+      lastHeartbeat,
+    };
+  }
+
+  _agentAliases(agentName, dirName, config) {
+    const aliases = new Set([agentName, this._safeAgentName(dirName)]);
+    for (const key of ['nockcc_agent_name', 'nockccAgentName', 'surface', 'author_surface']) {
+      const value = this._safeAgentName(config[key]);
+      if (value) aliases.add(value);
+    }
+    // Mira is the renamed local folder/persona, while some NockCC substrate
+    // surfaces still use the older mara-nockos id.
+    if (aliases.has('mira')) aliases.add('mara-nockos');
+    if (aliases.has('mara')) aliases.add('mara-chat');
+    return [...aliases].filter(Boolean);
+  }
+
+  _agentStaleThresholdMs(config) {
+    const seconds = Number(config.passive_frozen_threshold || config.stale_threshold_seconds || 1200);
+    if (!Number.isFinite(seconds) || seconds <= 0) return 20 * 60 * 1000;
+    return Math.max(5 * 60 * 1000, seconds * 1000);
+  }
+
+  _statusFromAgentLifecycle(lifecycle) {
+    if (lifecycle === 'running' || lifecycle === 'idle') return 'active';
+    if (lifecycle === 'stale') return 'recent';
+    return 'inactive';
+  }
+
+  async _countBusFiles(kind, aliases) {
+    let count = 0;
+    let lastActivity = 0;
+    for (const alias of aliases) {
+      const dir = path.join(this.fileBusRoot, kind, alias);
+      try {
+        const entries = await fsp.readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isFile() || entry.name.startsWith('.')) continue;
+          count += 1;
+          try {
+            const stat = await fsp.stat(path.join(dir, entry.name));
+            lastActivity = Math.max(lastActivity, stat.mtimeMs);
+          } catch {
+            // File may have been processed between readdir and stat.
+          }
+        }
+      } catch {
+        // Missing bus directories are normal for agents that have never run.
+      }
+    }
+    return { count, lastActivity };
+  }
+
+  async _latestHeartbeat(aliases) {
+    const names = [
+      'fc-heartbeat',
+      'nockcc-last-ok',
+      'tg-bridge.heartbeat',
+      'session-start',
+      'fast-checker.pid',
+      'stats.json',
+    ];
+    let latest = 0;
+    for (const alias of aliases) {
+      for (const name of names) {
+        const filePath = path.join(this.fileBusRoot, 'state', `${alias}.${name}`);
+        try {
+          const [content, stat] = await Promise.all([
+            fsp.readFile(filePath, 'utf-8').catch(() => ''),
+            fsp.stat(filePath),
+          ]);
+          latest = Math.max(latest, this._timestampFromText(content) || stat.mtimeMs);
+        } catch {
+          // Not every agent has every heartbeat file.
+        }
+      }
+    }
+    return latest || null;
+  }
+
+  async _readAgentStats(aliases) {
+    for (const alias of aliases) {
+      try {
+        const filePath = path.join(this.fileBusRoot, 'state', `${alias}.stats.json`);
+        const parsed = JSON.parse(await fsp.readFile(filePath, 'utf-8'));
+        if (!parsed || typeof parsed !== 'object') continue;
+        return {
+          agentState: this._safeString(parsed.agent, 80).toLowerCase(),
+          lastChecked: this._timestampFromText(parsed.checked),
+        };
+      } catch {
+        // Try the next alias.
+      }
+    }
+    return { agentState: '', lastChecked: null };
+  }
+
+  async _hasLiveAgentPid(aliases) {
+    for (const alias of aliases) {
+      for (const suffix of ['fast-checker.pid', 'mcp-children.pids']) {
+        try {
+          const content = await fsp.readFile(path.join(this.fileBusRoot, 'state', `${alias}.${suffix}`), 'utf-8');
+          const pids = content
+            .split(/\s+/)
+            .map(value => Number(value))
+            .filter(value => Number.isInteger(value) && value > 0);
+          if (pids.some(pid => this._pidIsAlive(pid))) return true;
+        } catch {
+          // Missing pid files are normal.
+        }
+      }
+    }
+    return false;
+  }
+
+  _pidIsAlive(pid) {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (err) {
+      return err?.code === 'EPERM';
+    }
+  }
+
+  _timestampFromText(value) {
+    const text = String(value || '').trim();
+    if (!text) return null;
+
+    if (!/^\d+$/.test(text)) {
+      const parsedDate = Date.parse(text);
+      if (Number.isFinite(parsedDate)) return parsedDate;
+    }
+
+    const match = text.match(/\d{10,13}/);
+    if (!match) return null;
+    const numeric = Number(match[0]);
+    if (!Number.isFinite(numeric)) return null;
+    return numeric > 10_000_000_000 ? numeric : numeric * 1000;
   }
 
   // Bounded-concurrency Promise.all: runs at most `limit` tasks in parallel

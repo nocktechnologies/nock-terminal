@@ -10,9 +10,9 @@ Nock Terminal is not ready for public GTM or paid launch.
 
 After the May 15 remediation pass, it is ready for renewed internal dogfood and a controlled private alpha. The previous launch blockers around dependency audit, terminal settings, unsaved editor protection, NockCC placeholder activity, first-run onboarding, and release gates have been fixed or materially reduced.
 
-The remaining public-GTM blockers are product depth and distribution proof: Codex transcript/launch adapters, worktree lanes, session replay, packaged-app smoke automation, update distribution, crash/error reporting, and a crisp public demo/support path.
+The remaining public-GTM blockers are product depth and distribution proof: true reconnect/attach for live agents, Codex transcript/launch adapters, worktree lanes, session replay, packaged-app smoke automation, update distribution, crash/error reporting, and a crisp public demo/support path.
 
-The product has useful bones: a real PTY-backed terminal, session discovery, project cards, file tree, Monaco editing, local model chat, prompt/session history, git controls, port awareness, and notifications. The main problem is not lack of product surface. The problem is that the surface is not yet formed into a sharp promise people can immediately understand and trust.
+The product has useful bones: a real PTY-backed terminal, Claude transcript discovery, agent-folder discovery, project cards, file tree, Monaco editing, local model chat, prompt/session history, git controls, port awareness, and notifications. The main problem is not lack of product surface. The problem is that the surface is not yet formed into a sharp promise people can immediately understand and trust.
 
 ## Verification Summary
 
@@ -93,7 +93,7 @@ Impact: Users will bounce if the public promise says Codex but the app behaves l
 
 Status: Partially fixed.
 
-The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an initial adapter registry for Claude/Codex process detection and project context checks, but Claude Code remains the only transcript-discovery source and Claude launch remains the only concrete agent launch flow.
+The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an initial adapter registry for Claude/Codex process detection and project context checks, plus first-class local agent-folder discovery from existing `config.json` files. Claude Code remains the only transcript-discovery source, and true reconnect/attach for live agents remains future work.
 
 Recommendation: keep the private alpha Claude-first but agent-agnostic in posture. Do not market Codex as first-class until Codex discovery, launch, process, context, and settings are all backed by code.
 
@@ -250,9 +250,10 @@ That is more compelling than "a terminal with AI chat."
 
 ## Remaining Fixes
 
-1. Implement real Codex transcript discovery and Codex launch/profile settings.
-2. Add worktree lanes for parallel agent attempts.
-3. Add session replay and handoff export from terminal output, diff, commands, and test results.
-4. Automate packaged-app smoke tests for macOS, Windows, and Linux artifacts.
-5. Decide update distribution, crash/error reporting, support path, and beta feedback channel.
-6. Build the public demo around agent observability, worktree safety, and recoverable sessions.
+1. Implement true reconnect/attach for live local agents.
+2. Implement real Codex transcript discovery and Codex launch/profile settings.
+3. Add worktree lanes for parallel agent attempts.
+4. Add session replay and handoff export from terminal output, diff, commands, and test results.
+5. Automate packaged-app smoke tests for macOS, Windows, and Linux artifacts.
+6. Decide update distribution, crash/error reporting, support path, and beta feedback channel.
+7. Build the public demo around agent observability, worktree safety, and recoverable sessions.

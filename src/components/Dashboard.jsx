@@ -7,6 +7,7 @@ import OnboardingPanel from './OnboardingPanel';
 export default function Dashboard({
   sessions,
   onSessionClick,
+  onLaunchAgentFresh,
   onNewTerminal,
   onRefresh,
   onOpenSettings,
@@ -17,11 +18,17 @@ export default function Dashboard({
   const [settingsProject, setSettingsProject] = useState(null);
 
   const stats = useMemo(() => {
+    const agents = sessions.filter(s => s.kind === 'agent').length;
+    const repos = sessions.length - agents;
     const active = sessions.filter(s => s.status === 'active').length;
-    const recent = sessions.filter(s => s.status === 'recent').length;
     const dirty = sessions.filter(s => s.dirty).length;
-    return { total: sessions.length, active, recent, dirty };
+    return { agents, repos, active, dirty };
   }, [sessions]);
+
+  const groupedSessions = useMemo(() => ({
+    agents: sessions.filter(session => session.kind === 'agent'),
+    projects: sessions.filter(session => session.kind !== 'agent'),
+  }), [sessions]);
 
   const handleCardContextMenu = useCallback((e, session) => {
     e.preventDefault();
@@ -33,60 +40,80 @@ export default function Dashboard({
     setContextMenu(null);
   }, []);
 
-  const buildCardMenuItems = (session) => [
-    {
-      label: 'Open Terminal',
-      icon: (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      ),
-      onClick: () => onSessionClick(session),
-    },
-    {
-      label: 'Open in VS Code',
-      icon: (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-        </svg>
-      ),
-      disabled: true,
-      onClick: () => {},
-    },
-    {
-      label: 'Open in Explorer',
-      icon: (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-        </svg>
-      ),
-      onClick: () => {
-        window.nockTerminal.shell.showItemInFolder?.(session.path);
+  const buildCardMenuItems = (session) => {
+    const items = [
+      {
+        label: session.kind === 'agent' ? 'Open Agent Folder' : 'Open Terminal',
+        icon: (
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        ),
+        onClick: () => onSessionClick(session),
       },
-    },
-    {
-      label: 'Project Settings',
-      icon: (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      ),
-      onClick: () => setSettingsProject(session),
-    },
-    { separator: true },
-    {
-      label: 'Copy Path',
-      icon: (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-        </svg>
-      ),
-      onClick: () => {
-        window.nockTerminal.clipboard.write(session.path);
+    ];
+
+    if (session.kind === 'agent') {
+      items.push({
+        label: 'Launch Fresh',
+        icon: (
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
+        ),
+        disabled: !session.agent?.enabled || !session.launch?.command,
+        onClick: () => onLaunchAgentFresh?.(session),
+      });
+    }
+
+    items.push(
+      {
+        label: 'Open in VS Code',
+        icon: (
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+          </svg>
+        ),
+        disabled: true,
+        onClick: () => {},
       },
-    },
-  ];
+      {
+        label: 'Open in Explorer',
+        icon: (
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
+        ),
+        onClick: () => {
+          window.nockTerminal.shell.showItemInFolder?.(session.path);
+        },
+      },
+      {
+        label: 'Project Settings',
+        icon: (
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        ),
+        onClick: () => setSettingsProject(session),
+      },
+      { separator: true },
+      {
+        label: 'Copy Path',
+        icon: (
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+          </svg>
+        ),
+        onClick: () => {
+          window.nockTerminal.clipboard.write(session.path);
+        },
+      },
+    );
+
+    return items;
+  };
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -112,7 +139,7 @@ export default function Dashboard({
                 Sessions
               </h1>
               <p className="font-mono text-xs text-nock-text-dim mt-2 tracking-wide">
-                Claude Code sessions + git repos from configured dev roots
+                Agent folders, running sessions, and git repos from configured dev roots
               </p>
             </div>
 
@@ -139,9 +166,9 @@ export default function Dashboard({
 
           {/* Stat strip — cockpit telemetry */}
           <div className="grid grid-cols-4 gap-0 border border-nock-border rounded-md overflow-hidden bg-nock-card/30 backdrop-blur-sm">
-            <StatCell label="Total" value={stats.total} accent="blue" />
-            <StatCell label="Active" value={stats.active} accent="green" pulse={stats.active > 0} />
-            <StatCell label="Recent" value={stats.recent} accent="yellow" />
+            <StatCell label="Agents" value={stats.agents} accent="green" pulse={stats.agents > 0} />
+            <StatCell label="Active" value={stats.active} accent="blue" pulse={stats.active > 0} />
+            <StatCell label="Repos" value={stats.repos} accent="yellow" />
             <StatCell label="Modified" value={stats.dirty} accent="purple" />
           </div>
         </div>
@@ -160,29 +187,20 @@ export default function Dashboard({
 
         {sessions.length > 0 ? (
           <>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="font-mono text-[10px] text-nock-text-muted tracking-widest uppercase">
-                // Projects
-              </span>
-              <div className="flex-1 h-px bg-gradient-to-r from-nock-border to-transparent" />
-            </div>
-            <div
-              key={sessions.length}
-              className="stagger-reveal grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-            >
-              {sessions.map((session, i) => (
-                <div
-                  key={session.id}
-                  onContextMenu={(e) => handleCardContextMenu(e, session)}
-                >
-                  <ProjectCard
-                    session={session}
-                    index={i}
-                    onClick={() => onSessionClick(session)}
-                  />
-                </div>
-              ))}
-            </div>
+            <SessionSection
+              label="// Agents"
+              sessions={groupedSessions.agents}
+              offset={0}
+              onSessionClick={onSessionClick}
+              onContextMenu={handleCardContextMenu}
+            />
+            <SessionSection
+              label="// Projects"
+              sessions={groupedSessions.projects}
+              offset={groupedSessions.agents.length}
+              onSessionClick={onSessionClick}
+              onContextMenu={handleCardContextMenu}
+            />
           </>
         ) : (
           <EmptyState />
@@ -207,6 +225,37 @@ export default function Dashboard({
           onClose={() => setSettingsProject(null)}
         />
       )}
+    </div>
+  );
+}
+
+function SessionSection({ label, sessions, offset, onSessionClick, onContextMenu }) {
+  if (sessions.length === 0) return null;
+  return (
+    <div className="mb-7 last:mb-0">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="font-mono text-[10px] text-nock-text-muted tracking-widest uppercase">
+          {label}
+        </span>
+        <div className="flex-1 h-px bg-gradient-to-r from-nock-border to-transparent" />
+      </div>
+      <div
+        key={`${label}-${sessions.length}`}
+        className="stagger-reveal grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+      >
+        {sessions.map((session, i) => (
+          <div
+            key={session.id}
+            onContextMenu={(e) => onContextMenu(e, session)}
+          >
+            <ProjectCard
+              session={session}
+              index={offset + i}
+              onClick={() => onSessionClick(session)}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -240,9 +289,9 @@ function EmptyState() {
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-nock-accent-blue/10 to-nock-accent-purple/10" />
           <img src="./nock-logo.png" alt="" className="w-12 h-12 opacity-40 relative" />
         </div>
-        <p className="font-display text-sm text-nock-text mb-1 tracking-wide">No sessions detected</p>
+        <p className="font-display text-sm text-nock-text mb-1 tracking-wide">No agents or projects detected</p>
         <p className="font-mono text-[10px] text-nock-text-muted tracking-wider uppercase">
-          Run Claude Code in any dev project to begin
+          Add a dev root or run an agent in a local project
         </p>
       </div>
     </div>
