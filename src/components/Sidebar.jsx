@@ -25,6 +25,9 @@ export default function Sidebar({
   onCtrlPFocus,
   onExecutePrompt,
 }) {
+  const agentSessions = sessions.filter(session => session.kind === 'agent');
+  const projectSessions = sessions.filter(session => session.kind !== 'agent');
+
   return (
     <div
       className={`transition-sidebar bg-nock-bg border-r border-nock-border flex flex-col shrink-0 ${
@@ -58,40 +61,20 @@ export default function Sidebar({
           )}
 
           <div className="px-3 pt-4 pb-2">
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-mono text-[9px] text-nock-text-muted uppercase tracking-widest">
-                // Sessions
-              </span>
-              <button
-                type="button"
-                onClick={onRefresh}
-                className="min-h-7 min-w-7 inline-flex items-center justify-center rounded text-nock-text-muted hover:text-nock-text hover:bg-nock-card transition-colors"
-                title="Refresh"
-                aria-label="Refresh sessions"
-              >
-                <RefreshIcon />
-              </button>
-            </div>
+            <SessionListHeader onRefresh={onRefresh} />
             {sessions.length === 0 && (
               <p className="font-mono text-[10px] text-nock-text-muted px-1 py-2">No sessions detected</p>
             )}
-            <div className="space-y-0.5">
-              {sessions.map((session) => (
-                <button
-                  key={session.id}
-                  onClick={() => onSessionClick(session)}
-                  className="w-full text-left px-2 py-1.5 rounded hover:bg-nock-card transition-colors group flex items-center gap-2"
-                >
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_COLORS[session.status]} ${session.status === 'active' ? 'animate-pulse-glow' : ''}`} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[11px] text-nock-text group-hover:text-white transition-colors truncate font-medium">{session.name}</p>
-                    <p className="font-mono text-[9px] text-nock-text-muted truncate tracking-tight">
-                      {session.branch || '—'} · {session.lastActivityFormatted}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
+            <SidebarSessionSection
+              label="// Agents"
+              sessions={agentSessions}
+              onSessionClick={onSessionClick}
+            />
+            <SidebarSessionSection
+              label="// Projects"
+              sessions={projectSessions}
+              onSessionClick={onSessionClick}
+            />
           </div>
 
           {/* Active ports */}
@@ -153,6 +136,59 @@ export default function Sidebar({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
       </button>
+    </div>
+  );
+}
+
+function SessionListHeader({ onRefresh }) {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <span className="font-mono text-[9px] text-nock-text-muted uppercase tracking-widest">
+        // Sessions
+      </span>
+      <button
+        type="button"
+        onClick={onRefresh}
+        className="min-h-7 min-w-7 inline-flex items-center justify-center rounded text-nock-text-muted hover:text-nock-text hover:bg-nock-card transition-colors"
+        title="Refresh"
+        aria-label="Refresh sessions"
+      >
+        <RefreshIcon />
+      </button>
+    </div>
+  );
+}
+
+function SidebarSessionSection({ label, sessions, onSessionClick }) {
+  if (sessions.length === 0) return null;
+  return (
+    <div className="mb-3 last:mb-0">
+      <span className="font-mono text-[8px] text-nock-text-muted uppercase tracking-widest px-1 mb-1.5 block">
+        {label}
+      </span>
+      <div className="space-y-0.5">
+        {sessions.map((session) => {
+          const lifecycle = session.kind === 'agent' ? session.agent?.lifecycle : null;
+          const meta = session.kind === 'agent'
+            ? `${lifecycle || 'offline'} · ${session.agent?.unreadCount || 0} unread`
+            : `${session.branch || '—'} · ${session.lastActivityFormatted}`;
+          return (
+            <button
+              key={session.id}
+              onClick={() => onSessionClick(session)}
+              className="w-full text-left px-2 py-1.5 rounded hover:bg-nock-card transition-colors group flex items-center gap-2"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_COLORS[session.status]} ${session.status === 'active' ? 'animate-pulse-glow' : ''}`} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] text-nock-text group-hover:text-white transition-colors truncate font-medium">{session.name}</p>
+                <p className="font-mono text-[9px] text-nock-text-muted truncate tracking-tight">
+                  {meta}
+                </p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
