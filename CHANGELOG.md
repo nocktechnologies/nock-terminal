@@ -6,6 +6,7 @@ This changelog is summarized from git history. The repository has no version tag
 
 ### 2026-05-15
 
+- Added agent-folder intelligence: configured dev roots now discover existing `agents/*/config.json` folders, read local NockCC file-bus state, show agents separately from repos, and use conservative launch defaults.
 - Added a full product, technical, and GTM readiness audit in `docs/PRODUCT_AUDIT_GTM_READINESS.md`.
 - Added a product roadmap and positioning plan in `docs/ROADMAP.md`.
 - Added a docs index in `docs/README.md`.
