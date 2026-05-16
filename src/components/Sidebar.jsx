@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
+import { Search, X } from 'lucide-react';
 import FileTree from './FileTree';
 import ContextMonitor from './ContextMonitor';
 import SessionHistory from './SessionHistory';
 import PromptLibrary from './PromptLibrary';
+import { filterSessionsBySearch } from '../utils/sessionSearch.mjs';
 
 const STATUS_COLORS = {
   active:   'bg-nock-green',
@@ -25,8 +27,16 @@ export default function Sidebar({
   onCtrlPFocus,
   onExecutePrompt,
 }) {
-  const agentSessions = sessions.filter(session => session.kind === 'agent');
-  const projectSessions = sessions.filter(session => session.kind !== 'agent');
+  const [searchQuery, setSearchQuery] = useState('');
+  const visibleSessions = useMemo(
+    () => filterSessionsBySearch(sessions, searchQuery),
+    [sessions, searchQuery]
+  );
+  const groupedSessions = useMemo(() => ({
+    agents: visibleSessions.filter(session => session.kind === 'agent'),
+    projects: visibleSessions.filter(session => session.kind !== 'agent'),
+  }), [visibleSessions]);
+  const searchActive = searchQuery.trim().length > 0;
 
   return (
     <div
@@ -62,19 +72,33 @@ export default function Sidebar({
 
           <div className="px-3 pt-4 pb-2">
             <SessionListHeader onRefresh={onRefresh} />
+            {sessions.length > 0 && (
+              <SidebarSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                resultCount={visibleSessions.length}
+                totalCount={sessions.length}
+              />
+            )}
             {sessions.length === 0 && (
               <p className="font-mono text-[10px] text-nock-text-muted px-1 py-2">No sessions detected</p>
             )}
-            <SidebarSessionSection
-              label="// Agents"
-              sessions={agentSessions}
-              onSessionClick={onSessionClick}
-            />
-            <SidebarSessionSection
-              label="// Projects"
-              sessions={projectSessions}
-              onSessionClick={onSessionClick}
-            />
+            {sessions.length > 0 && visibleSessions.length === 0 && searchActive ? (
+              <p className="font-mono text-[10px] text-nock-text-muted px-1 py-2">No matching repos</p>
+            ) : (
+              <>
+                <SidebarSessionSection
+                  label="// Agents"
+                  sessions={groupedSessions.agents}
+                  onSessionClick={onSessionClick}
+                />
+                <SidebarSessionSection
+                  label="// Projects"
+                  sessions={groupedSessions.projects}
+                  onSessionClick={onSessionClick}
+                />
+              </>
+            )}
           </div>
 
           {/* Active ports */}
@@ -136,6 +160,35 @@ export default function Sidebar({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
       </button>
+    </div>
+  );
+}
+
+function SidebarSearch({ value, onChange, resultCount, totalCount }) {
+  const hasValue = value.trim().length > 0;
+  return (
+    <div className="relative mb-3">
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-nock-text-muted" aria-hidden="true" />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Search repos..."
+        aria-label="Search repos and agents"
+        className="h-8 w-full rounded border border-nock-border bg-nock-card/70 pl-8 pr-16 font-mono text-[10px] text-nock-text outline-none transition-colors placeholder:text-nock-text-muted focus:border-nock-accent-blue/60"
+      />
+      <span className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 font-mono text-[8px] text-nock-text-muted tabular-nums">
+        {resultCount}/{totalCount}
+      </span>
+      {hasValue && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-nock-text-muted transition-colors hover:bg-white/5 hover:text-nock-text"
+          aria-label="Clear repo search"
+        >
+          <X className="h-3 w-3" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }
