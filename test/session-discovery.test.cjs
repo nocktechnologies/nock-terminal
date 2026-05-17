@@ -58,7 +58,7 @@ test('discovers agent folders from existing config.json files', async () => {
   assert.equal(mira.agent.lifecycle, 'idle');
   assert.equal(mira.agent.model, 'claude-opus-4-6');
   assert.equal(mira.agent.unreadCount, 1);
-  assert.equal(mira.launch.command, 'mira');
+  assert.equal(mira.launch.command, 'tmux attach -t crm-default-mira');
   assert.equal(mira.launch.cwd, agentPath);
 });
 
@@ -93,8 +93,33 @@ test('upgrades Claude transcript paths to agent folders even without dev roots',
   assert.equal(mira.id, `agent:${agentPath}`);
   assert.equal(mira.name, 'Mira');
   assert.equal(mira.claudeSessionId, 'transcript-for-mira');
-  assert.equal(mira.launch.command, 'mira');
+  assert.equal(mira.launch.command, 'tmux attach -t crm-default-mira');
   assert.equal(mira.launch.cwd, agentPath);
+});
+
+test('uses CRM tmux attach fallback for enabled persistent agents without shell aliases', async () => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const agentPath = path.join(devRoot, 'claude-remote-manager', 'agents', 'cooper');
+
+  writeJson(path.join(agentPath, 'config.json'), {
+    agent_name: 'cooper',
+    enabled: true,
+    model: 'claude-opus-4-6',
+  });
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [devRoot],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const cooper = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'cooper');
+
+  assert.ok(cooper);
+  assert.equal(cooper.launch.command, 'tmux attach -t crm-default-cooper');
+  assert.equal(cooper.launch.canLaunch, true);
 });
 
 test('marks disabled agent folders as inactive without launch defaults', async () => {
