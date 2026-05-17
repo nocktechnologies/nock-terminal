@@ -1,6 +1,6 @@
 # Release Readiness
 
-Updated: 2026-05-15
+Updated: 2026-05-16
 
 Nock Terminal has a release pipeline, but public distribution should stay gated until the checks below pass on a tagged release and the packaged installers are manually smoked on each target OS.
 
@@ -52,9 +52,11 @@ Before a public beta announcement, install the generated artifacts on clean mach
 - Linux AppImage launches and the deb package installs cleanly.
 - First-run onboarding can detect dev roots, Claude/Codex CLI availability, project context files, and Ollama status.
 - Terminal tab opens in the selected shell and respects shell arguments and environment variables.
-- Claude launch uses the configured project command when present.
+- `Ctrl+K` command launcher opens, searches repos/agents, and launches the selected target.
+- Claude, Codex, Gemini, and custom-agent profile launch commands use the configured project command when present.
+- Task staging opens a fresh agent terminal and places task text in the terminal without auto-submitting it.
 - Monaco can open, edit, save, and protect unsaved changes on close.
-- Context monitor reports `CLAUDE.md`, `AGENTS.md`, Codex config, and `.nock/config.toml` accurately.
+- Context monitor reports `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, Codex config, and `.nock/config.toml` accurately.
 - NockCC heartbeat reports active project and agent session counts when configured.
 - Telegram/notification settings remain opt-in and do not leak local project details without user configuration.
 

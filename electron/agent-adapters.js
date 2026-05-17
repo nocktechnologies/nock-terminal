@@ -27,6 +27,18 @@ const AGENT_ADAPTERS = [
       },
     ],
   },
+  {
+    id: 'gemini',
+    label: 'Gemini CLI',
+    command: 'gemini',
+    processNames: ['gemini', 'gemini.exe', 'gemini.cmd'],
+    contextGroups: [
+      {
+        label: 'GEMINI.md',
+        paths: ['GEMINI.md', '.gemini/GEMINI.md'],
+      },
+    ],
+  },
 ];
 
 const SHARED_CONTEXT_GROUPS = [

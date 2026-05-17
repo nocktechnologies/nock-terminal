@@ -8,12 +8,14 @@ Built by [Nock Technologies](https://nocktechnologies.io).
 
 ## Current Status
 
-As of the May 15, 2026 audit/remediation pass, this repo is ready for renewed dogfooding and a controlled private alpha, but not yet ready for a public GTM launch.
+As of the May 16, 2026 agent-agnostic cockpit pass, this repo is ready for renewed dogfooding and a controlled private alpha, but not yet ready for a public GTM launch.
 
 - Passing: `npm test`, `npm audit --audit-level=moderate`, `npx vite build`, `npm run check:bundle`, and the Monaco browser smoke test.
 - Fixed in the remediation pass: dependency audit blockers, shell/profile settings application, unsaved editor protection, agent context/process adapters, NockCC heartbeat activity, first-run onboarding, hit-target/accessibility polish, and release gate scripts.
 - New agent-folder intelligence: Nock discovers existing `agents/*/config.json` folders, reads local NockCC file-bus state, and presents agents separately from repos.
-- Strategic gap: Claude Code remains the only transcript-discovery source. Codex support now has context/process foundations, but full Codex session discovery and launch behavior are still roadmap work.
+- New agent-agnostic launcher: `Ctrl+K` searches repos/agents and launches Claude Code, Codex CLI, Gemini CLI, local agent folders, or a custom agent command from project profiles.
+- New task staging: the launcher can open a fresh agent terminal and place task text into it without auto-submitting the prompt.
+- Strategic gap: Claude Code remains the only transcript-discovery source. Codex/Gemini support now has context/process/profile launch foundations, but transcript discovery and resume/attach behavior are still roadmap work.
 - Launch gap: release workflows now enforce signing/notarization secrets and checksums, but packaged-app smoke tests, update distribution, crash/error reporting, and support flow still need a release pass.
 
 Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_GTM_READINESS.md).
@@ -23,12 +25,15 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 - Discovers Claude Code session transcripts from `~/.claude/projects`.
 - Scans configured development roots for git repositories.
 - Discovers local agent folders from existing `config.json` files and shows enabled/running/stale/offline state from the NockCC file bus.
+- Searches repos and agent folders from a `Ctrl+K` command launcher.
+- Launches Claude Code, Codex CLI, Gemini CLI, local agent folders, or custom agent aliases from project profiles.
+- Stages task text into newly launched agent terminals for human review before submit.
 - Opens xterm.js terminal tabs through `node-pty`, including splits.
 - Keeps terminal sessions mounted while switching between dashboard, terminal, and settings views.
 - Provides a sidebar file tree, git status markers, context checks, and Monaco editing.
 - Provides local AI chat through Ollama models.
 - Launches a Claude Code terminal tab from the AI panel.
-- Stores project profiles, prompt library entries, session history, output capture settings, and app preferences.
+- Stores project profiles, default agent choices, per-agent launch commands, prompt library entries, session history, output capture settings, and app preferences.
 - Sends optional Telegram notifications and heartbeat events to NockCC.
 
 ## Product Direction

@@ -2,19 +2,20 @@
 
 Nock Terminal is an Electron desktop app with a React 18 renderer. The renderer owns the cockpit UI; the Electron main process owns privileged work: PTYs, filesystem access, settings, process discovery, network clients, notifications, and OS integrations.
 
-This document describes the current codebase, not the aspirational Codex roadmap. Today, the implementation is Claude Code-oriented with Ollama support, plus first-class local agent-folder discovery for existing `agents/*/config.json` folders. The next architecture step is real Codex discovery and launch support behind the same adapter model.
+This document describes the current codebase, not the aspirational Codex roadmap. Today, the implementation is strongest around Claude Code transcript discovery and Ollama chat, plus first-class local agent-folder discovery for existing `agents/*/config.json` folders. The renderer now has profile-driven launch support for Claude Code, Codex CLI, Gemini CLI, and custom terminal agents; the next architecture step is real non-Claude transcript discovery and resume/attach support behind the same adapter model.
 
 ## Process Model
 
 - `src/main.jsx` mounts the React app.
-- `src/App.jsx` owns top-level renderer state for the active view, terminal tabs, session list, port list, process status, chat panel, queued prompts, and active project path.
+- `src/App.jsx` owns top-level renderer state for the active view, terminal tabs, session list, profile cache, port list, process status, command launcher, chat panel, queued prompts, and active project path.
 - `electron/main.js` creates the frameless window, tray, global shortcuts, service instances, and IPC handlers.
 - `electron/preload.js` exposes `window.nockTerminal` through `contextBridge`.
 - The renderer does not import Node APIs directly. It calls preload methods, which route to `ipcMain` handlers and main-process services.
 
 ## Main Surfaces
 
-- **Dashboard**: `Dashboard`, `ProjectCard`, `OnboardingPanel`, and `Sidebar` show discovered agent folders, Claude Code sessions, git repositories, status counts, ports, project context, prompt library entries, first-run setup status, and session history.
+- **Dashboard**: `Dashboard`, `ProjectCard`, `OnboardingPanel`, and `Sidebar` show discovered agent folders, Claude Code sessions, git repositories, operations telemetry, status counts, ports, project context, prompt library entries, first-run setup status, and session history.
+- **Command launcher**: `CommandPalette` and `src/utils/agentLaunchers.mjs` provide repo/agent search, default-agent launch resolution, and task staging for terminal-first agent work.
 - **Nock Command**: `TabBar`, `ActionToolbar`, `TerminalView`, `SplitPane`, `EditorPane`, and `AIChatPanel` form the terminal workbench for shells, Claude Code launch, split terminals, file editing, git actions, and AI chat.
 - **Settings**: `Settings` edits electron-store-backed preferences for window behavior, AI/model settings, terminal/editor options, file-tree roots, notifications, Telegram, data import/export, and app info.
 
@@ -26,6 +27,7 @@ This document describes the current codebase, not the aspirational Codex roadmap
 - `FileService` reads/writes files, builds trees, reads git status, and runs `pull`, `push`, and `fetch` only inside allowed roots.
 - `FileWatcher` emits file and git status changes for the active project tree.
 - `ProcessDetector` observes terminal processes and reports active agent identities under each PTY through the adapter registry.
+- `agent-adapters.js` defines known terminal agents for main-process detection and context checks. The current registry covers Claude Code, Codex CLI, and Gemini CLI.
 - `OllamaClient` streams local model chat through `/api/chat` and lists models through `/api/tags`.
 - `ClaudeCodeClient` can spawn `claude -p --output-format stream-json` for Claude Code chat-style calls.
 - `TelegramNotifier` sends configured notification events.
@@ -47,7 +49,9 @@ This document describes the current codebase, not the aspirational Codex roadmap
 2. `TerminalView` creates an xterm instance and calls `terminal:create` over IPC.
 3. `TerminalManager` spawns a PTY in the tab cwd and streams output back with `terminal:data`.
 4. xterm sends user input through `terminal:write`; resize events use `terminal:resize`.
-5. Session history records output only when `autoCaptureSessions` is enabled.
+5. When a tab has a launch command, `TerminalView` sends it after the shell initializes.
+6. When a tab has staged task text, `TerminalView` places the sanitized text into the terminal after launch without sending an Enter key.
+7. Session history records output only when `autoCaptureSessions` is enabled.
 
 ### Files And Git
 
@@ -61,8 +65,16 @@ This document describes the current codebase, not the aspirational Codex roadmap
 
 1. `AIChatPanel` polls Ollama status and model list.
 2. Local model chat streams through `OllamaClient` and `ai:stream`.
-3. The Kit option opens a new terminal tab that launches `claude`.
+3. The Kit option opens a new terminal tab that launches the configured Claude command.
 4. The Mara option opens `https://claude.ai`.
+
+### Agent Launching
+
+1. `CommandPalette` searches discovered sessions with `buildLauncherTargets()`.
+2. For repos, `resolveSessionLaunch()` chooses the project profile's default agent and command override. Supported built-ins are Claude Code, Codex CLI, Gemini CLI, and custom agent command.
+3. For local agent folders, `resolveSessionLaunch()` uses the discovered `config.json` launch command and cwd.
+4. `App` creates a terminal tab with the resolved cwd, launch command, and optional staged task text.
+5. The task text is sanitized to remove terminal control characters and shell-submitting newlines before it is written to the PTY.
 
 ## NockCC Connection
 
@@ -90,7 +102,7 @@ When configured:
 
 ## Known Architectural Gaps
 
-- Claude Code transcript discovery is still hard-coded around `~/.claude/projects`; Codex needs first-class transcript/session discovery and launch adapters.
+- Claude Code transcript discovery is still hard-coded around `~/.claude/projects`; Codex and Gemini need first-class transcript/session discovery and resume/attach adapters.
 - Agent folder state is read-only and local-file-bus based. True reconnect/attach still needs a runtime adapter that can choose tmux attach, transcript resume, or another agent-specific reconnect path.
 - Monaco is lazy-loaded and now budgeted in CI, but targeted worker/language loading is still worth tightening if startup or update size becomes a problem.
 - The app has CI for tests, dependency audit, renderer builds, and bundle budgets, but no automated packaged Electron smoke test, crash reporting, or update channel validation.

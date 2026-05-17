@@ -1,6 +1,6 @@
 # Product Roadmap
 
-Updated: 2026-05-15
+Updated: 2026-05-16
 
 This roadmap follows the audit in `docs/PRODUCT_AUDIT_GTM_READINESS.md`. It assumes Nock Terminal should become a local-first cockpit for supervising coding agents, not a generic AI IDE.
 
@@ -26,6 +26,18 @@ Do not lead with "Codex app" or "Claude app." Lead with the workflow:
 - **Dense, calm, repeated-use UI**: this is an operator console, not a marketing dashboard.
 
 ## Near-Term Roadmap
+
+### May 16 Agent-Agnostic Cockpit Slice
+
+The approved five-phase slice is now represented in-product:
+
+- **Find and launch**: `Ctrl+K` opens a command launcher that searches repos, agent folders, branches, lifecycle state, models, and launch commands.
+- **Agent-agnostic core**: project launches now share one profile-driven launcher model for Claude Code, Codex CLI, Gemini CLI, and a custom agent command.
+- **Repo profiles**: project profiles can set a default coding agent and per-agent command overrides for Claude, Codex, Gemini, or an internal wrapper.
+- **Session observability**: the dashboard now has an operations strip for active agent folders, agent processes, open terminals, quiet agent tabs, dirty repos, and stale agent folders.
+- **Orchestration**: the launcher can stage a task into a freshly launched agent terminal without submitting it, keeping the human-in-the-loop terminal workflow intact.
+
+This is not the end-state orchestration system. It is the first cohesive cockpit interaction that makes the product feel agent-agnostic without overstating transcript discovery or reconnect support.
 
 ### 1. Relaunch Foundations
 
@@ -59,6 +71,14 @@ Completed in the agent-folder intelligence pass:
 - Resolve conservative launch defaults from config or the agent name.
 - Avoid auto-launching duplicate processes when an agent appears running or idle.
 
+Completed in the May 16 command-center pass:
+
+- Added a shared launcher model for Claude Code, Codex CLI, Gemini CLI, and custom terminal agents.
+- Added profile fields for default agent, Codex command, Gemini command, and custom agent command.
+- Added Gemini process detection and `GEMINI.md` context checks, based on the official Gemini CLI context-file convention.
+- Added task staging into launched terminal sessions for safe human review before submit.
+- Added dashboard operations telemetry for active agents, live agent processes, terminal count, quiet tabs, stale agents, and dirty repos.
+
 Extend the adapter contract for:
 
 - Agent display name and status labels.
@@ -72,8 +92,11 @@ Extend the adapter contract for:
 Current adapter posture:
 
 - Claude Code: current transcript discovery and launch behavior remain preserved.
-- Local agent folders: discovered from config and file-bus state; true reconnect/attach remains future work.
-- Codex CLI: context/process foundations exist; first-class discovery and launch support remain next work after confirming the desired Codex integration surface.
+- Local agent folders: discovered from config and file-bus state; terminal launch is supported; true reconnect/attach remains future work.
+- Codex CLI: context/process detection and profile-driven terminal launch are implemented; transcript discovery and resume/attach remain future work.
+- Gemini CLI: process detection, `GEMINI.md` context checks, and profile-driven terminal launch are implemented; transcript discovery is not claimed.
+
+Gemini context reference: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md
 
 ### 3. Worktree Lanes
 

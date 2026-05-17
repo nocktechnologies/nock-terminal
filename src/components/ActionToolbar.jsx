@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Columns2, PanelLeft, MessageSquare, LayoutDashboard, ArrowDown, ArrowUp, RefreshCw, Loader2 } from 'lucide-react';
+import { Columns2, PanelLeft, MessageSquare, LayoutDashboard, ArrowDown, ArrowUp, RefreshCw, Loader2, Command } from 'lucide-react';
 
 const GIT_OPS = [
   { op: 'pull',  Icon: ArrowDown,  label: 'Pull'  },
@@ -12,6 +12,7 @@ export default function ActionToolbar({
   onToggleSidebar,
   onToggleChat,
   onDashboard,
+  onOpenCommandPalette,
   sidebarOpen,
   chatOpen,
   hasSplit,
@@ -67,6 +68,12 @@ export default function ActionToolbar({
 
   return (
     <div className="flex items-center gap-1 px-2 shrink-0">
+      <ToolbarButton
+        Icon={Command}
+        label="Launch"
+        shortcut="Ctrl+K"
+        onClick={onOpenCommandPalette}
+      />
       <ToolbarButton
         Icon={Columns2}
         label="Split"

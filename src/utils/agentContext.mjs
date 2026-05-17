@@ -12,6 +12,10 @@ export const AGENT_CONTEXT_GROUPS = [
     paths: ['.codex/config.toml', '.Codex/config.toml'],
   },
   {
+    label: 'GEMINI.md',
+    paths: ['GEMINI.md', '.gemini/GEMINI.md'],
+  },
+  {
     label: '.nock/config.toml',
     paths: ['.nock/config.toml'],
   },

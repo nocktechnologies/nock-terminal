@@ -76,3 +76,12 @@ The May 15, 2026 audit/remediation pass found that the repo is dogfoodable and p
 - Remaining launch gaps: Codex transcript/launch support, packaged smoke automation, update distribution, crash/error reporting, and a sharper public demo.
 
 Start with `docs/PRODUCT_AUDIT_GTM_READINESS.md`, `docs/ROADMAP.md`, and `docs/RELEASE_READINESS.md` before major product work.
+
+## Session Closeout
+
+File a Session Report for every build/session before final response, even
+docs-only work. Use `nockcc_session_report_create` or
+`POST /api/sessions/reports/` with `session_id`, `agent_name`, `duration`,
+task/PR/message/decision counts, `handoff_written`, standing-order pass/total
+counts, concise notes, and 2-5 highlights. Include `nock-terminal` in the
+session id or notes so NockCC can trace the report back to this repo.
