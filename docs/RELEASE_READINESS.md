@@ -52,7 +52,7 @@ Before a public beta announcement, install the generated artifacts on clean mach
 - Linux AppImage launches and the deb package installs cleanly.
 - First-run onboarding can detect dev roots, Claude/Codex CLI availability, project context files, and Ollama status.
 - Terminal tab opens in the selected shell and respects shell arguments and environment variables.
-- `Ctrl+K` command launcher opens, searches repos/agents, and launches the selected target.
+- `Ctrl+K` command launcher opens, searches repos/agents, and launches the selected target, including fallback-discovered agents when stored `devRoots` is empty.
 - Claude, Codex, Gemini, and custom-agent profile launch commands use the configured project command when present.
 - Task staging opens a fresh agent terminal and places task text in the terminal without auto-submitting it.
 - Codex/DeepSeek dispatch agents appear once each, show `DISPATCH`, and do not duplicate from copied dispatch worktrees.

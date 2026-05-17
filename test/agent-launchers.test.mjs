@@ -118,6 +118,32 @@ test('builds launcher targets from session and profile search fields', () => {
   assert.equal(dispatchTargets[0].session.name, 'Ash');
 });
 
+test('searches dispatch agents by name and runtime', () => {
+  const smithRepo = {
+    ...project,
+    id: 'dev:/Users/kevin/Dev/nock-command-center-smith-284',
+    name: 'nock-command-center-smith-284',
+    path: '/Users/kevin/Dev/nock-command-center-smith-284',
+  };
+  const smith = {
+    ...dispatchAgent,
+    id: 'agent:/Users/kevin/Dev/claude-remote-manager/agents/smith',
+    name: 'Smith',
+    path: '/Users/kevin/Dev/claude-remote-manager/agents/smith',
+    agent: { name: 'smith', lifecycle: 'dispatch', runtime: 'deepseek', model: 'deepseek-v4-pro' },
+    launch: {
+      ...dispatchAgent.launch,
+      dispatcher: 'deepseek',
+      runtime: 'deepseek',
+      scriptPath: '/Users/kevin/Dev/claude-remote-manager/core/scripts/dispatch-deepseek.sh',
+      commandTemplate: '/Users/kevin/Dev/claude-remote-manager/core/scripts/dispatch-deepseek.sh --agent smith --payload-file <payload-file>',
+    },
+  };
+
+  assert.equal(buildLauncherTargets([smithRepo, dispatchAgent, smith], {}, 'smith')[0].session.name, 'Smith');
+  assert.equal(buildLauncherTargets([dispatchAgent, smith], {}, 'deepseek dispatch')[0].session.name, 'Smith');
+});
+
 test('sanitizes staged terminal input without submitting shell newlines', () => {
   assert.equal(
     sanitizeStagedTerminalInput(' fix the bug\nthen run tests\tplease\u0007 '),

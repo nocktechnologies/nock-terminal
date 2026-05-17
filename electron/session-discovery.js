@@ -12,7 +12,10 @@ class SessionDiscovery {
     this.projectsDir = path.join(this.claudeDir, 'projects');
     this.fileBusRoot = opts.fileBusRoot || this._defaultFileBusRoot();
     // Dev root directories to scan for git projects (merged with sessions)
-    this.devRoots = opts.devRoots || this._defaultDevRoots();
+    this.defaultDevRoots = Array.isArray(opts.defaultDevRoots)
+      ? opts.defaultDevRoots
+      : this._defaultDevRoots();
+    this.devRoots = this._effectiveDevRoots(opts.devRoots);
     // Project names to hide from dashboard (case-insensitive)
     this.skipList = (opts.skipList || []).map(s => s.toLowerCase());
     // Cache git status results: { projectPath: { branch, dirty, cachedAt } }
@@ -21,7 +24,7 @@ class SessionDiscovery {
   }
 
   setConfig({ devRoots, skipList }) {
-    if (Array.isArray(devRoots)) this.devRoots = devRoots;
+    if (Array.isArray(devRoots)) this.devRoots = this._effectiveDevRoots(devRoots);
     if (Array.isArray(skipList)) this.skipList = skipList.map(s => s.toLowerCase());
   }
 
@@ -29,10 +32,26 @@ class SessionDiscovery {
     if (process.platform === 'win32') {
       return ['C:\\Dev'];
     }
+    const home = os.homedir();
     return [
-      path.join(os.homedir(), 'dev'),
-      path.join(os.homedir(), 'Projects'),
+      path.join(home, 'Dev'),
+      path.join(home, 'dev'),
+      path.join(home, 'Projects'),
     ];
+  }
+
+  _effectiveDevRoots(devRoots) {
+    const configuredRoots = Array.isArray(devRoots)
+      ? devRoots
+        .map(root => this._safeString(root, 1000))
+        .filter(Boolean)
+      : [];
+    const roots = configuredRoots.length > 0 ? configuredRoots : this.defaultDevRoots;
+    return [...new Set(
+      roots
+        .map(root => this._safeString(root, 1000))
+        .filter(Boolean)
+    )];
   }
 
   _defaultFileBusRoot() {
