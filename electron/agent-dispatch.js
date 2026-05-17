@@ -113,14 +113,14 @@ function buildBrokeredDispatchMessage(input = {}) {
   };
 }
 
-function buildDirectDispatchCommand({ scriptPath, agentName, payloadFile } = {}) {
+function buildDirectDispatchCommand({ scriptPath, agentName, payloadFile, agentBound = false } = {}) {
   const agent = safeAgentName(agentName);
   const script = safeString(scriptPath, 1000);
   const payload = safeString(payloadFile, 1000);
   if (!script) throw new Error('Dispatch script path is required');
-  if (!agent) throw new Error('A valid dispatch agent name is required');
+  if (!agentBound && !agent) throw new Error('A valid dispatch agent name is required');
   if (!payload) throw new Error('Dispatch payload file is required');
-  return `${shellQuote(script)} --agent ${shellQuote(agent)} --payload-file ${shellQuote(payload)}`;
+  return `${shellQuote(script)}${agentBound ? '' : ` --agent ${shellQuote(agent)}`} --payload-file ${shellQuote(payload)}`;
 }
 
 function cleanupDispatchPayloadDirSync(dir) {
@@ -185,6 +185,7 @@ async function createDispatchPayloadFile(input = {}, opts = {}) {
         scriptPath: input.scriptPath,
         agentName: request.agentName,
         payloadFile: filePath,
+        agentBound: input.agentBound === true,
       })
       : '',
   };

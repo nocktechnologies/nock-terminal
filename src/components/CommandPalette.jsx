@@ -15,6 +15,7 @@ export default function CommandPalette({
   sessions,
   profilesByPath,
   activeProjectPath,
+  preset,
   onClose,
   onOpenSession,
   onLaunchSessionWithAgent,
@@ -27,21 +28,30 @@ export default function CommandPalette({
   const [taskAgentId, setTaskAgentId] = useState(DEFAULT_AGENT_ID);
   const [taskDispatchMode, setTaskDispatchMode] = useState('brokered');
   const inputRef = useRef(null);
+  const taskRef = useRef(null);
 
   const targets = useMemo(
     () => buildLauncherTargets(sessions, profilesByPath, query).slice(0, 12),
     [sessions, profilesByPath, query]
   );
 
-  const taskTargets = useMemo(
-    () => orderTaskTargets(sessions, activeProjectPath).slice(0, 18),
+  const orderedTaskTargets = useMemo(
+    () => orderTaskTargets(sessions, activeProjectPath),
     [sessions, activeProjectPath]
   );
 
   const selectedTaskTarget = useMemo(() => {
-    if (!taskTargets.length) return null;
-    return taskTargets.find((session) => session.id === taskTargetId) || taskTargets[0];
-  }, [taskTargetId, taskTargets]);
+    if (!orderedTaskTargets.length) return null;
+    return orderedTaskTargets.find((session) => session.id === taskTargetId) || orderedTaskTargets[0];
+  }, [taskTargetId, orderedTaskTargets]);
+
+  const taskTargets = useMemo(() => {
+    const visible = orderedTaskTargets.slice(0, 18);
+    if (!selectedTaskTarget || visible.some((session) => session.id === selectedTaskTarget.id)) {
+      return visible;
+    }
+    return [selectedTaskTarget, ...visible].slice(0, 18);
+  }, [orderedTaskTargets, selectedTaskTarget]);
 
   const selectedTaskProfile = selectedTaskTarget ? (profilesByPath?.[selectedTaskTarget.path] || {}) : {};
   const selectedTaskLaunch = selectedTaskTarget
@@ -51,14 +61,23 @@ export default function CommandPalette({
 
   useEffect(() => {
     if (!open) return;
-    setQuery('');
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }, [open]);
+    setQuery(preset?.query || '');
+    if (preset?.sessionId) {
+      setTaskTargetId(preset.sessionId);
+    }
+    setTimeout(() => {
+      if (preset?.focusTask) {
+        taskRef.current?.focus();
+      } else {
+        inputRef.current?.focus();
+      }
+    }, 0);
+  }, [open, preset?.key]);
 
   useEffect(() => {
-    if (!open || taskTargetId || !taskTargets[0]) return;
-    setTaskTargetId(taskTargets[0].id);
-  }, [open, taskTargetId, taskTargets]);
+    if (!open || taskTargetId || !orderedTaskTargets[0]) return;
+    setTaskTargetId(orderedTaskTargets[0].id);
+  }, [open, taskTargetId, orderedTaskTargets]);
 
   useEffect(() => {
     const firstMatch = targets[0]?.session;
@@ -84,6 +103,12 @@ export default function CommandPalette({
         const firstTarget = targets[0];
         if (!firstTarget) return;
         event.preventDefault();
+        if (firstTarget.launch?.mode === 'dispatch') {
+          setTaskTargetId(firstTarget.session.id);
+          setQuery(firstTarget.session.agent?.name || firstTarget.session.name || '');
+          setTimeout(() => taskRef.current?.focus(), 0);
+          return;
+        }
         onOpenSession(firstTarget.session);
         onClose();
       }
@@ -117,6 +142,23 @@ export default function CommandPalette({
       targetRepo,
     });
     setTaskText('');
+    onClose();
+  };
+
+  const selectTaskTarget = (target) => {
+    if (!target?.session) return;
+    setTaskTargetId(target.session.id);
+    setQuery(target.session.agent?.name || target.session.name || '');
+    setTimeout(() => taskRef.current?.focus(), 0);
+  };
+
+  const activateTarget = (target) => {
+    if (!target?.session) return;
+    if (target.launch?.mode === 'dispatch') {
+      selectTaskTarget(target);
+      return;
+    }
+    onOpenSession(target.session);
     onClose();
   };
 
@@ -195,10 +237,7 @@ export default function CommandPalette({
                   <LaunchRow
                     key={target.session.id}
                     target={target}
-                    onOpen={() => {
-                      onOpenSession(target.session);
-                      onClose();
-                    }}
+                    onOpen={() => activateTarget(target)}
                     onLaunch={(agentId) => {
                       onLaunchSessionWithAgent(target.session, agentId, { launchFresh: true });
                       onClose();
@@ -274,6 +313,7 @@ export default function CommandPalette({
               <label className="block">
                 <span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">Task</span>
                 <textarea
+                  ref={taskRef}
                   value={taskText}
                   onChange={(event) => setTaskText(event.target.value)}
                   rows={8}
@@ -327,9 +367,10 @@ function LaunchRow({ target, onOpen, onLaunch }) {
         <button
           type="button"
           onClick={onOpen}
+          title={isDispatch ? 'Select this dispatch agent for task staging' : undefined}
           className="h-8 rounded border border-nock-border px-2.5 font-mono text-[9px] uppercase tracking-wider text-nock-text-dim transition-colors hover:border-nock-border-bright hover:text-nock-text"
         >
-          Open
+          {isDispatch ? 'Task' : 'Open'}
         </button>
         <button
           type="button"

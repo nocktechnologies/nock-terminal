@@ -47,7 +47,7 @@ The approved seven-phase dispatch slice is now represented in-product:
 - **Codex/DeepSeek discovery**: Nock discovers Ash, Forge, Hammer, Kiln, Talon, Vale, Smith, and Tinker from existing CRM configs and parses dispatcher allowlists.
 - **Intentional disabled state**: dispatch agents with `enabled:false` render as `DISPATCH`, not broken or unavailable.
 - **Brokered route**: task staging can send a structured NockCC AgentMessage to `mira-nockos`, letting Mira handle payload creation, worktree setup, kill-switches, API-key checks, and reporting.
-- **Direct route**: operators can create a sanitized payload file and launch the CRM dispatch script in a terminal when they need the lower-level path.
+- **Direct route**: operators can create a sanitized payload file and launch the resolved per-agent alias or canonical CRM dispatch script in a terminal when they need the lower-level path.
 - **Run telemetry**: recent dispatch requests show in the dashboard operations panel with route and status.
 - **Docs and release posture**: the dispatch contract is documented in `docs/AGENT_DISPATCH.md` and the release smoke checklist now includes dispatch verification.
 

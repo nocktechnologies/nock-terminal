@@ -87,7 +87,7 @@ export default function ProjectCard({ session, profile, index, onClick }) {
         <div className="relative flex items-center gap-2 mb-2 min-h-4">
           <span className="font-mono text-[10px] text-nock-accent-blue truncate tracking-tight">
             {session.launch?.mode === 'dispatch'
-              ? (session.launch?.canLaunch ? `broker: ${session.launch.broker || 'mira-nockos'}` : (session.launch?.disabledReason || 'dispatch unavailable'))
+              ? (session.launch?.canLaunch ? `alias: ${session.launch.aliasCommand || session.launch.commandTemplate || session.launch.broker || 'dispatch'}` : (session.launch?.disabledReason || 'dispatch unavailable'))
               : (session.launch?.command ? `cmd: ${session.launch.command}` : 'launch disabled')}
           </span>
           {agentSignalCount > 0 && (

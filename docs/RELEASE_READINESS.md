@@ -56,8 +56,9 @@ Before a public beta announcement, install the generated artifacts on clean mach
 - Claude, Codex, Gemini, and custom-agent profile launch commands use the configured project command when present.
 - Task staging opens a fresh agent terminal and places task text in the terminal without auto-submitting it.
 - Codex/DeepSeek dispatch agents appear once each, show `DISPATCH`, and do not duplicate from copied dispatch worktrees.
+- Clicking a Codex/DeepSeek dispatch agent opens task staging with that agent selected instead of opening a plain folder terminal.
 - Brokered dispatch sends a NockCC AgentMessage to Mira when NockCC is configured.
-- Direct dispatch creates a sanitized temp payload file, schedules cleanup, and opens a terminal running the correct CRM dispatch script.
+- Direct dispatch creates a sanitized temp payload file, schedules cleanup, and opens a terminal running the resolved per-agent alias or canonical CRM dispatch script.
 - Monaco can open, edit, save, and protect unsaved changes on close.
 - Context monitor reports `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, Codex config, and `.nock/config.toml` accurately.
 - NockCC heartbeat reports active project and agent session counts when configured.

@@ -67,6 +67,7 @@ Configs with `agent_runtime: codex` or `agent_runtime: deepseek` follow a differ
 - `enabled: false` is expected and does not mean the card is broken.
 - Nock walks up to the CRM root and looks for `core/scripts/dispatch-codex.sh` or `core/scripts/dispatch-deepseek.sh`.
 - The script `ALLOWED_AGENTS=(...)` list is the source of truth for whether the agent can launch.
+- Per-agent aliases such as `agents/ash/scripts/dispatch-ash.sh` are detected when present; agents without a shim use the canonical dispatcher with `--agent <name>`.
 - Allowlisted dispatch agents show as dispatch-ready and can receive task-staging requests.
 - Non-allowlisted dispatch agents remain visible with an explicit blocked reason.
 
@@ -94,7 +95,7 @@ Click behavior is conservative:
 - The context menu provides `Launch Fresh` when the agent is enabled and has a launch command.
 - `Ctrl+K` includes agent folders in the command launcher, ranks exact agent-name matches above similarly named repos, and can launch a fresh agent terminal.
 - Task staging can place a user-written task into a freshly launched agent terminal without submitting it.
-- For dispatch agents, task staging sends a brokered NockCC request to Mira by default, or opens a direct dispatcher-script terminal when the direct route is selected.
+- Dispatch agent clicks open task staging with that agent selected; task staging sends a brokered NockCC request to Mira by default, or opens the resolved direct dispatch alias/script when the direct route is selected.
 
 ## Current Limits
 
