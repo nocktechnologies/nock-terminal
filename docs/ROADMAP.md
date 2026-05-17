@@ -39,6 +39,20 @@ The approved five-phase slice is now represented in-product:
 
 This is not the end-state orchestration system. It is the first cohesive cockpit interaction that makes the product feel agent-agnostic without overstating transcript discovery or reconnect support.
 
+### May 16 Dispatch-Agent Slice
+
+The approved seven-phase dispatch slice is now represented in-product:
+
+- **Runtime taxonomy**: `agent_runtime: codex` and `agent_runtime: deepseek` are first-class dispatch runtimes, separate from long-lived terminal agents.
+- **Codex/DeepSeek discovery**: Nock discovers Ash, Forge, Hammer, Kiln, Talon, Vale, Smith, and Tinker from existing CRM configs and parses dispatcher allowlists.
+- **Intentional disabled state**: dispatch agents with `enabled:false` render as `DISPATCH`, not broken or unavailable.
+- **Brokered route**: task staging can send a structured NockCC AgentMessage to `mira-nockos`, letting Mira handle payload creation, worktree setup, kill-switches, API-key checks, and reporting.
+- **Direct route**: operators can create a sanitized payload file and launch the CRM dispatch script in a terminal when they need the lower-level path.
+- **Run telemetry**: recent dispatch requests show in the dashboard operations panel with route and status.
+- **Docs and release posture**: the dispatch contract is documented in `docs/AGENT_DISPATCH.md` and the release smoke checklist now includes dispatch verification.
+
+This gives Nock a sharper agent-agnostic wedge: not every agent needs to be a process Nock owns. Some agents are brokered work orders, and the cockpit can still discover, route, and track them.
+
 ### 1. Relaunch Foundations
 
 Goal: make the current app trustworthy for private dogfood.
@@ -94,6 +108,8 @@ Current adapter posture:
 - Claude Code: current transcript discovery and launch behavior remain preserved.
 - Local agent folders: discovered from config and file-bus state; terminal launch is supported; true reconnect/attach remains future work.
 - Codex CLI: context/process detection and profile-driven terminal launch are implemented; transcript discovery and resume/attach remain future work.
+- Codex dispatch agents: CRM brokered/direct dispatch is implemented for allowlisted agents; completion-thread tracking remains future work.
+- DeepSeek dispatch agents: API-backed CRM brokered/direct dispatch is implemented for allowlisted agents; there is no standalone DeepSeek CLI launcher.
 - Gemini CLI: process detection, `GEMINI.md` context checks, and profile-driven terminal launch are implemented; transcript discovery is not claimed.
 
 Gemini context reference: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md

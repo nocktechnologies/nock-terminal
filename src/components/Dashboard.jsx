@@ -20,6 +20,7 @@ export default function Dashboard({
   processStatus = {},
   lastDataTimestamps = {},
   profilesByPath = {},
+  dispatchRuns = [],
   onOpenCommandPalette,
   onLaunchSessionWithAgent,
 }) {
@@ -71,15 +72,22 @@ export default function Dashboard({
     ];
 
     if (session.kind === 'agent') {
+      const isDispatchAgent = session.launch?.mode === 'dispatch';
       items.push({
-        label: 'Launch Fresh',
+        label: isDispatchAgent ? 'Stage Dispatch Task' : 'Launch Fresh',
         icon: (
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
           </svg>
         ),
-        disabled: !session.agent?.enabled || !session.launch?.command,
-        onClick: () => onLaunchAgentFresh?.(session),
+        disabled: isDispatchAgent ? !session.launch?.canLaunch : (!session.agent?.enabled || !session.launch?.command),
+        onClick: () => {
+          if (isDispatchAgent) {
+            onOpenCommandPalette?.();
+          } else {
+            onLaunchAgentFresh?.(session);
+          }
+        },
       });
     } else {
       items.push({
@@ -235,6 +243,7 @@ export default function Dashboard({
           tabs={tabs}
           processStatus={processStatus}
           lastDataTimestamps={lastDataTimestamps}
+          dispatchRuns={dispatchRuns}
           onOpenCommandPalette={onOpenCommandPalette}
         />
 
@@ -294,7 +303,7 @@ function SessionSearch({ value, onChange, resultCount, totalCount }) {
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Search repos..."
+        placeholder="Search repos and agents..."
         aria-label="Search repos and agents"
         className="h-9 w-full rounded border border-nock-border bg-nock-card/80 pl-9 pr-20 font-mono text-[11px] text-nock-text outline-none transition-colors placeholder:text-nock-text-muted focus:border-nock-accent-blue/60 focus:bg-nock-card"
       />
@@ -315,7 +324,7 @@ function SessionSearch({ value, onChange, resultCount, totalCount }) {
   );
 }
 
-function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, onOpenCommandPalette }) {
+function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, dispatchRuns = [], onOpenCommandPalette }) {
   const summary = useMemo(
     () => summarizeFleet({ sessions, tabs, processStatus, lastDataTimestamps }),
     [sessions, tabs, processStatus, lastDataTimestamps]
@@ -323,6 +332,10 @@ function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, on
   const visibleAgents = sessions
     .filter((session) => session.kind === 'agent' && ['running', 'idle', 'stale'].includes(session.agent?.lifecycle))
     .slice(0, 4);
+  const dispatchAgents = sessions
+    .filter((session) => session.kind === 'agent' && session.launch?.mode === 'dispatch')
+    .slice(0, 5);
+  const recentDispatchRuns = Array.isArray(dispatchRuns) ? dispatchRuns.slice(0, 4) : [];
 
   if (sessions.length === 0 && tabs.length === 0) return null;
 
@@ -353,6 +366,26 @@ function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, on
               <span className={`h-1.5 w-1.5 rounded-full ${agent.agent?.lifecycle === 'stale' ? 'bg-nock-yellow' : 'bg-nock-green'}`} />
               <span className="max-w-[140px] truncate text-nock-text">{agent.name}</span>
               <span>{agent.agent?.lifecycle}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {(dispatchAgents.length > 0 || recentDispatchRuns.length > 0) && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-nock-border px-4 py-3">
+          <span className="font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">// Dispatch</span>
+          {dispatchAgents.map((agent) => (
+            <span key={agent.id} className="inline-flex min-w-0 items-center gap-1.5 rounded border border-nock-accent-purple/30 bg-nock-accent-purple/5 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-nock-text-dim">
+              <span className={`h-1.5 w-1.5 rounded-full ${agent.launch?.canLaunch ? 'bg-nock-accent-cyan' : 'bg-nock-text-muted'}`} />
+              <span className="max-w-[120px] truncate text-nock-text">{agent.name}</span>
+              <span>{agent.agent?.runtime || 'dispatch'}</span>
+            </span>
+          ))}
+          {recentDispatchRuns.map((run) => (
+            <span key={run.id} className="inline-flex min-w-0 items-center gap-1.5 rounded border border-nock-border bg-nock-bg/70 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-nock-text-dim">
+              <span className={`h-1.5 w-1.5 rounded-full ${run.status === 'failed' ? 'bg-nock-red' : 'bg-nock-green'}`} />
+              <span className="max-w-[100px] truncate text-nock-text">{run.agentDisplayName || run.agentName}</span>
+              <span>{run.mode}</span>
+              <span>{run.status}</span>
             </span>
           ))}
         </div>

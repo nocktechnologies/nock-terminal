@@ -16,6 +16,7 @@ const PromptStore = require('./prompt-store');
 const { DEFAULT_SETTINGS, normalizeSettingValue, sanitizeStoredSettings } = require('./settings-utils');
 const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
+const { AgentDispatchService } = require('./agent-dispatch');
 
 const APP_NAME = 'Nock Terminal';
 
@@ -53,6 +54,7 @@ let projectProfiles = null;
 let sessionHistory = null;
 let promptStore = null;
 let nockccClient = null;
+let agentDispatchService = null;
 let nockccHeartbeatInterval = null;
 let nockccActivity = {
   activeProjectCount: 0,
@@ -255,6 +257,7 @@ function initServices() {
   sessionHistory = new SessionHistory(store);
   promptStore = new PromptStore();
   nockccClient = new NockCCClient(store);
+  agentDispatchService = new AgentDispatchService(store);
 }
 
 function registerIPC() {
@@ -296,6 +299,14 @@ function registerIPC() {
     fileService.setGrantedRoots(sessions.map((session) => session.path));
     fileWatcher.revalidate();
     return sessions;
+  });
+
+  // Dispatch-and-die agent requests (Codex / DeepSeek via Mira or direct script)
+  ipcMain.handle('dispatch:brokered', async (_, payload) => {
+    return agentDispatchService.sendBrokered(payload);
+  });
+  ipcMain.handle('dispatch:createPayload', async (_, payload) => {
+    return agentDispatchService.createPayload(payload);
   });
 
   // Ollama chat

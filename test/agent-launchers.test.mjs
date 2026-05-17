@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   AGENT_FOLDER_ID,
+  DISPATCH_AGENT_ID,
   buildLauncherTargets,
   getProfileCommand,
   resolveDefaultAgentId,
@@ -29,6 +30,24 @@ const agent = {
   launch: { command: 'mira', cwd: '/Users/kevin/Dev/claude-remote-manager/agents/mira' },
 };
 
+const dispatchAgent = {
+  id: 'agent:/Users/kevin/Dev/claude-remote-manager/agents/ash',
+  kind: 'agent',
+  name: 'Ash',
+  path: '/Users/kevin/Dev/claude-remote-manager/agents/ash',
+  status: 'inactive',
+  agent: { name: 'ash', lifecycle: 'dispatch', runtime: 'codex', model: 'o4-mini' },
+  launch: {
+    mode: 'dispatch',
+    canLaunch: true,
+    broker: 'mira-nockos',
+    dispatcher: 'codex',
+    cwd: '/Users/kevin/Dev/claude-remote-manager',
+    scriptPath: '/Users/kevin/Dev/claude-remote-manager/core/scripts/dispatch-codex.sh',
+    commandTemplate: '/Users/kevin/Dev/claude-remote-manager/core/scripts/dispatch-codex.sh --agent ash --payload-file <payload-file>',
+  },
+};
+
 test('resolves profile default agents and command overrides', () => {
   assert.equal(resolveDefaultAgentId({ defaultAgent: 'codex' }), 'codex');
   assert.equal(resolveDefaultAgentId({ defaultAgent: 'bogus' }), 'claude');
@@ -46,6 +65,8 @@ test('resolves project and agent-folder launches', () => {
       command: 'gemini',
       cwd: '/Users/kevin/Dev/nock-terminal',
       title: 'nock-terminal (Gemini)',
+      mode: 'terminal',
+      canLaunch: true,
       disabledReason: '',
     }
   );
@@ -54,16 +75,34 @@ test('resolves project and agent-folder launches', () => {
   assert.equal(agentLaunch.agentId, AGENT_FOLDER_ID);
   assert.equal(agentLaunch.command, 'mira');
   assert.equal(agentLaunch.cwd, agent.launch.cwd);
+  assert.equal(agentLaunch.mode, 'terminal');
+  assert.equal(agentLaunch.canLaunch, true);
+});
+
+test('resolves brokered dispatch agent launches without treating them as terminal commands', () => {
+  const launch = resolveSessionLaunch(dispatchAgent, {});
+
+  assert.equal(launch.agentId, DISPATCH_AGENT_ID);
+  assert.equal(launch.mode, 'dispatch');
+  assert.equal(launch.canLaunch, true);
+  assert.equal(launch.command, '');
+  assert.equal(launch.runtime, 'codex');
+  assert.equal(launch.broker, 'mira-nockos');
+  assert.match(launch.commandTemplate, /dispatch-codex\.sh --agent ash --payload-file <payload-file>/);
 });
 
 test('builds launcher targets from session and profile search fields', () => {
-  const targets = buildLauncherTargets([project, agent], {
+  const targets = buildLauncherTargets([project, agent, dispatchAgent], {
     [project.path]: { defaultAgent: 'codex', notes: 'private alpha cockpit' },
   }, 'alpha codex');
 
   assert.equal(targets.length, 1);
   assert.equal(targets[0].session.name, 'nock-terminal');
   assert.equal(targets[0].defaultAgentId, 'codex');
+
+  const dispatchTargets = buildLauncherTargets([project, agent, dispatchAgent], {}, 'codex dispatch');
+  assert.equal(dispatchTargets.length, 1);
+  assert.equal(dispatchTargets[0].session.name, 'Ash');
 });
 
 test('sanitizes staged terminal input without submitting shell newlines', () => {

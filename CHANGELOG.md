@@ -11,6 +11,10 @@ This changelog is summarized from git history. The repository has no version tag
 - Added Gemini CLI process detection and `GEMINI.md` context checks.
 - Added dashboard operations telemetry for active agent folders, live agent processes, terminals, quiet tabs, stale agents, and dirty repos.
 - Added task staging so a launched agent terminal receives sanitized task text without auto-submitting it.
+- Added Codex/DeepSeek dispatch-agent discovery from `agent_runtime` configs, including intentional `enabled:false` handling and dispatcher allowlist parsing.
+- Added Mira-brokered NockCC dispatch requests plus a direct dispatcher-script route with sanitized payload-file creation.
+- Added dashboard dispatch telemetry and deduping for copied dispatch/worktree agent configs.
+- Added `docs/AGENT_DISPATCH.md` and refreshed release/docs/audit coverage for dispatch-agent behavior.
 - Added launcher and fleet summary unit tests plus a mocked browser smoke pass for launch/task staging.
 - Updated README, architecture, roadmap, release readiness, audit, and agent-folder docs for the agent-agnostic cockpit slice.
 

@@ -17,7 +17,7 @@ The product has useful bones: a real PTY-backed terminal, Claude transcript disc
 
 ## May 16 Product Progress
 
-The five approved agent-agnostic cockpit phases now have a working private-alpha slice:
+The approved agent-agnostic cockpit phases now have a working private-alpha slice:
 
 - `Ctrl+K` command launcher for searching repos, agents, branches, lifecycle state, models, and launch commands.
 - Profile-driven default agent selection for Claude Code, Codex CLI, Gemini CLI, and custom agent aliases/wrappers.
@@ -25,14 +25,17 @@ The five approved agent-agnostic cockpit phases now have a working private-alpha
 - Dashboard operations strip for active agent folders, live agent processes, open terminals, quiet agent tabs, dirty repos, and stale agent folders.
 - Task staging that launches an agent terminal and places the task text into the terminal without submitting it.
 - Gemini process/context support using `GEMINI.md`; official reference: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md
+- Codex and DeepSeek dispatch-agent discovery from `agent_runtime` configs, including intentional `enabled:false` handling.
+- Brokered dispatch requests through Mira via NockCC AgentMessage and an operator direct-dispatch route through CRM scripts.
+- Dispatch-run telemetry in the dashboard and deduping for copied dispatch/worktree agent configs.
 
-Readiness impact: this improves private-alpha usefulness and product clarity, but it does not remove the public-GTM blockers around real transcript discovery beyond Claude, attach/reconnect semantics, worktree lanes, session replay, packaged smoke automation, update distribution, crash/error reporting, and public support/demo material.
+Readiness impact: this improves private-alpha usefulness and product clarity, especially for agent-agnostic orchestration. It does not remove the public-GTM blockers around real transcript discovery beyond Claude, attach/reconnect semantics, dispatch completion-thread tracking, worktree lanes, session replay, packaged smoke automation, update distribution, crash/error reporting, and public support/demo material.
 
 ## Verification Summary
 
 | Check | Result | Notes |
 | --- | --- | --- |
-| `npm test` | Pass | 32 Node test-runner tests passed after the May 16 launcher/profile additions. |
+| `npm test` | Pass | 41 Node test-runner tests passed after the May 16 launcher/profile/dispatch additions. |
 | `npm audit --audit-level=moderate` | Pass | 0 vulnerabilities found after dependency remediation. |
 | `npx vite build` | Pass with warnings | Renderer build succeeded; known Monaco/editor chunks exceed Vite's generic 500 kB warning threshold. |
 | `npm run check:bundle` | Pass | Explicit budgets cover app entry, Monaco workers/API, and xterm chunks. |
@@ -107,7 +110,7 @@ Impact: Users will bounce if the public promise says Codex but the app behaves l
 
 Status: Improved, still not public-GTM complete.
 
-The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an adapter registry for Claude/Codex/Gemini process detection and project context checks, first-class local agent-folder discovery from existing `config.json` files, profile-driven launches for Claude/Codex/Gemini/custom agents, and a command launcher that can stage tasks into fresh agent terminals. Claude Code remains the only transcript-discovery source, and true reconnect/attach for live agents remains future work.
+The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an adapter registry for Claude/Codex/Gemini process detection and project context checks, first-class local agent-folder discovery from existing `config.json` files, profile-driven launches for Claude/Codex/Gemini/custom agents, Codex/DeepSeek dispatch discovery, brokered dispatch through Mira, and a command launcher that can stage tasks into fresh agent terminals or dispatch requests. Claude Code remains the only transcript-discovery source, and true reconnect/attach for live agents remains future work.
 
 Recommendation: keep the private alpha agent-agnostic in launch/profile posture, while staying explicit that transcript discovery is still Claude-first. Do not market Codex as fully first-class until Codex discovery, resume/attach, transcript history, and settings are all backed by code.
 

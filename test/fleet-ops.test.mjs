@@ -10,6 +10,7 @@ test('summarizes agent, repo, terminal, and quiet-tab state', () => {
     sessions: [
       { kind: 'agent', agent: { lifecycle: 'idle' } },
       { kind: 'agent', agent: { lifecycle: 'stale' } },
+      { kind: 'agent', agent: { lifecycle: 'dispatch' }, launch: { mode: 'dispatch', canLaunch: true } },
       { kind: 'project', dirty: true },
       { kind: 'project', dirty: false },
     ],
@@ -27,10 +28,11 @@ test('summarizes agent, repo, terminal, and quiet-tab state', () => {
     },
   });
 
-  assert.equal(summary.agents, 2);
+  assert.equal(summary.agents, 3);
   assert.equal(summary.repos, 2);
   assert.equal(summary.activeAgentFolders, 1);
   assert.equal(summary.staleAgentFolders, 1);
+  assert.equal(summary.dispatchReadyAgents, 1);
   assert.equal(summary.dirtyRepos, 1);
   assert.equal(summary.terminals, 2);
   assert.equal(summary.activeAgentProcesses, 2);

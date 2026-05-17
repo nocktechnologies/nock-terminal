@@ -2,9 +2,10 @@
 
 Current docs:
 
-- [Product Audit And GTM Readiness](PRODUCT_AUDIT_GTM_READINESS.md) - May 15 audit plus May 16 agent-agnostic cockpit update, market read, launch decision, and GTM readiness.
-- [Product Roadmap](ROADMAP.md) - recommended positioning, completed five-phase cockpit slice, roadmap, GTM experiments, and product ideas.
+- [Product Audit And GTM Readiness](PRODUCT_AUDIT_GTM_READINESS.md) - May 15 audit plus May 16 cockpit/dispatch updates, market read, launch decision, and GTM readiness.
+- [Product Roadmap](ROADMAP.md) - recommended positioning, completed cockpit and dispatch slices, roadmap, GTM experiments, and product ideas.
 - [Agent Folder Intelligence](AGENT_FOLDER_INTELLIGENCE.md) - agent-folder detection, local NockCC file-bus state mapping, command launcher behavior, and launch behavior.
+- [Agent Dispatch](AGENT_DISPATCH.md) - Codex/DeepSeek dispatch-agent discovery, Mira-brokered requests, direct dispatcher scripts, telemetry, and current limits.
 - [Release Readiness](RELEASE_READINESS.md) - release gate, signing/notarization requirements, artifact checksums, command launcher smoke checks, and packaged smoke checklist.
 - [Brand Assets](BRAND_ASSETS.md) - current green Nock asset sources and app-surface mapping.
 

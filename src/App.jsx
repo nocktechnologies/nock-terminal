@@ -14,8 +14,24 @@ import CommandPalette from './components/CommandPalette';
 import { buildUnsavedFilesMessage, normalizeUnsavedFiles } from './utils/unsavedFiles.mjs';
 import { resolveSessionLaunch, sanitizeStagedTerminalInput } from './utils/agentLaunchers.mjs';
 
+const DISPATCH_RUN_STORAGE_KEY = 'nock-terminal.dispatchRuns.v1';
+
 function createTabId(prefix = 'tab') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function readStoredDispatchRuns() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(DISPATCH_RUN_STORAGE_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+
+function projectNameFromPath(projectPath) {
+  const normalized = String(projectPath || '').replace(/[\\/]+$/, '');
+  return normalized.split(/[\\/]/).filter(Boolean).pop() || '';
 }
 
 export default function App() {
@@ -32,6 +48,7 @@ export default function App() {
   const [queuedPrompt, setQueuedPrompt] = useState(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [profilesByPath, setProfilesByPath] = useState({});
+  const [dispatchRuns, setDispatchRuns] = useState(() => readStoredDispatchRuns());
   const queuedPromptIdRef = useRef(0);
 
   // Discover sessions on mount and periodically
@@ -89,6 +106,14 @@ export default function App() {
     };
   }, [sessions]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(DISPATCH_RUN_STORAGE_KEY, JSON.stringify(dispatchRuns.slice(0, 12)));
+    } catch {
+      // Local storage may be unavailable in hardened renderer contexts.
+    }
+  }, [dispatchRuns]);
+
   // Poll Ollama status every 30s
   useEffect(() => {
     const checkOllama = async () => {
@@ -144,7 +169,18 @@ export default function App() {
   }, [tabs, processStatus]);
 
   const shouldLaunchAgent = (session) =>
-    session?.kind === 'agent' && session.agent?.enabled && Boolean(session.launch?.command);
+    session?.kind === 'agent'
+    && session.launch?.mode !== 'dispatch'
+    && session.agent?.enabled
+    && Boolean(session.launch?.command);
+
+  const recordDispatchRun = useCallback((run) => {
+    setDispatchRuns(prev => [{
+      id: createTabId('dispatch'),
+      createdAt: Date.now(),
+      ...run,
+    }, ...prev].slice(0, 12));
+  }, []);
 
   const getProfileForPath = useCallback(async (projectPath) => {
     if (!projectPath) return {};
@@ -206,6 +242,97 @@ export default function App() {
     const launch = resolveSessionLaunch(session, profile, agentId);
     const initialInput = sanitizeStagedTerminalInput(options.initialInput || '');
 
+    if (launch.mode === 'dispatch') {
+      if (!initialInput) {
+        openTerminalTab(session, { launchFresh: options.launchFresh === true });
+        return;
+      }
+
+      const agentName = session.agent?.name || session.name;
+      const targetRepo = options.targetRepo || '';
+      const projectName = options.projectName || projectNameFromPath(targetRepo);
+      const dispatchMode = options.dispatchMode === 'direct' ? 'direct' : 'brokered';
+      const runBase = {
+        agentName,
+        agentDisplayName: session.name,
+        runtime: launch.runtime,
+        targetRepo,
+        projectName,
+        mode: dispatchMode,
+      };
+
+      try {
+        if (dispatchMode === 'direct') {
+          const payload = await window.nockTerminal.dispatch.createPayload({
+            agentName,
+            runtime: launch.runtime,
+            taskDescription: initialInput,
+            targetRepo,
+            projectName,
+            scriptPath: launch.scriptPath,
+          });
+          const tabId = createTabId();
+          const newTab = {
+            id: tabId,
+            sessionId: session.id,
+            title: `${session.name} Dispatch`,
+            branch: session.branch,
+            status: 'active',
+            cwd: launch.cwd,
+            splitContent: null,
+            splitRatio: 0.5,
+            launchCommand: payload.command,
+            initialInput: '',
+            agentId: launch.agentId,
+          };
+
+          setTabs(prev => [...prev, newTab]);
+          setActiveTabId(tabId);
+          setView('terminal');
+          window.nockTerminal.sessionHistory.start(tabId, {
+            project: `${session.name} Dispatch`,
+            shell: payload.command,
+            cwd: launch.cwd || undefined,
+          });
+          recordDispatchRun({
+            ...runBase,
+            status: 'launched',
+            requestId: payload.request?.requestId,
+            payloadFile: payload.filePath,
+            command: payload.command,
+          });
+          return;
+        }
+
+        const result = await window.nockTerminal.dispatch.brokered({
+          agentName,
+          runtime: launch.runtime,
+          taskDescription: initialInput,
+          targetRepo,
+          projectName,
+          brokerAgent: launch.broker,
+        });
+        recordDispatchRun({
+          ...runBase,
+          mode: 'brokered',
+          status: 'sent',
+          requestId: result?.requestId,
+          messageId: result?.messageId,
+          broker: result?.broker || launch.broker,
+        });
+      } catch (err) {
+        const message = err?.message || 'Dispatch request failed';
+        recordDispatchRun({
+          ...runBase,
+          status: 'failed',
+          error: message,
+          broker: launch.broker,
+        });
+        window.alert?.(message);
+      }
+      return;
+    }
+
     if (!launch.command) {
       openTerminalTab(session, {
         launchFresh: options.launchFresh === true,
@@ -237,7 +364,7 @@ export default function App() {
       shell: launch.command,
       cwd: launch.cwd || undefined,
     });
-  }, [getProfileForPath, openTerminalTab]);
+  }, [getProfileForPath, openTerminalTab, recordDispatchRun]);
 
   // Open a new blank terminal
   const openNewTab = useCallback((cwd) => {
@@ -626,6 +753,7 @@ export default function App() {
               processStatus={processStatus}
               lastDataTimestamps={lastDataTimestamps}
               profilesByPath={profilesByPath}
+              dispatchRuns={dispatchRuns}
               onOpenCommandPalette={() => setCommandPaletteOpen(true)}
               onLaunchSessionWithAgent={launchSessionWithAgent}
             />

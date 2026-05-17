@@ -198,11 +198,38 @@ class SessionDiscovery {
     const results = await this._mapLimit([...configPaths], 5, (configPath) =>
       this._parseAgentFolder(configPath)
     );
-    return results.filter(Boolean);
+    return this._dedupeAgentFolders(results.filter(Boolean));
+  }
+
+  _dedupeAgentFolders(agentFolders) {
+    const byName = new Map();
+    for (const agent of agentFolders) {
+      const key = agent.agent?.name || agent.path;
+      const existing = byName.get(key);
+      if (!existing || this._agentFolderPriority(agent) > this._agentFolderPriority(existing)) {
+        byName.set(key, agent);
+      }
+    }
+    return [...byName.values()];
+  }
+
+  _agentFolderPriority(agent) {
+    let score = 0;
+    const normalizedPath = String(agent.path || '').replace(/\\/g, '/');
+    if (/\/claude-remote-manager\/agents\/[^/]+$/i.test(normalizedPath)) score += 1000;
+    if (agent.launch?.canLaunch === true) score += 100;
+    if (agent.agent?.enabled === true) score += 50;
+    if (agent.agent?.lifecycle && agent.agent.lifecycle !== 'disabled') score += 25;
+    score += Math.min(24, Math.floor((agent.lastActivity || 0) / (60 * 60 * 1000)));
+    return score;
   }
 
   async _candidateAgentConfigPaths(root) {
     const configs = new Set();
+    if (this._isDispatchWorkspaceName(path.basename(root))) {
+      return [];
+    }
+
     await this._addConfigIfReadable(configs, path.join(root, 'config.json'));
     await this._addAgentConfigsFromRoot(configs, root);
     await this._addAgentConfigsFromRoot(configs, path.join(root, 'agents'));
@@ -216,7 +243,12 @@ class SessionDiscovery {
 
     const ignored = new Set(['.git', 'node_modules', 'dist', 'dist-react', 'build']);
     await this._mapLimit(
-      entries.filter(entry => entry.isDirectory() && !entry.name.startsWith('.') && !ignored.has(entry.name)),
+      entries.filter(entry =>
+        entry.isDirectory()
+        && !entry.name.startsWith('.')
+        && !ignored.has(entry.name)
+        && !this._isDispatchWorkspaceName(entry.name)
+      ),
       5,
       async (entry) => {
         await this._addAgentConfigsFromRoot(configs, path.join(root, entry.name, 'agents'));
@@ -224,6 +256,10 @@ class SessionDiscovery {
     );
 
     return [...configs];
+  }
+
+  _isDispatchWorkspaceName(name) {
+    return /(?:^|-)dispatch$/i.test(String(name || ''));
   }
 
   async _addAgentConfigsFromRoot(configs, agentsRoot) {
@@ -270,9 +306,13 @@ class SessionDiscovery {
       }
 
       const enabled = config.enabled !== false;
-      const launchCwd = this._resolveAgentLaunchCwd(config, agentPath);
-      const launchCommand = enabled ? this._resolveAgentLaunchCommand(config, agentName) : '';
-      const runtime = await this._getAgentRuntimeState(agentName, dirName, config, enabled);
+      const agentRuntime = this._agentRuntimeFromConfig(config);
+      const dispatchLaunch = await this._resolveDispatchLaunch(agentPath, config, agentName, agentRuntime);
+      const launchCwd = dispatchLaunch?.cwd || this._resolveAgentLaunchCwd(config, agentPath);
+      const launchCommand = dispatchLaunch
+        ? ''
+        : (enabled ? this._resolveAgentLaunchCommand(config, agentName) : '');
+      const runtime = await this._getAgentRuntimeState(agentName, dirName, config, enabled, Boolean(dispatchLaunch));
       const gitInfo = await this._getGitInfo(agentPath);
       const lastActivity = runtime.lastActivity || 0;
 
@@ -290,16 +330,22 @@ class SessionDiscovery {
           name: agentName,
           enabled,
           lifecycle: runtime.lifecycle,
+          runtime: agentRuntime,
+          launchType: dispatchLaunch ? 'dispatch' : 'terminal',
           model: this._safeString(config.model, 120),
+          workingDirectory: this._resolveAgentLaunchCwd(config, agentPath),
           cronCount: Array.isArray(config.crons) ? config.crons.length : 0,
           unreadCount: runtime.unreadCount,
           inflightCount: runtime.inflightCount,
           aliases: runtime.aliases,
           lastHeartbeat: runtime.lastHeartbeat,
         },
-        launch: {
+        launch: dispatchLaunch || {
+          mode: 'terminal',
           command: launchCommand,
           cwd: launchCwd,
+          canLaunch: Boolean(launchCommand),
+          disabledReason: launchCommand ? '' : 'Agent launch command is missing',
         },
       };
     } catch {
@@ -358,8 +404,92 @@ class SessionDiscovery {
     return path.isAbsolute(raw) ? raw : path.resolve(agentPath, raw);
   }
 
-  async _getAgentRuntimeState(agentName, dirName, config, enabled) {
+  _agentRuntimeFromConfig(config) {
+    const runtime = this._safeString(
+      config.agent_runtime || config.agentRuntime || config.runtime,
+      80
+    ).toLowerCase();
+    return ['codex', 'deepseek'].includes(runtime) ? runtime : '';
+  }
+
+  async _resolveDispatchLaunch(agentPath, config, agentName, agentRuntime) {
+    if (!agentRuntime) return null;
+
+    const scriptName = agentRuntime === 'deepseek' ? 'dispatch-deepseek.sh' : 'dispatch-codex.sh';
+    const dispatchRoot = await this._findDispatchRoot(agentPath, scriptName);
+    const scriptPath = dispatchRoot ? path.join(dispatchRoot, 'core', 'scripts', scriptName) : '';
+    const allowlist = scriptPath ? await this._readDispatchAllowlist(scriptPath) : [];
+    const allowed = allowlist.includes(agentName);
+    const disabledReason = !scriptPath
+      ? `${scriptName} was not found for this agent runtime`
+      : (allowed ? '' : `${agentName} is not allowlisted in ${scriptName}`);
+
+    return {
+      mode: 'dispatch',
+      command: '',
+      cwd: dispatchRoot || this._resolveAgentLaunchCwd(config, agentPath),
+      canLaunch: allowed,
+      disabledReason,
+      broker: this._safeAgentName(config.broker_agent || config.brokerAgent) || 'mira-nockos',
+      dispatcher: agentRuntime,
+      runtime: agentRuntime,
+      scriptPath,
+      commandTemplate: scriptPath
+        ? `${this._shellToken(scriptPath)} --agent ${this._shellToken(agentName)} --payload-file <payload-file>`
+        : '',
+      directMode: scriptPath ? 'available' : 'missing-script',
+    };
+  }
+
+  async _findDispatchRoot(agentPath, scriptName) {
+    let current = agentPath;
+    for (let i = 0; i < 10; i += 1) {
+      const scriptPath = path.join(current, 'core', 'scripts', scriptName);
+      try {
+        await fsp.access(scriptPath);
+        return current;
+      } catch {
+        const parent = path.dirname(current);
+        if (!parent || parent === current) return '';
+        current = parent;
+      }
+    }
+    return '';
+  }
+
+  async _readDispatchAllowlist(scriptPath) {
+    try {
+      const content = await fsp.readFile(scriptPath, 'utf-8');
+      const match = content.match(/ALLOWED_AGENTS=\(([\s\S]*?)\)/);
+      if (!match) return [];
+      return (match[1].match(/"[^"]+"|'[^']+'|[^\s]+/g) || [])
+        .map(token => token.replace(/^['"]|['"]$/g, ''))
+        .map(token => this._safeAgentName(token))
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+
+  _shellToken(value) {
+    const text = String(value || '');
+    if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(text)) return text;
+    return `'${text.replace(/'/g, `'\\''`)}'`;
+  }
+
+  async _getAgentRuntimeState(agentName, dirName, config, enabled, isDispatchAgent = false) {
     const aliases = this._agentAliases(agentName, dirName, config);
+    if (isDispatchAgent) {
+      return {
+        aliases,
+        lifecycle: 'dispatch',
+        unreadCount: 0,
+        inflightCount: 0,
+        lastActivity: 0,
+        lastHeartbeat: null,
+      };
+    }
+
     if (!enabled) {
       return {
         aliases,

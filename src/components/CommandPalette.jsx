@@ -25,6 +25,7 @@ export default function CommandPalette({
   const [taskText, setTaskText] = useState('');
   const [taskTargetId, setTaskTargetId] = useState('');
   const [taskAgentId, setTaskAgentId] = useState(DEFAULT_AGENT_ID);
+  const [taskDispatchMode, setTaskDispatchMode] = useState('brokered');
   const inputRef = useRef(null);
 
   const targets = useMemo(
@@ -41,6 +42,12 @@ export default function CommandPalette({
     if (!taskTargets.length) return null;
     return taskTargets.find((session) => session.id === taskTargetId) || taskTargets[0];
   }, [taskTargetId, taskTargets]);
+
+  const selectedTaskProfile = selectedTaskTarget ? (profilesByPath?.[selectedTaskTarget.path] || {}) : {};
+  const selectedTaskLaunch = selectedTaskTarget
+    ? resolveSessionLaunch(selectedTaskTarget, selectedTaskProfile, taskAgentId)
+    : null;
+  const selectedTaskIsDispatch = selectedTaskLaunch?.mode === 'dispatch';
 
   useEffect(() => {
     if (!open) return;
@@ -63,7 +70,7 @@ export default function CommandPalette({
     if (!selectedTaskTarget || selectedTaskTarget.kind === 'agent') return;
     const profile = profilesByPath?.[selectedTaskTarget.path] || {};
     setTaskAgentId(profile.defaultAgent || DEFAULT_AGENT_ID);
-  }, [selectedTaskTarget?.id]);
+  }, [profilesByPath, selectedTaskTarget?.id]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -88,13 +95,22 @@ export default function CommandPalette({
   if (!open) return null;
 
   const sanitizedTask = sanitizeStagedTerminalInput(taskText);
-  const canStageTask = Boolean(sanitizedTask && selectedTaskTarget);
+  const canStageTask = Boolean(
+    sanitizedTask
+    && selectedTaskTarget
+    && (!selectedTaskIsDispatch || selectedTaskLaunch?.canLaunch)
+  );
 
   const stageTask = () => {
     if (!canStageTask) return;
+    const targetRepo = selectedTaskIsDispatch
+      ? (activeProjectPath && activeProjectPath !== selectedTaskTarget.path ? activeProjectPath : '')
+      : selectedTaskTarget.path;
     onLaunchSessionWithAgent(selectedTaskTarget, taskAgentId, {
       launchFresh: true,
       initialInput: sanitizedTask,
+      dispatchMode: selectedTaskIsDispatch ? taskDispatchMode : undefined,
+      targetRepo,
     });
     setTaskText('');
     onClose();
@@ -201,7 +217,9 @@ export default function CommandPalette({
                 <span className="font-mono text-[10px] uppercase tracking-widest text-nock-text">// Task Staging</span>
               </div>
               <p className="font-mono text-[9px] leading-4 text-nock-text-muted">
-                Launch an agent and place the task text into the terminal without submitting it.
+                {selectedTaskIsDispatch
+                  ? 'Send a brokered dispatch request to Mira, or launch the local dispatch script directly.'
+                  : 'Launch an agent and place the task text into the terminal without submitting it.'}
               </p>
             </div>
 
@@ -215,7 +233,7 @@ export default function CommandPalette({
                 >
                   {taskTargets.map((session) => (
                     <option key={session.id} value={session.id}>
-                      {session.kind === 'agent' ? 'Agent' : 'Repo'} · {session.name}
+                      {session.kind === 'agent' ? 'Agent' : 'Repo'} · {session.name}{session.agent?.runtime ? ` · ${session.agent.runtime}` : ''}
                     </option>
                   ))}
                 </select>
@@ -234,6 +252,20 @@ export default function CommandPalette({
                   ))}
                 </select>
               </label>
+
+              {selectedTaskIsDispatch && (
+                <label className="block">
+                  <span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">Route</span>
+                  <select
+                    value={taskDispatchMode}
+                    onChange={(event) => setTaskDispatchMode(event.target.value)}
+                    className="h-9 w-full rounded border border-nock-border bg-nock-card px-3 font-mono text-[11px] text-nock-text outline-none focus:border-nock-accent-blue/60"
+                  >
+                    <option value="brokered">Brokered by Mira</option>
+                    <option value="direct">Direct dispatch script</option>
+                  </select>
+                </label>
+              )}
 
               <label className="block">
                 <span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">Task</span>
@@ -255,7 +287,7 @@ export default function CommandPalette({
                 className="flex h-9 w-full items-center justify-center gap-2 rounded nock-gradient-bg font-mono text-[10px] font-semibold uppercase tracking-wider text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Play className="h-3.5 w-3.5" aria-hidden="true" />
-                Launch And Stage Task
+                {selectedTaskIsDispatch ? 'Send Dispatch Request' : 'Launch And Stage Task'}
               </button>
             </div>
           </div>
@@ -270,6 +302,7 @@ function LaunchRow({ target, onOpen, onLaunch }) {
   const isAgent = session.kind === 'agent';
   const defaultLaunch = resolveSessionLaunch(session, profile);
   const defaultLauncher = isAgent ? null : getAgentLauncher(target.defaultAgentId);
+  const isDispatch = defaultLaunch.mode === 'dispatch';
 
   return (
     <div className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded border border-transparent px-3 py-2 transition-colors hover:border-nock-border hover:bg-nock-card/70">
@@ -280,7 +313,7 @@ function LaunchRow({ target, onOpen, onLaunch }) {
           </span>
           <span className="truncate font-display text-sm font-semibold text-nock-text">{session.name}</span>
           <span className="rounded border border-nock-border px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider text-nock-text-muted">
-            {isAgent ? session.agent?.lifecycle || 'agent' : defaultLauncher?.shortLabel || 'Shell'}
+            {isDispatch ? `${defaultLaunch.runtime || 'dispatch'} dispatch` : (isAgent ? session.agent?.lifecycle || 'agent' : defaultLauncher?.shortLabel || 'Shell')}
           </span>
         </div>
         <p className="truncate font-mono text-[10px] text-nock-text-muted">{session.path}</p>
@@ -297,11 +330,11 @@ function LaunchRow({ target, onOpen, onLaunch }) {
         <button
           type="button"
           onClick={() => onLaunch(target.defaultAgentId)}
-          disabled={!defaultLaunch.command}
-          title={defaultLaunch.disabledReason || `Launch ${defaultLaunch.label}`}
+          disabled={isDispatch || !defaultLaunch.canLaunch}
+          title={isDispatch ? 'Use Task Staging to send this dispatch agent a task' : (defaultLaunch.disabledReason || `Launch ${defaultLaunch.label}`)}
           className="h-8 rounded border border-nock-accent-blue/40 px-2.5 font-mono text-[9px] uppercase tracking-wider text-nock-accent-blue transition-colors hover:bg-nock-accent-blue/10 disabled:cursor-not-allowed disabled:border-nock-border disabled:text-nock-text-muted"
         >
-          Launch
+          {isDispatch ? 'Task' : 'Launch'}
         </button>
       </div>
     </div>
