@@ -334,7 +334,7 @@ class SessionDiscovery {
       const launchCwd = dispatchLaunch?.cwd || this._resolveAgentLaunchCwd(config, agentPath);
       const launchCommand = dispatchLaunch
         ? ''
-        : (enabled ? this._resolveAgentLaunchCommand(config, agentName) : '');
+        : (enabled ? this._resolveAgentLaunchCommand(config, agentName, agentPath) : '');
       const runtime = await this._getAgentRuntimeState(agentName, dirName, config, enabled, Boolean(dispatchLaunch));
       const gitInfo = await this._getGitInfo(agentPath);
       const lastActivity = runtime.lastActivity || 0;
@@ -405,7 +405,7 @@ class SessionDiscovery {
       .join(' ');
   }
 
-  _resolveAgentLaunchCommand(config, agentName) {
+  _resolveAgentLaunchCommand(config, agentName, agentPath = '') {
     const candidates = [
       config.launch_command,
       config.launchCommand,
@@ -418,7 +418,19 @@ class SessionDiscovery {
       const command = this._safeString(candidate, 500);
       if (command) return command;
     }
+    const crmAttachCommand = this._resolveCrmAgentAttachCommand(agentPath, agentName);
+    if (crmAttachCommand) return crmAttachCommand;
     return this._safeAgentName(agentName) || this._formatAgentName(agentName).replace(/\s+/g, '');
+  }
+
+  _resolveCrmAgentAttachCommand(agentPath, agentName) {
+    if (process.platform === 'win32') return '';
+    const safeAgent = this._safeAgentName(agentName);
+    if (!safeAgent) return '';
+    const normalizedPath = String(agentPath || '').replace(/\\/g, '/');
+    if (!/\/claude-remote-manager\/agents\/[^/]+$/i.test(normalizedPath)) return '';
+    const instanceId = this._safeAgentName(process.env.CRM_INSTANCE_ID || 'default') || 'default';
+    return `tmux attach -t crm-${instanceId}-${safeAgent}`;
   }
 
   _resolveAgentLaunchCwd(config, agentPath) {

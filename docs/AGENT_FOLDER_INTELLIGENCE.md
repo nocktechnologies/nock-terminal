@@ -28,7 +28,7 @@ Nock reads existing fields only. It does not introduce a parallel metadata forma
 - `launch_command`, `launchCommand`, `command`, `start_command`, `startCommand`, or `launch.command` - optional explicit launch command.
 - `passive_frozen_threshold` or `stale_threshold_seconds` - heartbeat freshness threshold.
 
-When no explicit launch command exists, enabled agents derive a command from the raw agent name, such as `mira`.
+When no explicit launch command exists, enabled CRM persistent agents launch through the canonical tmux attach path, such as `tmux attach -t crm-default-cooper`. Other enabled agent folders still derive a command from the raw agent name.
 
 ## Runtime State
 
@@ -92,6 +92,7 @@ Click behavior is conservative:
 
 - Running or idle agents open a terminal in the agent folder without auto-launching a duplicate process.
 - Offline or stale enabled agents launch the derived or configured command.
+- Persistent CRM agents do not require shell aliases such as `cooper` or `rook`; Nock falls back to `tmux attach -t crm-<instance>-<agent>`.
 - The context menu provides `Launch Fresh` when the agent is enabled and has a launch command.
 - `Ctrl+K` includes agent folders in the command launcher, ranks exact agent-name matches above similarly named repos, and can launch a fresh agent terminal.
 - Task staging can place a user-written task into a freshly launched agent terminal without submitting it.
