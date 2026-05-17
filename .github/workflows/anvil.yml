@@ -55,6 +55,15 @@ jobs:
             exit 0
           fi
 
+          if ! NO_COLOR=1 codex debug models -c model="o4-mini" > /tmp/anvil-auth-check.txt 2>&1; then
+            {
+              echo 'review<<ANVIL_REVIEW_EOF'
+              echo 'Codex CLI auth preflight failed; skipped Anvil security review.'
+              echo 'ANVIL_REVIEW_EOF'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           NO_COLOR=1 codex review \
             --base "$PR_BASE_REF" \
             --title "Security-focused adversarial review for PR #${PR_NUMBER}: ${PR_TITLE}" \
