@@ -53,6 +53,17 @@ The approved seven-phase dispatch slice is now represented in-product:
 
 This gives Nock a sharper agent-agnostic wedge: not every agent needs to be a process Nock owns. Some agents are brokered work orders, and the cockpit can still discover, route, and track them.
 
+### May 17 Replay And Lane Direction
+
+The next approved product direction is documented in `docs/superpowers/specs/2026-05-17-session-replay-worktree-lanes-design.md`.
+
+- **Session replay**: make terminal and dispatch runs durable with metadata, optional captured output, git summary, test state, and saved handoff drafts.
+- **Worktree lanes**: show each agent attempt as a lane with project, worktree/branch, status, changed files, tests, last output, and review actions.
+- **Dispatch completion tracking**: move dispatch runs from renderer local storage into persisted main-process state and link brokered/direct dispatch to lanes and replays.
+- **Handoff composer**: generate local Markdown drafts for PR bodies, test summaries, risk notes, and follow-ups from replay and lane state.
+
+This is the trust layer after launch. The cockpit should not only start agents; it should preserve what happened and make the next human review step obvious.
+
 ### 1. Relaunch Foundations
 
 Goal: make the current app trustworthy for private dogfood.

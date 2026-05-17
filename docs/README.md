@@ -8,6 +8,7 @@ Current docs:
 - [Agent Dispatch](AGENT_DISPATCH.md) - Codex/DeepSeek dispatch-agent discovery, Mira-brokered requests, direct dispatcher scripts, telemetry, and current limits.
 - [Release Readiness](RELEASE_READINESS.md) - release gate, signing/notarization requirements, artifact checksums, command launcher smoke checks, and packaged smoke checklist.
 - [Brand Assets](BRAND_ASSETS.md) - current green Nock asset sources and app-surface mapping.
+- [Session Replay, Worktree Lanes, Dispatch Tracking, And Handoff Composer Design](superpowers/specs/2026-05-17-session-replay-worktree-lanes-design.md) - approved next-phase design for durable agent runs, lane tracking, dispatch completion state, and handoff drafts.
 
 Root docs:
 
@@ -22,4 +23,4 @@ Historical docs:
 - [Phase 2 Product Features Plan](superpowers/plans/2026-04-05-phase2-product-features.md) - implementation plan from the Windows/Phase 2 buildout.
 - [Phase 2 Product Features Design Spec](superpowers/specs/2026-04-05-phase2-product-features-design.md) - design spec that accompanied the Phase 2 plan.
 
-The Phase 2 docs are retained for historical context. Use the current audit and roadmap for present-day product decisions.
+The Phase 2 docs are retained for historical context. Use the current audit, roadmap, and approved May 17 replay/lane spec for present-day product decisions.
