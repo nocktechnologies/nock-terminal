@@ -70,7 +70,11 @@ export function resolveSessionLaunch(session, profile = {}, agentId) {
   const isAgentFolder = session?.kind === 'agent';
   if (isAgentFolder) {
     if (session?.launch?.mode === 'dispatch') {
-      const runtime = trimString(session?.agent?.runtime || session?.launch?.runtime || session?.launch?.dispatcher).toLowerCase();
+      const runtime = (
+        trimString(session?.agent?.runtime)
+        || trimString(session?.launch?.runtime)
+        || trimString(session?.launch?.dispatcher)
+      ).toLowerCase();
       const label = session?.name || 'Dispatch Agent';
       return {
         agentId: DISPATCH_AGENT_ID,

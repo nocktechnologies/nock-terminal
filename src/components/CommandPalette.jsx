@@ -104,7 +104,11 @@ export default function CommandPalette({
   const stageTask = () => {
     if (!canStageTask) return;
     const targetRepo = selectedTaskIsDispatch
-      ? (activeProjectPath && activeProjectPath !== selectedTaskTarget.path ? activeProjectPath : '')
+      ? (
+        selectedTaskTarget.kind === 'agent'
+          ? (activeProjectPath && activeProjectPath !== selectedTaskTarget.path ? activeProjectPath : '')
+          : selectedTaskTarget.path
+      )
       : selectedTaskTarget.path;
     onLaunchSessionWithAgent(selectedTaskTarget, taskAgentId, {
       launchFresh: true,

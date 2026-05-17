@@ -11,6 +11,11 @@ const {
   sanitizeDispatchText,
 } = require('../electron/agent-dispatch');
 
+function assertPathInside(parent, child) {
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  assert.equal(relative.startsWith('..') || path.isAbsolute(relative), false);
+}
+
 test('builds brokered dispatch messages for Mira orchestration', () => {
   const message = buildBrokeredDispatchMessage({
     agentName: 'Ash',
@@ -62,7 +67,7 @@ test('creates payload files with sanitized task text', async () => {
     requestId: 'request-1',
   }, { tmpDir });
 
-  assert.equal(path.dirname(result.filePath).startsWith(tmpDir), true);
+  assertPathInside(tmpDir, result.filePath);
   assert.equal(path.basename(result.filePath), 'smith-request-1.txt');
   assert.equal(result.command, '');
   const content = fs.readFileSync(result.filePath, 'utf8');
@@ -79,8 +84,22 @@ test('does not use unsafe request ids as payload filenames', async () => {
     requestId: '../escape',
   }, { tmpDir });
 
-  assert.equal(path.dirname(result.filePath).startsWith(tmpDir), true);
+  assertPathInside(tmpDir, result.filePath);
   assert.equal(path.basename(result.filePath).startsWith('smith-..'), false);
+});
+
+test('cleans up payload files after the configured TTL', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nock-dispatch-test-'));
+  const result = await createDispatchPayloadFile({
+    agentName: 'ash',
+    runtime: 'codex',
+    taskDescription: 'Clean up after this dispatch.',
+    requestId: 'cleanup-1',
+  }, { tmpDir, cleanupAfterMs: 5 });
+
+  assert.equal(fs.existsSync(result.filePath), true);
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(fs.existsSync(result.filePath), false);
 });
 
 test('sanitizes dispatch text while preserving useful newlines', () => {

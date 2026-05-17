@@ -107,7 +107,7 @@ When configured:
 - External URL opening is limited to `http` and `https`.
 - File APIs are path-gated by sanitized dev roots and discovered project grants.
 - Settings are normalized before being stored or applied.
-- Dispatch IPC validates runtime and agent names, strips unsafe control characters from payload text, writes payload files under the OS temp directory, and shell-quotes direct script commands.
+- Dispatch IPC validates runtime and agent names, strips unsafe control characters from payload text, writes payload files under the OS temp directory with best-effort cleanup, and shell-quotes direct script commands.
 - Claude Code spawning avoids shell execution and validates custom binary paths.
 - CI includes Node tests for security utilities, settings normalization, and file-service write behavior.
 

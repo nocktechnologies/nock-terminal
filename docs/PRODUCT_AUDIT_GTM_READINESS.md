@@ -35,7 +35,7 @@ Readiness impact: this improves private-alpha usefulness and product clarity, es
 
 | Check | Result | Notes |
 | --- | --- | --- |
-| `npm test` | Pass | 41 Node test-runner tests passed after the May 16 launcher/profile/dispatch additions. |
+| `npm test` | Pass | 44 Node test-runner tests passed after the May 16 launcher/profile/dispatch additions and PR review hardening. |
 | `npm audit --audit-level=moderate` | Pass | 0 vulnerabilities found after dependency remediation. |
 | `npx vite build` | Pass with warnings | Renderer build succeeded; known Monaco/editor chunks exceed Vite's generic 500 kB warning threshold. |
 | `npm run check:bundle` | Pass | Explicit budgets cover app entry, Monaco workers/API, and xterm chunks. |

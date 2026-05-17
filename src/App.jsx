@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { AlertTriangle, X } from 'lucide-react';
 import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -49,6 +50,7 @@ export default function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [profilesByPath, setProfilesByPath] = useState({});
   const [dispatchRuns, setDispatchRuns] = useState(() => readStoredDispatchRuns());
+  const [notice, setNotice] = useState(null);
   const queuedPromptIdRef = useRef(0);
 
   // Discover sessions on mount and periodically
@@ -113,6 +115,20 @@ export default function App() {
       // Local storage may be unavailable in hardened renderer contexts.
     }
   }, [dispatchRuns]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timeout = setTimeout(() => setNotice(null), 7000);
+    return () => clearTimeout(timeout);
+  }, [notice]);
+
+  const showDispatchError = useCallback((message) => {
+    setNotice({
+      id: createTabId('notice'),
+      title: 'Dispatch failed',
+      message,
+    });
+  }, []);
 
   // Poll Ollama status every 30s
   useEffect(() => {
@@ -328,7 +344,7 @@ export default function App() {
           error: message,
           broker: launch.broker,
         });
-        window.alert?.(message);
+        showDispatchError(message);
       }
       return;
     }
@@ -869,6 +885,28 @@ export default function App() {
         onNewTerminal={openNewTab}
         onOpenSettings={() => setView('settings')}
       />
+
+      {notice && (
+        <div
+          className="fixed right-4 top-14 z-[80] flex max-w-md items-start gap-3 border border-red-500/30 bg-red-950/95 px-4 py-3 text-sm text-red-100 shadow-2xl"
+          role="status"
+          aria-live="polite"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-300" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold tracking-wide">{notice.title}</div>
+            <div className="mt-1 break-words text-red-100/85">{notice.message}</div>
+          </div>
+          <button
+            type="button"
+            className="min-h-7 min-w-7 text-red-200 hover:text-white"
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss dispatch error"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      )}
 
       {/* Status Bar */}
       <StatusBar

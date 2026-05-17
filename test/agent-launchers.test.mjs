@@ -91,6 +91,19 @@ test('resolves brokered dispatch agent launches without treating them as termina
   assert.match(launch.commandTemplate, /dispatch-codex\.sh --agent ash --payload-file <payload-file>/);
 });
 
+test('falls back to launch runtime when dispatch agent runtime is blank', () => {
+  const blankRuntimeAgent = {
+    ...dispatchAgent,
+    agent: { ...dispatchAgent.agent, runtime: '   ' },
+    launch: { ...dispatchAgent.launch, runtime: 'codex', dispatcher: 'deepseek' },
+  };
+
+  const launch = resolveSessionLaunch(blankRuntimeAgent, {});
+
+  assert.equal(launch.runtime, 'codex');
+  assert.equal(launch.dispatcher, 'deepseek');
+});
+
 test('builds launcher targets from session and profile search fields', () => {
   const targets = buildLauncherTargets([project, agent, dispatchAgent], {
     [project.path]: { defaultAgent: 'codex', notes: 'private alpha cockpit' },

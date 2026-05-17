@@ -17,6 +17,8 @@ This changelog is summarized from git history. The repository has no version tag
 - Added `docs/AGENT_DISPATCH.md` and refreshed release/docs/audit coverage for dispatch-agent behavior.
 - Added launcher and fleet summary unit tests plus a mocked browser smoke pass for launch/task staging.
 - Updated README, architecture, roadmap, release readiness, audit, and agent-folder docs for the agent-agnostic cockpit slice.
+- Fixed the Anvil Codex security-review workflow invocation so PR runs execute the review instead of posting CLI argument errors.
+- Replaced blocking dispatch failure alerts with a non-blocking in-app error notice and hardened NockCC response stream decoding.
 
 ### 2026-05-15
 

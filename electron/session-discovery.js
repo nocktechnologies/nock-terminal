@@ -220,7 +220,11 @@ class SessionDiscovery {
     if (agent.launch?.canLaunch === true) score += 100;
     if (agent.agent?.enabled === true) score += 50;
     if (agent.agent?.lifecycle && agent.agent.lifecycle !== 'disabled') score += 25;
-    score += Math.min(24, Math.floor((agent.lastActivity || 0) / (60 * 60 * 1000)));
+    const lastActivity = Number(agent.lastActivity) || 0;
+    if (lastActivity > 0) {
+      const ageHours = Math.floor((Date.now() - lastActivity) / (60 * 60 * 1000));
+      score += Math.max(0, 24 - Math.max(0, ageHours));
+    }
     return score;
   }
 

@@ -265,6 +265,28 @@ test('does not duplicate agents from dispatch worktree copies', async () => {
   assert.equal(ashSessions[0].path, path.join(crmRoot, 'agents', 'ash'));
 });
 
+test('dedupe prefers recently active agent folders when priority is otherwise tied', () => {
+  const discovery = new SessionDiscovery({});
+  const now = Date.now();
+  const oldAsh = {
+    path: '/tmp/agents-old/ash',
+    agent: { name: 'ash', lifecycle: 'dispatch' },
+    launch: { mode: 'dispatch', canLaunch: true },
+    lastActivity: now - 48 * 60 * 60 * 1000,
+  };
+  const recentAsh = {
+    path: '/tmp/agents-new/ash',
+    agent: { name: 'ash', lifecycle: 'dispatch' },
+    launch: { mode: 'dispatch', canLaunch: true },
+    lastActivity: now - 10 * 60 * 1000,
+  };
+
+  const deduped = discovery._dedupeAgentFolders([oldAsh, recentAsh]);
+
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0].path, recentAsh.path);
+});
+
 test('ignores malformed agent configs instead of failing discovery', async () => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');

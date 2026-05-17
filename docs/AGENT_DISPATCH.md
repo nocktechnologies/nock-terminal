@@ -73,7 +73,7 @@ Nock asks the Electron main process to create a sanitized task payload file unde
 core/scripts/dispatch-<runtime>.sh --agent <agent> --payload-file <payload-file>
 ```
 
-The main process shell-quotes the script and payload path, strips unsafe control characters from task text, and rejects invalid runtime or agent names.
+The main process shell-quotes the script and payload path, strips unsafe control characters from task text, rejects invalid runtime or agent names, and schedules best-effort temp payload cleanup after 24 hours.
 
 ## UI Behavior
 

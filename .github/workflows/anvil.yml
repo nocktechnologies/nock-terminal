@@ -36,10 +36,9 @@ jobs:
         run: |
           NO_COLOR=1 codex review \
             --base "$PR_BASE_REF" \
-            --title "PR #${PR_NUMBER}: ${PR_TITLE}" \
+            --title "Security-focused adversarial review for PR #${PR_NUMBER}: ${PR_TITLE}" \
             -c model="o4-mini" \
             -c 'sandbox_permissions=["disk-full-read-access"]' \
-            "Security-focused adversarial review. Check for: injection vulnerabilities (SQL, XSS, SSRF, command injection), auth/authz bypasses, insecure data handling, hard-coded secrets, CSRF issues, logic errors in security-critical paths. Report ALL findings with file and line references. Be thorough and adversarial." \
             > /tmp/anvil-output.txt 2>&1 || true
           {
             echo 'review<<ANVIL_REVIEW_EOF'

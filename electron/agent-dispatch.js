@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs = require('fs');
 const fsp = require('fs/promises');
 const http = require('http');
 const https = require('https');
@@ -9,6 +10,9 @@ const path = require('path');
 
 const DEFAULT_BROKER_AGENT = 'mira-nockos';
 const MAX_TASK_LENGTH = 12000;
+const DEFAULT_PAYLOAD_CLEANUP_MS = 24 * 60 * 60 * 1000;
+const pendingPayloadDirs = new Set();
+let payloadCleanupHandlersInstalled = false;
 
 function safeAgentName(value) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -119,16 +123,63 @@ function buildDirectDispatchCommand({ scriptPath, agentName, payloadFile } = {})
   return `${shellQuote(script)} --agent ${shellQuote(agent)} --payload-file ${shellQuote(payload)}`;
 }
 
+function cleanupDispatchPayloadDirSync(dir) {
+  if (!pendingPayloadDirs.has(dir)) return;
+  pendingPayloadDirs.delete(dir);
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
+async function cleanupDispatchPayloadDir(dir) {
+  if (!pendingPayloadDirs.has(dir)) return;
+  pendingPayloadDirs.delete(dir);
+  try {
+    await fsp.rm(dir, { recursive: true, force: true });
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
+function installPayloadCleanupHandlers() {
+  if (payloadCleanupHandlersInstalled || typeof process === 'undefined') return;
+  payloadCleanupHandlersInstalled = true;
+  const cleanupAll = () => {
+    for (const dir of [...pendingPayloadDirs]) {
+      cleanupDispatchPayloadDirSync(dir);
+    }
+  };
+  process.once('beforeExit', cleanupAll);
+  process.once('exit', cleanupAll);
+}
+
+function schedulePayloadCleanup(dir, opts = {}) {
+  pendingPayloadDirs.add(dir);
+  installPayloadCleanupHandlers();
+  const cleanupAfterMs = Number.isFinite(opts.cleanupAfterMs) && opts.cleanupAfterMs > 0
+    ? opts.cleanupAfterMs
+    : DEFAULT_PAYLOAD_CLEANUP_MS;
+  const timer = setTimeout(() => {
+    cleanupDispatchPayloadDir(dir);
+  }, cleanupAfterMs);
+  timer.unref?.();
+  return cleanupAfterMs;
+}
+
 async function createDispatchPayloadFile(input = {}, opts = {}) {
   const request = buildDispatchRequest(input);
   const tmpRoot = opts.tmpDir || os.tmpdir();
   const dir = await fsp.mkdtemp(path.join(tmpRoot, 'nock-dispatch-'));
   const filePath = path.join(dir, `${request.agentName}-${request.requestId}.txt`);
   await fsp.writeFile(filePath, request.body, { mode: 0o600 });
+  const cleanupAfterMs = schedulePayloadCleanup(dir, opts);
 
   return {
     request,
     filePath,
+    cleanupAfterMs,
     command: input.scriptPath
       ? buildDirectDispatchCommand({
         scriptPath: input.scriptPath,
@@ -190,6 +241,7 @@ function postJson({ baseUrl, apiKey }, apiPath, body) {
   return new Promise((resolve, reject) => {
     const transport = parsed.protocol === 'https:' ? https : http;
     const req = transport.request(options, (res) => {
+      res.setEncoding('utf8');
       let data = '';
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
