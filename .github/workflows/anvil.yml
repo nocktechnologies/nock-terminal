@@ -34,10 +34,10 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          if [ -z "${OPENAI_API_KEY:-}" ]; then
+          if [[ -z "${OPENAI_API_KEY:-}" || "${OPENAI_API_KEY}" != sk-* ]]; then
             {
               echo 'review<<ANVIL_REVIEW_EOF'
-              echo 'OPENAI_API_KEY secret is not configured; skipped Anvil security review.'
+              echo 'OPENAI_API_KEY secret is missing or not an OpenAI API key; skipped Anvil security review.'
               echo 'ANVIL_REVIEW_EOF'
             } >> "$GITHUB_OUTPUT"
             exit 0
