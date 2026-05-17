@@ -10,7 +10,9 @@ import AIChatPanel from './components/AIChatPanel';
 import EditorPane from './components/EditorPane';
 import Settings from './components/Settings';
 import StatusBar from './components/StatusBar';
+import CommandPalette from './components/CommandPalette';
 import { buildUnsavedFilesMessage, normalizeUnsavedFiles } from './utils/unsavedFiles.mjs';
+import { resolveSessionLaunch, sanitizeStagedTerminalInput } from './utils/agentLaunchers.mjs';
 
 function createTabId(prefix = 'tab') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -28,6 +30,8 @@ export default function App() {
   const [lastDataTimestamps, setLastDataTimestamps] = useState({});
   const [ollamaStatus, setOllamaStatus] = useState(false);
   const [queuedPrompt, setQueuedPrompt] = useState(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [profilesByPath, setProfilesByPath] = useState({});
   const queuedPromptIdRef = useRef(0);
 
   // Discover sessions on mount and periodically
@@ -58,6 +62,32 @@ export default function App() {
     }, 30000); // Refresh every 30s
     return () => clearInterval(interval);
   }, [refreshSessions, refreshPorts]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const paths = [...new Set(sessions.map(session => session.path).filter(Boolean))];
+    if (paths.length === 0) {
+      setProfilesByPath({});
+      return undefined;
+    }
+
+    Promise.all(paths.map(async (projectPath) => {
+      try {
+        const profile = await window.nockTerminal.profiles.get(projectPath);
+        return [projectPath, profile || {}];
+      } catch {
+        return [projectPath, {}];
+      }
+    })).then((entries) => {
+      if (!cancelled) {
+        setProfilesByPath(Object.fromEntries(entries));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessions]);
 
   // Poll Ollama status every 30s
   useEffect(() => {
@@ -116,6 +146,16 @@ export default function App() {
   const shouldLaunchAgent = (session) =>
     session?.kind === 'agent' && session.agent?.enabled && Boolean(session.launch?.command);
 
+  const getProfileForPath = useCallback(async (projectPath) => {
+    if (!projectPath) return {};
+    if (profilesByPath[projectPath]) return profilesByPath[projectPath];
+    try {
+      return await window.nockTerminal.profiles.get(projectPath);
+    } catch {
+      return {};
+    }
+  }, [profilesByPath]);
+
   // Open a terminal tab for a session or agent folder
   const openTerminalTab = useCallback((session, options = {}) => {
     const launchFresh = options?.launchFresh === true;
@@ -131,6 +171,7 @@ export default function App() {
     const tabId = createTabId();
     const isAgent = session.kind === 'agent';
     const launchCommand = shouldLaunchAgent(session) ? session.launch.command : undefined;
+    const initialInput = sanitizeStagedTerminalInput(options?.initialInput || '');
     const cwd = isAgent ? (session.launch?.cwd || session.path) : session.path;
     const newTab = {
       id: tabId,
@@ -142,6 +183,7 @@ export default function App() {
       splitContent: null,
       splitRatio: 0.5,
       launchCommand,
+      initialInput,
     };
 
     setTabs(prev => [...prev, newTab]);
@@ -157,6 +199,45 @@ export default function App() {
   const launchAgentFresh = useCallback((session) => {
     openTerminalTab(session, { launchFresh: true });
   }, [openTerminalTab]);
+
+  const launchSessionWithAgent = useCallback(async (session, agentId, options = {}) => {
+    if (!session) return;
+    const profile = await getProfileForPath(session.path);
+    const launch = resolveSessionLaunch(session, profile, agentId);
+    const initialInput = sanitizeStagedTerminalInput(options.initialInput || '');
+
+    if (!launch.command) {
+      openTerminalTab(session, {
+        launchFresh: options.launchFresh === true,
+        initialInput,
+      });
+      return;
+    }
+
+    const tabId = createTabId();
+    const newTab = {
+      id: tabId,
+      sessionId: session.id,
+      title: launch.title,
+      branch: session.branch,
+      status: 'active',
+      cwd: launch.cwd,
+      splitContent: null,
+      splitRatio: 0.5,
+      launchCommand: launch.command,
+      initialInput,
+      agentId: launch.agentId,
+    };
+
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(tabId);
+    setView('terminal');
+    window.nockTerminal.sessionHistory.start(tabId, {
+      project: launch.title,
+      shell: launch.command,
+      cwd: launch.cwd || undefined,
+    });
+  }, [getProfileForPath, openTerminalTab]);
 
   // Open a new blank terminal
   const openNewTab = useCallback((cwd) => {
@@ -245,7 +326,7 @@ export default function App() {
 
   const duplicateTab = useCallback((tab) => {
     const tabId = createTabId();
-    const newTab = { ...tab, id: tabId, pinned: false };
+    const newTab = { ...tab, id: tabId, pinned: false, initialInput: '' };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(tabId);
     window.nockTerminal.sessionHistory.start(tabId, {
@@ -463,6 +544,11 @@ export default function App() {
         e.preventDefault();
         ctrlPFocusRef.current?.();
       }
+      // Ctrl+K / Cmd+K: Command launcher
+      if (isCtrl && e.key.toLowerCase() === 'k' && !e.shiftKey) {
+        e.preventDefault();
+        setCommandPaletteOpen(prev => !prev);
+      }
       // Ctrl+`: Toggle terminal focus
       if (isCtrl && e.key === '`') {
         e.preventDefault();
@@ -520,6 +606,7 @@ export default function App() {
           onFileClick={openFileInEditor}
           onCtrlPFocus={(fn) => { ctrlPFocusRef.current = fn; }}
           onExecutePrompt={executePrompt}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
         />
 
         {/* Main content — all views always mounted, visibility controlled by CSS */}
@@ -535,6 +622,12 @@ export default function App() {
               onOpenSettings={() => setView('settings')}
               activeProjectPath={activeProjectPath}
               ollamaStatus={ollamaStatus}
+              tabs={tabs}
+              processStatus={processStatus}
+              lastDataTimestamps={lastDataTimestamps}
+              profilesByPath={profilesByPath}
+              onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+              onLaunchSessionWithAgent={launchSessionWithAgent}
             />
           </div>
 
@@ -559,6 +652,7 @@ export default function App() {
                 onToggleSidebar={() => setSidebarCollapsed(prev => !prev)}
                 onToggleChat={() => setChatOpen(prev => !prev)}
                 onDashboard={() => setView('dashboard')}
+                onOpenCommandPalette={() => setCommandPaletteOpen(true)}
                 sidebarOpen={!sidebarCollapsed}
                 chatOpen={chatOpen}
                 hasSplit={!!activeTab?.splitContent}
@@ -598,6 +692,7 @@ export default function App() {
                       cwd={tab.cwd}
                       active={tab.id === activeTabId && view === 'terminal'}
                       launchCommand={tab.launchCommand}
+                      initialInput={tab.initialInput}
                     />
                   </SplitPane>
                 </div>
@@ -634,6 +729,18 @@ export default function App() {
           />
         </div>
       </div>
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        sessions={sessions}
+        profilesByPath={profilesByPath}
+        activeProjectPath={activeProjectPath}
+        onClose={() => setCommandPaletteOpen(false)}
+        onOpenSession={openTerminalTab}
+        onLaunchSessionWithAgent={launchSessionWithAgent}
+        onNewTerminal={openNewTab}
+        onOpenSettings={() => setView('settings')}
+      />
 
       {/* Status Bar */}
       <StatusBar

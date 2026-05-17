@@ -1,6 +1,7 @@
 # Product Audit And GTM Readiness
 
 Audit date: 2026-05-15
+Latest product update: 2026-05-16
 
 Scope: repository documentation, Electron/React implementation, local verification commands, browser smoke checks with the mocked preload bridge, and a current market read of agentic development tools.
 
@@ -14,16 +15,29 @@ The remaining public-GTM blockers are product depth and distribution proof: true
 
 The product has useful bones: a real PTY-backed terminal, Claude transcript discovery, agent-folder discovery, project cards, file tree, Monaco editing, local model chat, prompt/session history, git controls, port awareness, and notifications. The main problem is not lack of product surface. The problem is that the surface is not yet formed into a sharp promise people can immediately understand and trust.
 
+## May 16 Product Progress
+
+The five approved agent-agnostic cockpit phases now have a working private-alpha slice:
+
+- `Ctrl+K` command launcher for searching repos, agents, branches, lifecycle state, models, and launch commands.
+- Profile-driven default agent selection for Claude Code, Codex CLI, Gemini CLI, and custom agent aliases/wrappers.
+- Project command overrides for Claude, Codex, Gemini, and custom agents.
+- Dashboard operations strip for active agent folders, live agent processes, open terminals, quiet agent tabs, dirty repos, and stale agent folders.
+- Task staging that launches an agent terminal and places the task text into the terminal without submitting it.
+- Gemini process/context support using `GEMINI.md`; official reference: https://google-gemini.github.io/gemini-cli/docs/cli/gemini-md.html
+
+Readiness impact: this improves private-alpha usefulness and product clarity, but it does not remove the public-GTM blockers around real transcript discovery beyond Claude, attach/reconnect semantics, worktree lanes, session replay, packaged smoke automation, update distribution, crash/error reporting, and public support/demo material.
+
 ## Verification Summary
 
 | Check | Result | Notes |
 | --- | --- | --- |
-| `npm test` | Pass | 15 Node test-runner tests passed. |
+| `npm test` | Pass | 32 Node test-runner tests passed after the May 16 launcher/profile additions. |
 | `npm audit --audit-level=moderate` | Pass | 0 vulnerabilities found after dependency remediation. |
 | `npx vite build` | Pass with warnings | Renderer build succeeded; known Monaco/editor chunks exceed Vite's generic 500 kB warning threshold. |
 | `npm run check:bundle` | Pass | Explicit budgets cover app entry, Monaco workers/API, and xterm chunks. |
 | `python3 test/monaco.smoke.py` | Pass | Monaco loaded, TypeScript language mode worked, no worker/console errors. |
-| Lightweight browser DOM audit | Pass with residual risk | No console errors or horizontal overflow in mocked dashboard; the remediation pass added accessible names and larger hit targets to the highest-use controls. |
+| Lightweight browser DOM audit | Pass with residual risk | Mocked dashboard and command-launcher smoke passed, including `Ctrl+K`, profile-selected Codex launch, and staged task text. |
 
 ## Technical Quality Score
 
@@ -91,11 +105,11 @@ Docs and product instructions refer to Codex, but the implementation discovers `
 
 Impact: Users will bounce if the public promise says Codex but the app behaves like a Claude-specific shell.
 
-Status: Partially fixed.
+Status: Improved, still not public-GTM complete.
 
-The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an initial adapter registry for Claude/Codex process detection and project context checks, plus first-class local agent-folder discovery from existing `config.json` files. Claude Code remains the only transcript-discovery source, and true reconnect/attach for live agents remains future work.
+The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an adapter registry for Claude/Codex/Gemini process detection and project context checks, first-class local agent-folder discovery from existing `config.json` files, profile-driven launches for Claude/Codex/Gemini/custom agents, and a command launcher that can stage tasks into fresh agent terminals. Claude Code remains the only transcript-discovery source, and true reconnect/attach for live agents remains future work.
 
-Recommendation: keep the private alpha Claude-first but agent-agnostic in posture. Do not market Codex as first-class until Codex discovery, launch, process, context, and settings are all backed by code.
+Recommendation: keep the private alpha agent-agnostic in launch/profile posture, while staying explicit that transcript discovery is still Claude-first. Do not market Codex as fully first-class until Codex discovery, resume/attach, transcript history, and settings are all backed by code.
 
 ### P1 - Settings Promise More Than The Terminal Applies
 
@@ -251,7 +265,7 @@ That is more compelling than "a terminal with AI chat."
 ## Remaining Fixes
 
 1. Implement true reconnect/attach for live local agents.
-2. Implement real Codex transcript discovery and Codex launch/profile settings.
+2. Implement real Codex transcript discovery and resume/attach semantics; launch/profile settings now exist.
 3. Add worktree lanes for parallel agent attempts.
 4. Add session replay and handoff export from terminal output, diff, commands, and test results.
 5. Automate packaged-app smoke tests for macOS, Windows, and Linux artifacts.

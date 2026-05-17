@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, FolderOpen, Check } from 'lucide-react';
+import { AGENT_LAUNCHERS } from '../utils/agentLaunchers.mjs';
 
 // ---------------------------------------------------------------------------
 // Field wrapper — mirrors the Settings.jsx pattern
@@ -124,6 +125,18 @@ export default function ProjectSettingsModal({ projectPath, projectName, onClose
 
         {/* ---- Body (scrollable) ---- */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1">
+          <Field label="Default Coding Agent" description="Agent launched from the command palette and project context menu">
+            <select
+              className="settings-input font-mono"
+              value={profile.defaultAgent || 'claude'}
+              onChange={(e) => updateField('defaultAgent', e.target.value)}
+            >
+              {AGENT_LAUNCHERS.map((launcher) => (
+                <option key={launcher.id} value={launcher.id}>{launcher.label}</option>
+              ))}
+            </select>
+          </Field>
+
           <Field label="Preferred AI Model" description="Model to use for this project's AI chat sessions">
             <input
               type="text"
@@ -181,6 +194,36 @@ export default function ProjectSettingsModal({ projectPath, projectName, onClose
               placeholder="claude --dangerously-skip-permissions"
               value={profile.claudeCommand}
               onChange={(e) => updateField('claudeCommand', e.target.value)}
+            />
+          </Field>
+
+          <Field label="Codex Command" description="Custom command to launch Codex CLI for this project">
+            <input
+              type="text"
+              className="settings-input font-mono"
+              placeholder="codex"
+              value={profile.codexCommand || ''}
+              onChange={(e) => updateField('codexCommand', e.target.value)}
+            />
+          </Field>
+
+          <Field label="Gemini Command" description="Custom command to launch Gemini CLI for this project">
+            <input
+              type="text"
+              className="settings-input font-mono"
+              placeholder="gemini"
+              value={profile.geminiCommand || ''}
+              onChange={(e) => updateField('geminiCommand', e.target.value)}
+            />
+          </Field>
+
+          <Field label="Custom Agent Command" description="Fallback command for an internal agent script, alias, or wrapper">
+            <input
+              type="text"
+              className="settings-input font-mono"
+              placeholder="mira"
+              value={profile.customAgentCommand || ''}
+              onChange={(e) => updateField('customAgentCommand', e.target.value)}
             />
           </Field>
 

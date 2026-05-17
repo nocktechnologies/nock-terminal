@@ -1,6 +1,6 @@
 # Agent Folder Intelligence
 
-Updated: 2026-05-15
+Updated: 2026-05-16
 
 Nock Terminal now treats local agent folders as first-class cockpit entries instead of pretending every discovered path is a repo.
 
@@ -77,6 +77,8 @@ Click behavior is conservative:
 - Running or idle agents open a terminal in the agent folder without auto-launching a duplicate process.
 - Offline or stale enabled agents launch the derived or configured command.
 - The context menu provides `Launch Fresh` when the agent is enabled and has a launch command.
+- `Ctrl+K` includes agent folders in the command launcher and can launch a fresh agent terminal.
+- Task staging can place a user-written task into a freshly launched agent terminal without submitting it.
 
 ## Current Limits
 

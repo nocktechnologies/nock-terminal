@@ -4,6 +4,16 @@ This changelog is summarized from git history. The repository has no version tag
 
 ## Unreleased
 
+### 2026-05-16
+
+- Added the `Ctrl+K` command launcher for searching repos, agent folders, branches, lifecycle state, models, and launch commands.
+- Added profile-driven default agent selection and command overrides for Claude Code, Codex CLI, Gemini CLI, and custom terminal agents.
+- Added Gemini CLI process detection and `GEMINI.md` context checks.
+- Added dashboard operations telemetry for active agent folders, live agent processes, terminals, quiet tabs, stale agents, and dirty repos.
+- Added task staging so a launched agent terminal receives sanitized task text without auto-submitting it.
+- Added launcher and fleet summary unit tests plus a mocked browser smoke pass for launch/task staging.
+- Updated README, architecture, roadmap, release readiness, audit, and agent-folder docs for the agent-agnostic cockpit slice.
+
 ### 2026-05-15
 
 - Added agent-folder intelligence: configured dev roots now discover existing `agents/*/config.json` folders, read local NockCC file-bus state, show agents separately from repos, and use conservative launch defaults.

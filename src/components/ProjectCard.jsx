@@ -1,4 +1,5 @@
 import React from 'react';
+import { getAgentLauncher, resolveDefaultAgentId } from '../utils/agentLaunchers.mjs';
 
 const STATUS_CONFIG = {
   active:   { dot: 'bg-nock-green',   label: 'LIVE',    glowClass: 'status-active',   text: 'text-nock-green' },
@@ -14,7 +15,7 @@ const AGENT_LIFECYCLE_LABELS = {
   disabled: { label: 'DISABLED', text: 'text-nock-red' },
 };
 
-export default function ProjectCard({ session, index, onClick }) {
+export default function ProjectCard({ session, profile, index, onClick }) {
   const cfg = STATUS_CONFIG[session.status] || STATUS_CONFIG.inactive;
   const isAgent = session.kind === 'agent';
   const lifecycle = AGENT_LIFECYCLE_LABELS[session.agent?.lifecycle] || null;
@@ -24,6 +25,7 @@ export default function ProjectCard({ session, index, onClick }) {
     ? (['running', 'idle'].includes(session.agent?.lifecycle) ? 'OPEN' : 'LAUNCH')
     : 'OPEN';
   const agentSignalCount = (session.agent?.unreadCount || 0) + (session.agent?.inflightCount || 0);
+  const defaultLauncher = !isAgent ? getAgentLauncher(resolveDefaultAgentId(profile || {})) : null;
 
   return (
     <button
@@ -60,6 +62,17 @@ export default function ProjectCard({ session, index, onClick }) {
               {session.agent.model}
             </span>
           )}
+        </div>
+      )}
+
+      {!isAgent && defaultLauncher && (
+        <div className="relative flex items-center gap-1.5 mb-2">
+          <span className="font-mono text-[9px] tracking-widest uppercase text-nock-accent-cyan border border-nock-accent-cyan/30 rounded px-1.5 py-0.5 bg-nock-accent-cyan/5">
+            {defaultLauncher.shortLabel}
+          </span>
+          <span className="font-mono text-[9px] tracking-tight text-nock-text-muted truncate">
+            default agent
+          </span>
         </div>
       )}
 

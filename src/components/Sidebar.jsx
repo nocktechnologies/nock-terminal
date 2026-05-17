@@ -26,6 +26,7 @@ export default function Sidebar({
   onFileClick,
   onCtrlPFocus,
   onExecutePrompt,
+  onOpenCommandPalette,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const visibleSessions = useMemo(
@@ -47,6 +48,7 @@ export default function Sidebar({
       {/* Navigation */}
       <div className="flex flex-col gap-1 p-2 border-b border-nock-border">
         <NavButton icon={<GridIcon />} label="Dashboard" collapsed={collapsed} active={activeView === 'dashboard'} onClick={() => onViewChange('dashboard')} />
+        <NavButton icon={<CommandIcon />} label="Launcher" collapsed={collapsed} active={false} onClick={onOpenCommandPalette} />
         <NavButton icon={<TerminalIcon />} label="Terminal" collapsed={collapsed} active={activeView === 'terminal'} onClick={() => onViewChange('terminal')} />
         <NavButton icon={<GearIcon />} label="Settings" collapsed={collapsed} active={activeView === 'settings'} onClick={() => onViewChange('settings')} />
       </div>
@@ -282,6 +284,14 @@ function TerminalIcon() {
   return (
     <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+function CommandIcon() {
+  return (
+    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 3a3 3 0 0 1 0 6H6a3 3 0 1 1 0-6h12ZM18 15a3 3 0 1 1 0 6H6a3 3 0 1 1 0-6h12Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 9v6M18 9v6" />
     </svg>
   );
 }

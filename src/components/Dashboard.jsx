@@ -1,10 +1,11 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { Search, X } from 'lucide-react';
+import { Activity, Command, GitBranch, Radio, Search, Terminal, X } from 'lucide-react';
 import ProjectCard from './ProjectCard';
 import ContextMenu from './ContextMenu';
 import ProjectSettingsModal from './ProjectSettingsModal';
 import OnboardingPanel from './OnboardingPanel';
 import { filterSessionsBySearch } from '../utils/sessionSearch.mjs';
+import { summarizeFleet } from '../utils/fleetOps.mjs';
 
 export default function Dashboard({
   sessions,
@@ -15,6 +16,12 @@ export default function Dashboard({
   onOpenSettings,
   activeProjectPath,
   ollamaStatus,
+  tabs = [],
+  processStatus = {},
+  lastDataTimestamps = {},
+  profilesByPath = {},
+  onOpenCommandPalette,
+  onLaunchSessionWithAgent,
 }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [settingsProject, setSettingsProject] = useState(null);
@@ -73,6 +80,17 @@ export default function Dashboard({
         ),
         disabled: !session.agent?.enabled || !session.launch?.command,
         onClick: () => onLaunchAgentFresh?.(session),
+      });
+    } else {
+      items.push({
+        label: 'Launch Default Agent',
+        icon: (
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h6m-6 4h10" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        ),
+        onClick: () => onLaunchSessionWithAgent?.(session, undefined, { launchFresh: true }),
       });
     }
 
@@ -162,6 +180,15 @@ export default function Dashboard({
               />
               <div className="flex items-center gap-2">
                 <button
+                  onClick={onOpenCommandPalette}
+                  className="group px-3 py-2 text-[11px] font-mono tracking-wider uppercase border border-nock-border rounded hover:border-nock-accent-cyan/50 hover:bg-nock-card transition-all text-nock-text-dim hover:text-nock-text"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <Command className="h-3 w-3" aria-hidden="true" />
+                    Launcher
+                  </span>
+                </button>
+                <button
                   onClick={onRefresh}
                   className="group px-3 py-2 text-[11px] font-mono tracking-wider uppercase border border-nock-border rounded hover:border-nock-accent-blue/50 hover:bg-nock-card transition-all text-nock-text-dim hover:text-nock-text"
                 >
@@ -203,6 +230,14 @@ export default function Dashboard({
           onRefresh={onRefresh}
         />
 
+        <OperationsPanel
+          sessions={sessions}
+          tabs={tabs}
+          processStatus={processStatus}
+          lastDataTimestamps={lastDataTimestamps}
+          onOpenCommandPalette={onOpenCommandPalette}
+        />
+
         {sessions.length > 0 && visibleSessions.length > 0 ? (
           <>
             <SessionSection
@@ -211,6 +246,7 @@ export default function Dashboard({
               offset={0}
               onSessionClick={onSessionClick}
               onContextMenu={handleCardContextMenu}
+              profilesByPath={profilesByPath}
             />
             <SessionSection
               label="// Projects"
@@ -218,6 +254,7 @@ export default function Dashboard({
               offset={groupedSessions.agents.length}
               onSessionClick={onSessionClick}
               onContextMenu={handleCardContextMenu}
+              profilesByPath={profilesByPath}
             />
           </>
         ) : sessions.length > 0 && searchActive ? (
@@ -278,7 +315,77 @@ function SessionSearch({ value, onChange, resultCount, totalCount }) {
   );
 }
 
-function SessionSection({ label, sessions, offset, onSessionClick, onContextMenu }) {
+function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, onOpenCommandPalette }) {
+  const summary = useMemo(
+    () => summarizeFleet({ sessions, tabs, processStatus, lastDataTimestamps }),
+    [sessions, tabs, processStatus, lastDataTimestamps]
+  );
+  const visibleAgents = sessions
+    .filter((session) => session.kind === 'agent' && ['running', 'idle', 'stale'].includes(session.agent?.lifecycle))
+    .slice(0, 4);
+
+  if (sessions.length === 0 && tabs.length === 0) return null;
+
+  return (
+    <div className="mb-6 overflow-hidden rounded-md border border-nock-border bg-nock-card/25">
+      <div className="grid grid-cols-2 border-b border-nock-border md:grid-cols-4 xl:grid-cols-6">
+        <OpsCell Icon={Activity} label="Agent Folders" value={summary.activeAgentFolders} detail={`${summary.agents} known`} tone="green" />
+        <OpsCell Icon={Radio} label="Agent Procs" value={summary.activeAgentProcesses} detail="live terminals" tone="cyan" />
+        <OpsCell Icon={Terminal} label="Terminals" value={summary.terminals} detail={`${summary.quietAgentTabs} quiet`} tone="blue" />
+        <OpsCell Icon={GitBranch} label="Dirty Repos" value={summary.dirtyRepos} detail={`${summary.repos} repos`} tone="yellow" />
+        <OpsCell Icon={Activity} label="Stale" value={summary.staleAgentFolders} detail="needs glance" tone="purple" />
+        <div className="flex items-center justify-end border-t border-nock-border px-4 py-3 md:border-t-0 xl:border-l">
+          <button
+            type="button"
+            onClick={onOpenCommandPalette}
+            className="inline-flex h-8 items-center gap-2 rounded border border-nock-accent-cyan/40 px-3 font-mono text-[10px] uppercase tracking-wider text-nock-accent-cyan transition-colors hover:bg-nock-accent-cyan/10"
+          >
+            <Command className="h-3.5 w-3.5" aria-hidden="true" />
+            Cmd K
+          </button>
+        </div>
+      </div>
+      {visibleAgents.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+          <span className="font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">// Now</span>
+          {visibleAgents.map((agent) => (
+            <span key={agent.id} className="inline-flex min-w-0 items-center gap-1.5 rounded border border-nock-border bg-nock-bg/70 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-nock-text-dim">
+              <span className={`h-1.5 w-1.5 rounded-full ${agent.agent?.lifecycle === 'stale' ? 'bg-nock-yellow' : 'bg-nock-green'}`} />
+              <span className="max-w-[140px] truncate text-nock-text">{agent.name}</span>
+              <span>{agent.agent?.lifecycle}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OpsCell({ Icon, label, value, detail, tone }) {
+  const tones = {
+    blue: 'text-nock-accent-blue',
+    cyan: 'text-nock-accent-cyan',
+    green: 'text-nock-green',
+    yellow: 'text-nock-yellow',
+    purple: 'text-nock-accent-purple',
+  };
+  return (
+    <div className="border-r border-nock-border px-4 py-3 last:border-r-0">
+      <div className="mb-1 flex items-center gap-2">
+        <Icon className={`h-3 w-3 ${tones[tone]}`} aria-hidden="true" />
+        <span className="font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">{label}</span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className={`font-display text-2xl font-bold tabular-nums ${tones[tone]}`}>
+          {String(value).padStart(2, '0')}
+        </span>
+        <span className="font-mono text-[9px] uppercase tracking-wider text-nock-text-muted">{detail}</span>
+      </div>
+    </div>
+  );
+}
+
+function SessionSection({ label, sessions, offset, onSessionClick, onContextMenu, profilesByPath }) {
   if (sessions.length === 0) return null;
   return (
     <div className="mb-7 last:mb-0">
@@ -299,6 +406,7 @@ function SessionSection({ label, sessions, offset, onSessionClick, onContextMenu
           >
             <ProjectCard
               session={session}
+              profile={profilesByPath?.[session.path]}
               index={offset + i}
               onClick={() => onSessionClick(session)}
             />

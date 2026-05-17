@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { pitchBlack } from '../utils/themes';
+import { sanitizeStagedTerminalInput } from '../utils/agentLaunchers.mjs';
 
-export default function TerminalView({ tabId, cwd, active, launchCommand }) {
+export default function TerminalView({ tabId, cwd, active, launchCommand, initialInput }) {
   const containerRef = useRef(null);
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
@@ -38,6 +39,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
     let cleanupData = null;
     let cleanupExit = null;
     let launchTimer = null;
+    let stagedInputTimer = null;
 
     const init = async () => {
       // Dynamic import xterm (ESM modules)
@@ -171,10 +173,20 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
 
       // If a launch command is specified, send it to the pty after a short
       // delay so the shell prompt has time to initialize.
+      const stagedInput = sanitizeStagedTerminalInput(initialInput || '');
       if (launchCommand) {
         launchTimer = setTimeout(() => {
           window.nockTerminal.terminal.write(tabId, launchCommand + '\r');
+          if (stagedInput) {
+            stagedInputTimer = setTimeout(() => {
+              window.nockTerminal.terminal.write(tabId, stagedInput);
+            }, 1400);
+          }
         }, 500);
+      } else if (stagedInput) {
+        stagedInputTimer = setTimeout(() => {
+          window.nockTerminal.terminal.write(tabId, stagedInput);
+        }, 700);
       }
 
       // Wire input: terminal → pty
@@ -206,6 +218,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
 
     return () => {
       if (launchTimer) clearTimeout(launchTimer);
+      if (stagedInputTimer) clearTimeout(stagedInputTimer);
       if (cleanupData) cleanupData();
       if (cleanupExit) cleanupExit();
       if (term) {
@@ -214,7 +227,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand }) {
         terminalRef.current = null;
       }
     };
-  }, [tabId, cwd, launchCommand]);
+  }, [tabId, cwd, launchCommand, initialInput]);
 
   // Refit on visibility change or window resize
   useEffect(() => {

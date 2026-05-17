@@ -5,10 +5,14 @@ const crypto = require('crypto');
 const DEFAULT_PROFILE = {
   preferredModel: '',
   systemPrompt: '',
+  defaultAgent: 'claude',
   defaultShell: '',
   shellArgs: '',
   envVars: '',
   claudeCommand: '',
+  codexCommand: '',
+  geminiCommand: '',
+  customAgentCommand: '',
   notes: '',
 };
 

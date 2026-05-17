@@ -740,6 +740,7 @@ export default function Settings() {
                 <Shortcut keys="Ctrl+W" action="Close editor tab or split" />
                 <Shortcut keys="Ctrl+B" action="Toggle sidebar" />
                 <Shortcut keys="Ctrl+D" action="Dashboard" />
+                <Shortcut keys="Ctrl+K" action="Command launcher" />
                 <Shortcut keys="Ctrl+P" action="Quick file finder" />
                 <Shortcut keys="Ctrl+1-9" action="Switch to tab N" />
                 <Shortcut keys="Ctrl+Tab" action="Next tab" />
