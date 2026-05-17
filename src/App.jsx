@@ -132,7 +132,7 @@ export default function App() {
   }, []);
 
   const openCommandPalette = useCallback((preset = null) => {
-    const safePreset = preset && !preset.nativeEvent && !preset.currentTarget ? preset : null;
+    const safePreset = preset && typeof preset === 'object' && !preset.nativeEvent && !preset.currentTarget ? preset : null;
     setCommandPalettePreset(safePreset ? { ...safePreset, key: Date.now() } : null);
     setCommandPaletteOpen(true);
   }, []);
@@ -308,7 +308,7 @@ export default function App() {
             taskDescription: initialInput,
             targetRepo,
             projectName,
-            scriptPath: launch.directScriptPath || launch.aliasPath || launch.scriptPath,
+            scriptPath: launch.directScriptPath || launch.scriptPath,
             agentBound: launch.directAgentBound === true,
           });
           const tabId = createTabId();
