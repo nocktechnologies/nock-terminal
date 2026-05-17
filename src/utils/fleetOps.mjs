@@ -7,6 +7,9 @@ export function summarizeFleet({ sessions = [], tabs = [], processStatus = {}, l
     ['running', 'idle'].includes(session.agent?.lifecycle)
   );
   const staleAgentFolders = agentFolders.filter((session) => session.agent?.lifecycle === 'stale');
+  const dispatchReadyAgents = agentFolders.filter((session) =>
+    session.launch?.mode === 'dispatch' && session.launch?.canLaunch === true
+  );
   const dirtyRepos = repos.filter((session) => session.dirty);
 
   const activeAgentProcesses = safeTabs.flatMap((tab) => {
@@ -32,6 +35,7 @@ export function summarizeFleet({ sessions = [], tabs = [], processStatus = {}, l
     repos: repos.length,
     activeAgentFolders: activeAgentFolders.length,
     staleAgentFolders: staleAgentFolders.length,
+    dispatchReadyAgents: dispatchReadyAgents.length,
     dirtyRepos: dirtyRepos.length,
     terminals: safeTabs.length,
     activeAgentProcesses: activeAgentProcesses.length,

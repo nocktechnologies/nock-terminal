@@ -1,6 +1,7 @@
 export const DEFAULT_AGENT_ID = 'claude';
 export const CUSTOM_AGENT_ID = 'custom';
 export const AGENT_FOLDER_ID = 'agent-folder';
+export const DISPATCH_AGENT_ID = 'dispatch-agent';
 
 const MAX_LAUNCHER_TARGETS = 80; // Keep the palette responsive on large dev roots.
 
@@ -68,6 +69,33 @@ export function getProfileCommand(profile = {}, agentId = DEFAULT_AGENT_ID) {
 export function resolveSessionLaunch(session, profile = {}, agentId) {
   const isAgentFolder = session?.kind === 'agent';
   if (isAgentFolder) {
+    if (session?.launch?.mode === 'dispatch') {
+      const runtime = (
+        trimString(session?.agent?.runtime)
+        || trimString(session?.launch?.runtime)
+        || trimString(session?.launch?.dispatcher)
+      ).toLowerCase();
+      const label = session?.name || 'Dispatch Agent';
+      return {
+        agentId: DISPATCH_AGENT_ID,
+        label,
+        shortLabel: runtime ? runtime.toUpperCase() : 'Dispatch',
+        command: '',
+        cwd: session?.launch?.cwd || session?.agent?.workingDirectory || session?.path || undefined,
+        title: `${label} Dispatch`,
+        mode: 'dispatch',
+        canLaunch: session?.launch?.canLaunch === true,
+        runtime,
+        broker: trimString(session?.launch?.broker) || 'mira-nockos',
+        dispatcher: trimString(session?.launch?.dispatcher) || runtime,
+        scriptPath: trimString(session?.launch?.scriptPath),
+        commandTemplate: trimString(session?.launch?.commandTemplate),
+        disabledReason: session?.launch?.canLaunch === true
+          ? ''
+          : (trimString(session?.launch?.disabledReason) || 'Dispatch agent is not launchable'),
+      };
+    }
+
     const command = trimString(session?.launch?.command);
     return {
       agentId: AGENT_FOLDER_ID,
@@ -76,6 +104,8 @@ export function resolveSessionLaunch(session, profile = {}, agentId) {
       command,
       cwd: session?.launch?.cwd || session?.path || undefined,
       title: session?.name || 'Agent',
+      mode: 'terminal',
+      canLaunch: Boolean(command),
       disabledReason: command ? '' : 'Agent launch command is missing',
     };
   }
@@ -91,6 +121,8 @@ export function resolveSessionLaunch(session, profile = {}, agentId) {
     command,
     cwd: session?.path || profile?.projectPath || undefined,
     title: `${session?.name || 'Project'} (${launcher.shortLabel})`,
+    mode: 'terminal',
+    canLaunch: Boolean(command),
     disabledReason: command ? '' : 'Configure a custom agent command in the project profile',
   };
 }
@@ -106,8 +138,13 @@ export function buildSessionSearchText(session, profile = {}) {
     session?.kind,
     session?.agent?.name,
     session?.agent?.lifecycle,
+    session?.agent?.runtime,
     session?.agent?.model,
+    session?.launch?.mode,
+    session?.launch?.broker,
+    session?.launch?.dispatcher,
     session?.launch?.command,
+    session?.launch?.commandTemplate,
     defaultLauncher?.label,
     defaultLauncher?.shortLabel,
     profile?.notes,

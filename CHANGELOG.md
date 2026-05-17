@@ -11,8 +11,14 @@ This changelog is summarized from git history. The repository has no version tag
 - Added Gemini CLI process detection and `GEMINI.md` context checks.
 - Added dashboard operations telemetry for active agent folders, live agent processes, terminals, quiet tabs, stale agents, and dirty repos.
 - Added task staging so a launched agent terminal receives sanitized task text without auto-submitting it.
+- Added Codex/DeepSeek dispatch-agent discovery from `agent_runtime` configs, including intentional `enabled:false` handling and dispatcher allowlist parsing.
+- Added Mira-brokered NockCC dispatch requests plus a direct dispatcher-script route with sanitized payload-file creation.
+- Added dashboard dispatch telemetry and deduping for copied dispatch/worktree agent configs.
+- Added `docs/AGENT_DISPATCH.md` and refreshed release/docs/audit coverage for dispatch-agent behavior.
 - Added launcher and fleet summary unit tests plus a mocked browser smoke pass for launch/task staging.
 - Updated README, architecture, roadmap, release readiness, audit, and agent-folder docs for the agent-agnostic cockpit slice.
+- Fixed the Anvil Codex security-review workflow invocation and added OpenAI/Codex auth preflights so missing, malformed, or unauthorized review credentials skip cleanly instead of posting CLI/auth traces.
+- Replaced blocking dispatch failure alerts with a non-blocking in-app error notice and hardened NockCC response stream decoding.
 
 ### 2026-05-15
 

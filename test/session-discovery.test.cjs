@@ -125,6 +125,168 @@ test('marks disabled agent folders as inactive without launch defaults', async (
   assert.equal(warden.launch.command, '');
 });
 
+test('discovers disabled Codex and DeepSeek folders as dispatch-ready agents', async () => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const crmRoot = path.join(devRoot, 'claude-remote-manager');
+  const fileBusRoot = path.join(root, '.claude-remote', 'default');
+
+  writeFile(
+    path.join(crmRoot, 'core', 'scripts', 'dispatch-codex.sh'),
+    '#!/usr/bin/env bash\nALLOWED_AGENTS=(forge kiln hammer ash vale talon)\n'
+  );
+  writeFile(
+    path.join(crmRoot, 'core', 'scripts', 'dispatch-deepseek.sh'),
+    '#!/usr/bin/env bash\nALLOWED_AGENTS=(smith tinker)\n'
+  );
+  writeJson(path.join(crmRoot, 'agents', 'ash', 'config.json'), {
+    agent_name: 'ash',
+    agent_runtime: 'codex',
+    enabled: false,
+    model: 'o4-mini',
+    working_directory: path.join(devRoot, 'claude-remote-manager-codex-dispatch'),
+  });
+  writeJson(path.join(crmRoot, 'agents', 'smith', 'config.json'), {
+    agent_name: 'smith',
+    agent_runtime: 'deepseek',
+    enabled: false,
+    model: 'deepseek-v4-pro',
+    working_directory: path.join(devRoot, 'claude-remote-manager-smith-dispatch'),
+  });
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [devRoot],
+    fileBusRoot,
+  });
+
+  const sessions = await discovery.discover();
+  const ash = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'ash');
+  const smith = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'smith');
+
+  assert.ok(ash);
+  assert.equal(ash.agent.enabled, false);
+  assert.equal(ash.agent.runtime, 'codex');
+  assert.equal(ash.agent.lifecycle, 'dispatch');
+  assert.equal(ash.status, 'inactive');
+  assert.equal(ash.launch.mode, 'dispatch');
+  assert.equal(ash.launch.canLaunch, true);
+  assert.equal(ash.launch.broker, 'mira-nockos');
+  assert.equal(ash.launch.scriptPath, path.join(crmRoot, 'core', 'scripts', 'dispatch-codex.sh'));
+  assert.equal(ash.launch.cwd, crmRoot);
+  assert.match(ash.launch.commandTemplate, /dispatch-codex\.sh --agent ash --payload-file <payload-file>/);
+
+  assert.ok(smith);
+  assert.equal(smith.agent.runtime, 'deepseek');
+  assert.equal(smith.agent.lifecycle, 'dispatch');
+  assert.equal(smith.launch.mode, 'dispatch');
+  assert.equal(smith.launch.canLaunch, true);
+  assert.match(smith.launch.commandTemplate, /dispatch-deepseek\.sh --agent smith --payload-file <payload-file>/);
+});
+
+test('keeps non-allowlisted dispatch folders visible but not launchable', async () => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const crmRoot = path.join(devRoot, 'claude-remote-manager');
+
+  writeFile(
+    path.join(crmRoot, 'core', 'scripts', 'dispatch-codex.sh'),
+    '#!/usr/bin/env bash\nALLOWED_AGENTS=(ash vale talon)\n'
+  );
+  writeJson(path.join(crmRoot, 'agents', 'warden', 'config.json'), {
+    agent_name: 'warden',
+    agent_runtime: 'codex',
+    enabled: false,
+    model: 'o4-mini',
+  });
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [devRoot],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const warden = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'warden');
+
+  assert.ok(warden);
+  assert.equal(warden.agent.runtime, 'codex');
+  assert.equal(warden.agent.lifecycle, 'dispatch');
+  assert.equal(warden.launch.mode, 'dispatch');
+  assert.equal(warden.launch.canLaunch, false);
+  assert.match(warden.launch.disabledReason, /not allowlisted/i);
+});
+
+test('does not duplicate agents from dispatch worktree copies', async () => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const crmRoot = path.join(devRoot, 'claude-remote-manager');
+  const dispatchRoot = path.join(devRoot, 'claude-remote-manager-codex-dispatch');
+  const copiedWorktreeRoot = path.join(devRoot, 'crm-rook-n557');
+
+  writeFile(
+    path.join(crmRoot, 'core', 'scripts', 'dispatch-codex.sh'),
+    '#!/usr/bin/env bash\nALLOWED_AGENTS=(ash)\n'
+  );
+  writeFile(
+    path.join(dispatchRoot, 'core', 'scripts', 'dispatch-codex.sh'),
+    '#!/usr/bin/env bash\nALLOWED_AGENTS=(ash)\n'
+  );
+  writeFile(
+    path.join(copiedWorktreeRoot, 'core', 'scripts', 'dispatch-codex.sh'),
+    '#!/usr/bin/env bash\nALLOWED_AGENTS=(ash)\n'
+  );
+  writeJson(path.join(crmRoot, 'agents', 'ash', 'config.json'), {
+    agent_name: 'ash',
+    agent_runtime: 'codex',
+    enabled: false,
+  });
+  writeJson(path.join(dispatchRoot, 'agents', 'ash', 'config.json'), {
+    agent_name: 'ash',
+    agent_runtime: 'codex',
+    enabled: false,
+  });
+  writeJson(path.join(copiedWorktreeRoot, 'agents', 'ash', 'config.json'), {
+    agent_name: 'ash',
+    agent_runtime: 'codex',
+    enabled: false,
+  });
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [devRoot],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const ashSessions = sessions.filter(session => session.kind === 'agent' && session.agent?.name === 'ash');
+
+  assert.equal(ashSessions.length, 1);
+  assert.equal(ashSessions[0].path, path.join(crmRoot, 'agents', 'ash'));
+});
+
+test('dedupe prefers recently active agent folders when priority is otherwise tied', () => {
+  const discovery = new SessionDiscovery({});
+  const now = Date.now();
+  const oldAsh = {
+    path: '/tmp/agents-old/ash',
+    agent: { name: 'ash', lifecycle: 'dispatch' },
+    launch: { mode: 'dispatch', canLaunch: true },
+    lastActivity: now - 48 * 60 * 60 * 1000,
+  };
+  const recentAsh = {
+    path: '/tmp/agents-new/ash',
+    agent: { name: 'ash', lifecycle: 'dispatch' },
+    launch: { mode: 'dispatch', canLaunch: true },
+    lastActivity: now - 10 * 60 * 1000,
+  };
+
+  const deduped = discovery._dedupeAgentFolders([oldAsh, recentAsh]);
+
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0].path, recentAsh.path);
+});
+
 test('ignores malformed agent configs instead of failing discovery', async () => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');

@@ -42,6 +42,12 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     discover: () => ipcRenderer.invoke('sessions:discover'),
   },
 
+  // Dispatch-and-die agent launch requests
+  dispatch: {
+    brokered: (payload) => ipcRenderer.invoke('dispatch:brokered', payload),
+    createPayload: (payload) => ipcRenderer.invoke('dispatch:createPayload', payload),
+  },
+
   // AI Chat
   ai: {
     ollama: {

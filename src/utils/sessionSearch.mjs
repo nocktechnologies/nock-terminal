@@ -21,8 +21,13 @@ export function matchesSessionSearch(session, query) {
     session?.lastActivityFormatted,
     session?.agent?.name,
     session?.agent?.lifecycle,
+    session?.agent?.runtime,
     session?.agent?.model,
+    session?.launch?.mode,
+    session?.launch?.broker,
+    session?.launch?.dispatcher,
     session?.launch?.command,
+    session?.launch?.commandTemplate,
     session?.launch?.cwd,
   ];
 

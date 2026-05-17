@@ -11,6 +11,7 @@ const AGENT_LIFECYCLE_LABELS = {
   running: { label: 'RUNNING', text: 'text-nock-green' },
   idle: { label: 'IDLE', text: 'text-nock-green' },
   stale: { label: 'STALE', text: 'text-nock-yellow' },
+  dispatch: { label: 'DISPATCH', text: 'text-nock-accent-cyan' },
   offline: { label: 'OFFLINE', text: 'text-nock-text-muted' },
   disabled: { label: 'DISABLED', text: 'text-nock-red' },
 };
@@ -22,7 +23,7 @@ export default function ProjectCard({ session, profile, index, onClick }) {
   const primaryLabel = lifecycle?.label || cfg.label;
   const primaryText = lifecycle?.text || cfg.text;
   const actionLabel = isAgent
-    ? (['running', 'idle'].includes(session.agent?.lifecycle) ? 'OPEN' : 'LAUNCH')
+    ? (session.launch?.mode === 'dispatch' ? 'DISPATCH' : (['running', 'idle'].includes(session.agent?.lifecycle) ? 'OPEN' : 'LAUNCH'))
     : 'OPEN';
   const agentSignalCount = (session.agent?.unreadCount || 0) + (session.agent?.inflightCount || 0);
   const defaultLauncher = !isAgent ? getAgentLauncher(resolveDefaultAgentId(profile || {})) : null;
@@ -55,7 +56,7 @@ export default function ProjectCard({ session, profile, index, onClick }) {
       {isAgent && (
         <div className="relative flex items-center gap-1.5 mb-2">
           <span className="font-mono text-[9px] tracking-widest uppercase text-nock-green border border-nock-green/30 rounded px-1.5 py-0.5 bg-nock-green/5">
-            Agent
+            {session.agent?.runtime ? session.agent.runtime : 'Agent'}
           </span>
           {session.agent?.model && (
             <span className="font-mono text-[9px] tracking-tight text-nock-text-muted truncate">
@@ -85,7 +86,9 @@ export default function ProjectCard({ session, profile, index, onClick }) {
       {isAgent ? (
         <div className="relative flex items-center gap-2 mb-2 min-h-4">
           <span className="font-mono text-[10px] text-nock-accent-blue truncate tracking-tight">
-            {session.launch?.command ? `cmd: ${session.launch.command}` : 'launch disabled'}
+            {session.launch?.mode === 'dispatch'
+              ? (session.launch?.canLaunch ? `broker: ${session.launch.broker || 'mira-nockos'}` : (session.launch?.disabledReason || 'dispatch unavailable'))
+              : (session.launch?.command ? `cmd: ${session.launch.command}` : 'launch disabled')}
           </span>
           {agentSignalCount > 0 && (
             <span className="font-mono text-[9px] text-nock-accent-amber tracking-widest ml-auto">

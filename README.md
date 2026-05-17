@@ -1,6 +1,6 @@
 # Nock Terminal
 
-Nock Terminal is a cross-platform Electron cockpit for local agentic coding work. The current build is strongest as a Claude Code and Ollama companion: it discovers local Claude Code activity, opens PTY-backed terminal tabs, shows project/file context, embeds Monaco editing, tracks prompts/history, and exposes git, port, and notification controls from one desktop shell.
+Nock Terminal is a cross-platform Electron cockpit for local agentic coding work. The current build is strongest as a local-first cockpit: it discovers Claude Code activity, local agent folders, Codex/DeepSeek dispatch agents, and git repos; opens PTY-backed terminal tabs; shows project/file context; embeds Monaco editing; tracks prompts/history; and exposes git, port, notification, and NockCC controls from one desktop shell.
 
 The product direction is broader than a Claude-only launcher: Nock should become a local-first command center for supervising coding agents across terminals, worktrees, projects, and eventually Codex-compatible flows.
 
@@ -15,7 +15,8 @@ As of the May 16, 2026 agent-agnostic cockpit pass, this repo is ready for renew
 - New agent-folder intelligence: Nock discovers existing `agents/*/config.json` folders, reads local NockCC file-bus state, and presents agents separately from repos.
 - New agent-agnostic launcher: `Ctrl+K` searches repos/agents and launches Claude Code, Codex CLI, Gemini CLI, local agent folders, or a custom agent command from project profiles.
 - New task staging: the launcher can open a fresh agent terminal and place task text into it without auto-submitting the prompt.
-- Strategic gap: Claude Code remains the only transcript-discovery source. Codex/Gemini support now has context/process/profile launch foundations, but transcript discovery and resume/attach behavior are still roadmap work.
+- New dispatch support: Codex and DeepSeek dispatch agents with `agent_runtime` configs are visible even when intentionally `enabled:false`; allowlisted agents can be sent brokered tasks through Mira or launched through the local dispatch script.
+- Strategic gap: Claude Code remains the only transcript-discovery source. Codex/Gemini support now has context/process/profile launch foundations, and CRM Codex/DeepSeek dispatch is implemented, but Codex/Gemini transcript discovery and resume/attach behavior are still roadmap work.
 - Launch gap: release workflows now enforce signing/notarization secrets and checksums, but packaged-app smoke tests, update distribution, crash/error reporting, and support flow still need a release pass.
 
 Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_GTM_READINESS.md).
@@ -25,9 +26,11 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 - Discovers Claude Code session transcripts from `~/.claude/projects`.
 - Scans configured development roots for git repositories.
 - Discovers local agent folders from existing `config.json` files and shows enabled/running/stale/offline state from the NockCC file bus.
+- Discovers dispatch-and-die Codex/DeepSeek agents from `agent_runtime` configs, parses dispatcher allowlists, and dedupes copied worktree configs.
 - Searches repos and agent folders from a `Ctrl+K` command launcher.
 - Launches Claude Code, Codex CLI, Gemini CLI, local agent folders, or custom agent aliases from project profiles.
 - Stages task text into newly launched agent terminals for human review before submit.
+- Sends brokered dispatch requests to Mira through NockCC AgentMessage, or opens a direct dispatch-script terminal with a generated payload file.
 - Opens xterm.js terminal tabs through `node-pty`, including splits.
 - Keeps terminal sessions mounted while switching between dashboard, terminal, and settings views.
 - Provides a sidebar file tree, git status markers, context checks, and Monaco editing.
@@ -41,7 +44,7 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 The strongest GTM wedge is not "another AI IDE." The market has converged around agent-first workspaces, background agents, and multi-agent orchestration. Nock can be useful if it owns a sharper niche:
 
 - Local-first observability for agent sessions that already run in terminals.
-- Agent-agnostic adapters for Claude Code, Codex CLI, local Ollama workflows, and future agent CLIs.
+- Agent-agnostic adapters for Claude Code, Codex CLI, brokered dispatch agents, local Ollama workflows, and future agent CLIs.
 - Worktree-aware parallel execution and review.
 - Session replay, handoff notes, terminal output capture, and after-action summaries.
 - Team-ready notifications and presence through NockCC.
@@ -99,6 +102,7 @@ docs/           Product audit, launch readiness, roadmap, historical specs
 - [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_GTM_READINESS.md) is the current audit and launch-readiness report.
 - [docs/ROADMAP.md](docs/ROADMAP.md) lists product directions and prioritization.
 - [docs/AGENT_FOLDER_INTELLIGENCE.md](docs/AGENT_FOLDER_INTELLIGENCE.md) documents agent folder detection, state mapping, and launch behavior.
+- [docs/AGENT_DISPATCH.md](docs/AGENT_DISPATCH.md) documents Codex/DeepSeek dispatch discovery, brokered routing, direct scripts, and current limits.
 - [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md) documents the release gate and packaged smoke checklist.
 - [CHANGELOG.md](CHANGELOG.md) summarizes repo history.
 - [AGENTS.md](AGENTS.md) is the canonical agent instruction file; [CLAUDE.md](CLAUDE.md) points Claude users back to it with Claude-specific context.

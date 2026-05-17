@@ -4,8 +4,8 @@ Nock Terminal is a cross-platform Electron cockpit for local agentic coding work
 
 ## Product Posture
 
-- Be honest about current capabilities: Claude Code transcript discovery, local agent-folder discovery from existing `config.json` files, local NockCC file-bus state checks, Claude/Codex process and context adapters, Claude launch flows, Ollama chat, Monaco editing, git/file controls, prompt library, session history, Telegram, NockCC heartbeats, and first-run onboarding.
-- Treat Codex transcript discovery and Codex launch flows as strategic direction until the code has real Codex session discovery and launch adapters.
+- Be honest about current capabilities: Claude Code transcript discovery, local agent-folder discovery from existing `config.json` files, local NockCC file-bus state checks, Claude/Codex/Gemini process and context adapters, Claude/Codex/Gemini/custom terminal launch profiles, Codex/DeepSeek dispatch-agent discovery and Mira-brokered/direct dispatch requests, Ollama chat, Monaco editing, git/file controls, prompt library, session history, Telegram, NockCC heartbeats, and first-run onboarding.
+- Treat Codex transcript discovery, Codex resume/attach, and dispatch completion-thread tracking as strategic direction until the code has real adapters for those flows.
 - The best product wedge is local-first agent observability and orchestration, not a generic AI IDE clone.
 - Maintain a quiet, dense, cockpit-like UI for repeated developer work.
 
@@ -57,8 +57,9 @@ Nock Terminal is a cross-platform Electron cockpit for local agentic coding work
 
 ## What The App Does Today
 
-- Discovers Claude Code sessions, local agent folders, and git projects, then presents agents separately from repos in dashboard cards and sidebar entries.
+- Discovers Claude Code sessions, local agent folders, dispatch-agent configs, and git projects, then presents agents separately from repos in dashboard cards and sidebar entries.
 - Opens PTY-backed terminal tabs, applies global/project shell settings, supports splits, keeps terminals mounted across view switches, and launches `claude` from a new tab.
+- Sends brokered Codex/DeepSeek dispatch requests to Mira via NockCC AgentMessage, or launches direct CRM dispatch scripts with generated payload files.
 - Provides sidebar file browsing, git status markers, Monaco editing with unsaved-change protection, and project context checks for `CLAUDE.md`, `AGENTS.md`, Codex config, and `.nock/config.toml`.
 - Shows first-run onboarding for dev roots, agent binaries, sessions, context files, and Ollama status.
 - Provides AI chat against Ollama models, plus Claude-oriented Kit/Mara entries.
@@ -73,9 +74,9 @@ The May 15, 2026 audit/remediation pass found that the repo is dogfoodable and p
 - `npm run release:check` passes.
 - `python3 test/monaco.smoke.py` passes when Vite is running.
 - Dependency audit blockers are fixed.
-- Remaining launch gaps: Codex transcript/launch support, packaged smoke automation, update distribution, crash/error reporting, and a sharper public demo.
+- Remaining launch gaps: Codex/Gemini transcript discovery, resume/attach support, dispatch completion-thread tracking, packaged smoke automation, update distribution, crash/error reporting, and a sharper public demo.
 
-Start with `docs/PRODUCT_AUDIT_GTM_READINESS.md`, `docs/ROADMAP.md`, and `docs/RELEASE_READINESS.md` before major product work.
+Start with `docs/PRODUCT_AUDIT_GTM_READINESS.md`, `docs/ROADMAP.md`, `docs/AGENT_DISPATCH.md`, and `docs/RELEASE_READINESS.md` before major product work.
 
 ## Session Closeout
 
