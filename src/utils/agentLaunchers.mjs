@@ -157,6 +157,33 @@ export function buildSessionSearchText(session, profile = {}) {
     .join(' ');
 }
 
+function normalizedText(value) {
+  return trimString(value).toLowerCase();
+}
+
+function launcherTargetRank(target, terms) {
+  const session = target?.session || {};
+  const launch = target?.launch || {};
+  const agentName = normalizedText(session?.agent?.name);
+  const displayName = normalizedText(session?.name);
+  const pathName = normalizedText(session?.path?.split(/[\\/]/).filter(Boolean).pop());
+  const names = [agentName, displayName, pathName].filter(Boolean);
+  let rank = 0;
+
+  if (names.some((name) => terms.some((term) => name === term))) {
+    rank -= 1000;
+  } else if (names.some((name) => terms.some((term) => name.startsWith(term)))) {
+    rank -= 500;
+  } else if (names.some((name) => terms.some((term) => name.includes(term)))) {
+    rank -= 250;
+  }
+
+  if (session.kind === 'agent') rank -= 100;
+  if (launch.mode === 'dispatch') rank -= 25;
+  if (launch.canLaunch === true) rank -= 10;
+  return rank;
+}
+
 export function buildLauncherTargets(sessions = [], profilesByPath = {}, query = '') {
   const terms = String(query || '')
     .trim()
@@ -177,6 +204,12 @@ export function buildLauncherTargets(sessions = [], profilesByPath = {}, query =
       };
     })
     .filter((target) => terms.every((term) => target.searchText.includes(term)))
+    .sort((a, b) => {
+      if (terms.length === 0) return 0;
+      const rankDiff = launcherTargetRank(a, terms) - launcherTargetRank(b, terms);
+      if (rankDiff !== 0) return rankDiff;
+      return String(a.session?.name || '').localeCompare(String(b.session?.name || ''));
+    })
     .slice(0, MAX_LAUNCHER_TARGETS);
 }
 

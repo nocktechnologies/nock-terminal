@@ -24,7 +24,7 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 ## What It Does Today
 
 - Discovers Claude Code session transcripts from `~/.claude/projects`.
-- Scans configured development roots for git repositories.
+- Scans configured development roots for git repositories, falling back to common local roots like `~/Dev` when no roots are configured yet.
 - Discovers local agent folders from existing `config.json` files and shows enabled/running/stale/offline state from the NockCC file bus.
 - Discovers dispatch-and-die Codex/DeepSeek agents from `agent_runtime` configs, parses dispatcher allowlists, and dedupes copied worktree configs.
 - Searches repos and agent folders from a `Ctrl+K` command launcher.

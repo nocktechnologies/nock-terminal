@@ -6,7 +6,7 @@ Nock Terminal now treats local agent folders as first-class cockpit entries inst
 
 ## What Counts As An Agent Folder
 
-`SessionDiscovery` scans configured development roots for existing agent configs in these shapes:
+`SessionDiscovery` scans configured development roots for existing agent configs in these shapes. When the stored settings have no dev roots yet, Nock falls back to common local roots such as `~/Dev`, `~/dev`, and `~/Projects` so a fresh or reset install can still discover the canonical agent fleet.
 
 - `<root>/config.json`
 - `<root>/agents/<agent>/config.json`
@@ -92,7 +92,7 @@ Click behavior is conservative:
 - Running or idle agents open a terminal in the agent folder without auto-launching a duplicate process.
 - Offline or stale enabled agents launch the derived or configured command.
 - The context menu provides `Launch Fresh` when the agent is enabled and has a launch command.
-- `Ctrl+K` includes agent folders in the command launcher and can launch a fresh agent terminal.
+- `Ctrl+K` includes agent folders in the command launcher, ranks exact agent-name matches above similarly named repos, and can launch a fresh agent terminal.
 - Task staging can place a user-written task into a freshly launched agent terminal without submitting it.
 - For dispatch agents, task staging sends a brokered NockCC request to Mira by default, or opens a direct dispatcher-script terminal when the direct route is selected.
 

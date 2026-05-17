@@ -184,6 +184,48 @@ test('discovers disabled Codex and DeepSeek folders as dispatch-ready agents', a
   assert.match(smith.launch.commandTemplate, /dispatch-deepseek\.sh --agent smith --payload-file <payload-file>/);
 });
 
+test('falls back to common dev roots when stored devRoots is empty', async () => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const crmRoot = path.join(devRoot, 'claude-remote-manager');
+
+  writeFile(
+    path.join(crmRoot, 'core', 'scripts', 'dispatch-codex.sh'),
+    '#!/usr/bin/env bash\nALLOWED_AGENTS=(forge kiln hammer ash vale talon)\n'
+  );
+  writeFile(
+    path.join(crmRoot, 'core', 'scripts', 'dispatch-deepseek.sh'),
+    '#!/usr/bin/env bash\nALLOWED_AGENTS=(smith tinker)\n'
+  );
+  for (const [agentName, runtime] of [
+    ['ash', 'codex'],
+    ['smith', 'deepseek'],
+    ['tinker', 'deepseek'],
+  ]) {
+    writeJson(path.join(crmRoot, 'agents', agentName, 'config.json'), {
+      agent_name: agentName,
+      agent_runtime: runtime,
+      enabled: false,
+      model: runtime === 'deepseek' ? 'deepseek-v4-pro' : 'o4-mini',
+    });
+  }
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [],
+    defaultDevRoots: [devRoot],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  for (const agentName of ['ash', 'smith', 'tinker']) {
+    const session = sessions.find(item => item.kind === 'agent' && item.agent?.name === agentName);
+    assert.ok(session, `${agentName} should be discovered from the default dev root`);
+    assert.equal(session.launch.mode, 'dispatch');
+    assert.equal(session.launch.canLaunch, true);
+  }
+});
+
 test('keeps non-allowlisted dispatch folders visible but not launchable', async () => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');
