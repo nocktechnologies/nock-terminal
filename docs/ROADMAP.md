@@ -96,7 +96,7 @@ Current adapter posture:
 - Codex CLI: context/process detection and profile-driven terminal launch are implemented; transcript discovery and resume/attach remain future work.
 - Gemini CLI: process detection, `GEMINI.md` context checks, and profile-driven terminal launch are implemented; transcript discovery is not claimed.
 
-Gemini context reference: https://google-gemini.github.io/gemini-cli/docs/cli/gemini-md.html
+Gemini context reference: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md
 
 ### 3. Worktree Lanes
 

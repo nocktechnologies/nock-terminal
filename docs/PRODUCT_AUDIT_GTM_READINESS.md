@@ -24,7 +24,7 @@ The five approved agent-agnostic cockpit phases now have a working private-alpha
 - Project command overrides for Claude, Codex, Gemini, and custom agents.
 - Dashboard operations strip for active agent folders, live agent processes, open terminals, quiet agent tabs, dirty repos, and stale agent folders.
 - Task staging that launches an agent terminal and places the task text into the terminal without submitting it.
-- Gemini process/context support using `GEMINI.md`; official reference: https://google-gemini.github.io/gemini-cli/docs/cli/gemini-md.html
+- Gemini process/context support using `GEMINI.md`; official reference: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md
 
 Readiness impact: this improves private-alpha usefulness and product clarity, but it does not remove the public-GTM blockers around real transcript discovery beyond Claude, attach/reconnect semantics, worktree lanes, session replay, packaged smoke automation, update distribution, crash/error reporting, and public support/demo material.
 

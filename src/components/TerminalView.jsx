@@ -2,6 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { pitchBlack } from '../utils/themes';
 import { sanitizeStagedTerminalInput } from '../utils/agentLaunchers.mjs';
 
+const LAUNCH_COMMAND_DELAY_MS = 500;
+const STAGED_INPUT_DELAY_MS = 1400;
+const DIRECT_STAGED_INPUT_DELAY_MS = 700;
+
 export default function TerminalView({ tabId, cwd, active, launchCommand, initialInput }) {
   const containerRef = useRef(null);
   const terminalRef = useRef(null);
@@ -180,13 +184,13 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
           if (stagedInput) {
             stagedInputTimer = setTimeout(() => {
               window.nockTerminal.terminal.write(tabId, stagedInput);
-            }, 1400);
+            }, STAGED_INPUT_DELAY_MS);
           }
-        }, 500);
+        }, LAUNCH_COMMAND_DELAY_MS);
       } else if (stagedInput) {
         stagedInputTimer = setTimeout(() => {
           window.nockTerminal.terminal.write(tabId, stagedInput);
-        }, 700);
+        }, DIRECT_STAGED_INPUT_DELAY_MS);
       }
 
       // Wire input: terminal → pty
@@ -227,7 +231,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
         terminalRef.current = null;
       }
     };
-  }, [tabId, cwd, launchCommand, initialInput]);
+  }, [tabId, cwd, launchCommand]);
 
   // Refit on visibility change or window resize
   useEffect(() => {

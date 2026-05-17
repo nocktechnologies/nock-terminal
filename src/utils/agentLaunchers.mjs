@@ -2,6 +2,8 @@ export const DEFAULT_AGENT_ID = 'claude';
 export const CUSTOM_AGENT_ID = 'custom';
 export const AGENT_FOLDER_ID = 'agent-folder';
 
+const MAX_LAUNCHER_TARGETS = 80; // Keep the palette responsive on large dev roots.
+
 export const AGENT_LAUNCHERS = [
   {
     id: 'claude',
@@ -138,7 +140,7 @@ export function buildLauncherTargets(sessions = [], profilesByPath = {}, query =
       };
     })
     .filter((target) => terms.every((term) => target.searchText.includes(term)))
-    .slice(0, 80);
+    .slice(0, MAX_LAUNCHER_TARGETS);
 }
 
 export function sanitizeStagedTerminalInput(value, maxLength = 4000) {

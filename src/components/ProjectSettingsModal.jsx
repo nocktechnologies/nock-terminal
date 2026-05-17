@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, FolderOpen, Check } from 'lucide-react';
-import { AGENT_LAUNCHERS } from '../utils/agentLaunchers.mjs';
+import { AGENT_LAUNCHERS, DEFAULT_AGENT_ID } from '../utils/agentLaunchers.mjs';
 
 // ---------------------------------------------------------------------------
 // Field wrapper — mirrors the Settings.jsx pattern
@@ -128,7 +128,7 @@ export default function ProjectSettingsModal({ projectPath, projectName, onClose
           <Field label="Default Coding Agent" description="Agent launched from the command palette and project context menu">
             <select
               className="settings-input font-mono"
-              value={profile.defaultAgent || 'claude'}
+              value={profile.defaultAgent || DEFAULT_AGENT_ID}
               onChange={(e) => updateField('defaultAgent', e.target.value)}
             >
               {AGENT_LAUNCHERS.map((launcher) => (

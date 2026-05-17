@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Command, Play, Search, Send, Settings, Terminal, X } from 'lucide-react';
 import {
   AGENT_LAUNCHERS,
+  DEFAULT_AGENT_ID,
   buildLauncherTargets,
   getAgentLauncher,
   resolveSessionLaunch,
@@ -23,7 +24,7 @@ export default function CommandPalette({
   const [query, setQuery] = useState('');
   const [taskText, setTaskText] = useState('');
   const [taskTargetId, setTaskTargetId] = useState('');
-  const [taskAgentId, setTaskAgentId] = useState('claude');
+  const [taskAgentId, setTaskAgentId] = useState(DEFAULT_AGENT_ID);
   const inputRef = useRef(null);
 
   const targets = useMemo(
@@ -61,8 +62,8 @@ export default function CommandPalette({
   useEffect(() => {
     if (!selectedTaskTarget || selectedTaskTarget.kind === 'agent') return;
     const profile = profilesByPath?.[selectedTaskTarget.path] || {};
-    setTaskAgentId(profile.defaultAgent || 'claude');
-  }, [profilesByPath, selectedTaskTarget?.id, selectedTaskTarget?.kind, selectedTaskTarget?.path]);
+    setTaskAgentId(profile.defaultAgent || DEFAULT_AGENT_ID);
+  }, [selectedTaskTarget?.id]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -100,8 +101,17 @@ export default function CommandPalette({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/65 px-4 pt-[7vh]" role="dialog" aria-modal="true" aria-label="Command launcher">
-      <div className="w-full max-w-5xl overflow-hidden rounded-lg border border-nock-border-bright bg-nock-bg shadow-2xl">
+    <div
+      className="fixed inset-0 z-[70] flex items-start justify-center bg-black/65 px-4 pt-[7vh]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command launcher"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-5xl overflow-hidden rounded-lg border border-nock-border-bright bg-nock-bg shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex items-center gap-3 border-b border-nock-border px-4 py-3">
           <Command className="h-4 w-4 text-nock-accent-cyan" aria-hidden="true" />
           <div className="relative min-w-0 flex-1">
