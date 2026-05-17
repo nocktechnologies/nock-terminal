@@ -58,6 +58,10 @@ export function orderTaskTargets(sessions = [], activeProjectPath = '') {
     const rankB = statusRank[b.status] || 0;
     if (rankA !== rankB) return rankB - rankA;
 
+    const dispatchA = a.launch?.mode === 'dispatch' && a.launch?.canLaunch === true ? 1 : 0;
+    const dispatchB = b.launch?.mode === 'dispatch' && b.launch?.canLaunch === true ? 1 : 0;
+    if (dispatchA !== dispatchB) return dispatchB - dispatchA;
+
     return String(a.name || '').localeCompare(String(b.name || ''));
   });
 }

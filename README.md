@@ -30,7 +30,7 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 - Searches repos and agent folders from a `Ctrl+K` command launcher.
 - Launches Claude Code, Codex CLI, Gemini CLI, local agent folders, or custom agent aliases from project profiles.
 - Stages task text into newly launched agent terminals for human review before submit.
-- Sends brokered dispatch requests to Mira through NockCC AgentMessage, or opens a direct dispatch-script terminal with a generated payload file.
+- Sends brokered dispatch requests to Mira through NockCC AgentMessage, or opens a direct dispatch alias/script terminal with a generated payload file.
 - Opens xterm.js terminal tabs through `node-pty`, including splits.
 - Keeps terminal sessions mounted while switching between dashboard, terminal, and settings views.
 - Provides a sidebar file tree, git status markers, context checks, and Monaco editing.

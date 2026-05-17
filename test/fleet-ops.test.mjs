@@ -48,3 +48,14 @@ test('orders task targets by active path, agent folders, status, then name', () 
 
   assert.deepEqual(ordered.map((session) => session.name), ['alpha', 'mira', 'zeta']);
 });
+
+test('keeps launchable dispatch agents high enough for task staging', () => {
+  const ordered = orderTaskTargets([
+    { name: 'pierce', path: '/agents/pierce', kind: 'agent', status: 'inactive', launch: { mode: 'terminal', canLaunch: false } },
+    { name: 'smith', path: '/agents/smith', kind: 'agent', status: 'inactive', launch: { mode: 'dispatch', canLaunch: true } },
+    { name: 'mira', path: '/agents/mira', kind: 'agent', status: 'active', launch: { mode: 'terminal', canLaunch: true } },
+    { name: 'alpha', path: '/alpha', kind: 'project', status: 'recent' },
+  ]);
+
+  assert.deepEqual(ordered.map((session) => session.name), ['mira', 'smith', 'pierce', 'alpha']);
+});

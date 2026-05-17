@@ -23,6 +23,7 @@ For each dispatch agent, Nock:
 4. Parses the script `ALLOWED_AGENTS=(...)` list as the launch source of truth.
 5. Marks allowlisted agents as dispatch-ready.
 6. Keeps non-allowlisted agents visible but blocked, with an explicit disabled reason.
+7. Resolves a per-agent launch alias when one exists, such as `agents/ash/scripts/dispatch-ash.sh`; otherwise it falls back to the canonical dispatcher plus `--agent <name>`.
 
 Nock also dedupes copied agent configs from dispatch/worktree clones by canonical `agent_name`, preferring `/claude-remote-manager/agents/<name>` when available. This keeps copied worktrees from flooding the dashboard with repeated Ash/Smith/etc. cards.
 
@@ -81,7 +82,8 @@ The main process shell-quotes the script and payload path, strips unsafe control
 - `Ctrl+K` search matches runtime, dispatch state, broker, and command template.
 - Task staging switches copy and button text from terminal staging to dispatch request when a dispatch agent is selected.
 - Recent dispatch requests appear in the dashboard operations panel with route and status.
-- Clicking a dispatch agent card still opens the agent folder terminal; a task is required before Nock sends a brokered or direct dispatch request.
+- Clicking a dispatch agent card opens the launcher with that agent selected in task staging, because dispatch agents need a task payload before they can launch.
+- Direct dispatch uses the per-agent alias script when available, and falls back to `core/scripts/dispatch-<runtime>.sh --agent <agent>` when no alias exists.
 
 ## Current Limits
 

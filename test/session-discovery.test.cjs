@@ -139,6 +139,10 @@ test('discovers disabled Codex and DeepSeek folders as dispatch-ready agents', a
     path.join(crmRoot, 'core', 'scripts', 'dispatch-deepseek.sh'),
     '#!/usr/bin/env bash\nALLOWED_AGENTS=(smith tinker)\n'
   );
+  writeFile(
+    path.join(crmRoot, 'agents', 'ash', 'scripts', 'dispatch-ash.sh'),
+    '#!/usr/bin/env bash\nexec "${BASH_SOURCE[0]}/../../../core/scripts/dispatch-codex.sh" --agent ash "$@"\n'
+  );
   writeJson(path.join(crmRoot, 'agents', 'ash', 'config.json'), {
     agent_name: 'ash',
     agent_runtime: 'codex',
@@ -173,14 +177,22 @@ test('discovers disabled Codex and DeepSeek folders as dispatch-ready agents', a
   assert.equal(ash.launch.canLaunch, true);
   assert.equal(ash.launch.broker, 'mira-nockos');
   assert.equal(ash.launch.scriptPath, path.join(crmRoot, 'core', 'scripts', 'dispatch-codex.sh'));
+  assert.equal(ash.launch.aliasPath, path.join(crmRoot, 'agents', 'ash', 'scripts', 'dispatch-ash.sh'));
+  assert.equal(ash.launch.aliasCommand, path.join('agents', 'ash', 'scripts', 'dispatch-ash.sh'));
+  assert.equal(ash.launch.directScriptPath, ash.launch.aliasPath);
+  assert.equal(ash.launch.directAgentBound, true);
   assert.equal(ash.launch.cwd, crmRoot);
-  assert.match(ash.launch.commandTemplate, /dispatch-codex\.sh --agent ash --payload-file <payload-file>/);
+  assert.match(ash.launch.commandTemplate, /dispatch-ash\.sh --payload-file <payload-file>/);
+  assert.doesNotMatch(ash.launch.commandTemplate, /--agent ash/);
 
   assert.ok(smith);
   assert.equal(smith.agent.runtime, 'deepseek');
   assert.equal(smith.agent.lifecycle, 'dispatch');
   assert.equal(smith.launch.mode, 'dispatch');
   assert.equal(smith.launch.canLaunch, true);
+  assert.equal(smith.launch.aliasCommand, 'dispatch-deepseek.sh --agent smith');
+  assert.equal(smith.launch.directScriptPath, path.join(crmRoot, 'core', 'scripts', 'dispatch-deepseek.sh'));
+  assert.equal(smith.launch.directAgentBound, false);
   assert.match(smith.launch.commandTemplate, /dispatch-deepseek\.sh --agent smith --payload-file <payload-file>/);
 });
 

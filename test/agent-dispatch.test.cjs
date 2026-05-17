@@ -57,6 +57,20 @@ test('quotes direct dispatch commands safely', () => {
   );
 });
 
+test('builds agent-bound direct dispatch commands for per-agent aliases', () => {
+  const command = buildDirectDispatchCommand({
+    scriptPath: '/Users/kevin/Dev/claude-remote-manager/agents/ash/scripts/dispatch-ash.sh',
+    agentName: 'ash',
+    payloadFile: '/tmp/dispatch ash/task.txt',
+    agentBound: true,
+  });
+
+  assert.equal(
+    command,
+    "/Users/kevin/Dev/claude-remote-manager/agents/ash/scripts/dispatch-ash.sh --payload-file '/tmp/dispatch ash/task.txt'"
+  );
+});
+
 test('creates payload files with sanitized task text', async () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nock-dispatch-test-'));
   const result = await createDispatchPayloadFile({
@@ -73,6 +87,22 @@ test('creates payload files with sanitized task text', async () => {
   const content = fs.readFileSync(result.filePath, 'utf8');
   assert.match(content, /Fix this\nthen test it\./);
   assert.equal(content.includes('\u0007'), false);
+});
+
+test('creates payload files with agent-bound alias commands', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nock-dispatch-test-'));
+  const result = await createDispatchPayloadFile({
+    agentName: 'ash',
+    runtime: 'codex',
+    taskDescription: 'Check alias launch.',
+    requestId: 'request-2',
+    scriptPath: '/Users/kevin/Dev/claude-remote-manager/agents/ash/scripts/dispatch-ash.sh',
+    agentBound: true,
+  }, { tmpDir });
+
+  assertPathInside(tmpDir, result.filePath);
+  assert.match(result.command, /dispatch-ash\.sh --payload-file/);
+  assert.doesNotMatch(result.command, /--agent ash/);
 });
 
 test('does not use unsafe request ids as payload filenames', async () => {

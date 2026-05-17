@@ -44,7 +44,11 @@ const dispatchAgent = {
     dispatcher: 'codex',
     cwd: '/Users/kevin/Dev/claude-remote-manager',
     scriptPath: '/Users/kevin/Dev/claude-remote-manager/core/scripts/dispatch-codex.sh',
-    commandTemplate: '/Users/kevin/Dev/claude-remote-manager/core/scripts/dispatch-codex.sh --agent ash --payload-file <payload-file>',
+    aliasPath: '/Users/kevin/Dev/claude-remote-manager/agents/ash/scripts/dispatch-ash.sh',
+    aliasCommand: 'agents/ash/scripts/dispatch-ash.sh',
+    directScriptPath: '/Users/kevin/Dev/claude-remote-manager/agents/ash/scripts/dispatch-ash.sh',
+    directAgentBound: true,
+    commandTemplate: '/Users/kevin/Dev/claude-remote-manager/agents/ash/scripts/dispatch-ash.sh --payload-file <payload-file>',
   },
 };
 
@@ -88,7 +92,9 @@ test('resolves brokered dispatch agent launches without treating them as termina
   assert.equal(launch.command, '');
   assert.equal(launch.runtime, 'codex');
   assert.equal(launch.broker, 'mira-nockos');
-  assert.match(launch.commandTemplate, /dispatch-codex\.sh --agent ash --payload-file <payload-file>/);
+  assert.equal(launch.aliasCommand, 'agents/ash/scripts/dispatch-ash.sh');
+  assert.equal(launch.directAgentBound, true);
+  assert.match(launch.commandTemplate, /dispatch-ash\.sh --payload-file <payload-file>/);
 });
 
 test('falls back to launch runtime when dispatch agent runtime is blank', () => {
@@ -136,6 +142,10 @@ test('searches dispatch agents by name and runtime', () => {
       dispatcher: 'deepseek',
       runtime: 'deepseek',
       scriptPath: '/Users/kevin/Dev/claude-remote-manager/core/scripts/dispatch-deepseek.sh',
+      aliasPath: '',
+      aliasCommand: 'dispatch-deepseek.sh --agent smith',
+      directScriptPath: '/Users/kevin/Dev/claude-remote-manager/core/scripts/dispatch-deepseek.sh',
+      directAgentBound: false,
       commandTemplate: '/Users/kevin/Dev/claude-remote-manager/core/scripts/dispatch-deepseek.sh --agent smith --payload-file <payload-file>',
     },
   };

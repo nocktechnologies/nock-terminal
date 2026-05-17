@@ -48,6 +48,7 @@ export default function App() {
   const [ollamaStatus, setOllamaStatus] = useState(false);
   const [queuedPrompt, setQueuedPrompt] = useState(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandPalettePreset, setCommandPalettePreset] = useState(null);
   const [profilesByPath, setProfilesByPath] = useState({});
   const [dispatchRuns, setDispatchRuns] = useState(() => readStoredDispatchRuns());
   const [notice, setNotice] = useState(null);
@@ -129,6 +130,20 @@ export default function App() {
       message,
     });
   }, []);
+
+  const openCommandPalette = useCallback((preset = null) => {
+    const safePreset = preset && typeof preset === 'object' && !preset.nativeEvent && !preset.currentTarget ? preset : null;
+    setCommandPalettePreset(safePreset ? { ...safePreset, key: Date.now() } : null);
+    setCommandPaletteOpen(true);
+  }, []);
+
+  const openCommandPaletteForSession = useCallback((session) => {
+    openCommandPalette({
+      sessionId: session?.id,
+      query: session?.agent?.name || session?.name || '',
+      focusTask: session?.launch?.mode === 'dispatch',
+    });
+  }, [openCommandPalette]);
 
   // Poll Ollama status every 30s
   useEffect(() => {
@@ -252,6 +267,14 @@ export default function App() {
     openTerminalTab(session, { launchFresh: true });
   }, [openTerminalTab]);
 
+  const openSession = useCallback((session, options = {}) => {
+    if (session?.launch?.mode === 'dispatch' && options.openDispatchFolder !== true) {
+      openCommandPaletteForSession(session);
+      return;
+    }
+    openTerminalTab(session, options);
+  }, [openCommandPaletteForSession, openTerminalTab]);
+
   const launchSessionWithAgent = useCallback(async (session, agentId, options = {}) => {
     if (!session) return;
     const profile = await getProfileForPath(session.path);
@@ -285,7 +308,8 @@ export default function App() {
             taskDescription: initialInput,
             targetRepo,
             projectName,
-            scriptPath: launch.scriptPath,
+            scriptPath: launch.directScriptPath || launch.scriptPath,
+            agentBound: launch.directAgentBound === true,
           });
           const tabId = createTabId();
           const newTab = {
@@ -690,7 +714,11 @@ export default function App() {
       // Ctrl+K / Cmd+K: Command launcher
       if (isCtrl && e.key.toLowerCase() === 'k' && !e.shiftKey) {
         e.preventDefault();
-        setCommandPaletteOpen(prev => !prev);
+        setCommandPaletteOpen(prev => {
+          if (prev) return false;
+          setCommandPalettePreset(null);
+          return true;
+        });
       }
       // Ctrl+`: Toggle terminal focus
       if (isCtrl && e.key === '`') {
@@ -740,7 +768,7 @@ export default function App() {
           onToggle={() => setSidebarCollapsed(prev => !prev)}
           sessions={sessions}
           activePorts={activePorts}
-          onSessionClick={openTerminalTab}
+          onSessionClick={openSession}
           onPortClick={(port) => window.nockTerminal.shell.openExternal(port.url)}
           onRefresh={refreshSessions}
           activeView={view}
@@ -749,7 +777,7 @@ export default function App() {
           onFileClick={openFileInEditor}
           onCtrlPFocus={(fn) => { ctrlPFocusRef.current = fn; }}
           onExecutePrompt={executePrompt}
-          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          onOpenCommandPalette={openCommandPalette}
         />
 
         {/* Main content — all views always mounted, visibility controlled by CSS */}
@@ -758,7 +786,7 @@ export default function App() {
           <div className={`absolute inset-0 ${view === 'dashboard' ? 'flex flex-col z-10' : 'invisible pointer-events-none z-0'}`}>
             <Dashboard
               sessions={sessions}
-              onSessionClick={openTerminalTab}
+              onSessionClick={openSession}
               onLaunchAgentFresh={launchAgentFresh}
               onNewTerminal={openNewTab}
               onRefresh={refreshSessions}
@@ -770,7 +798,7 @@ export default function App() {
               lastDataTimestamps={lastDataTimestamps}
               profilesByPath={profilesByPath}
               dispatchRuns={dispatchRuns}
-              onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+              onOpenCommandPalette={openCommandPalette}
               onLaunchSessionWithAgent={launchSessionWithAgent}
             />
           </div>
@@ -796,7 +824,7 @@ export default function App() {
                 onToggleSidebar={() => setSidebarCollapsed(prev => !prev)}
                 onToggleChat={() => setChatOpen(prev => !prev)}
                 onDashboard={() => setView('dashboard')}
-                onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+                onOpenCommandPalette={openCommandPalette}
                 sidebarOpen={!sidebarCollapsed}
                 chatOpen={chatOpen}
                 hasSplit={!!activeTab?.splitContent}
@@ -879,8 +907,9 @@ export default function App() {
         sessions={sessions}
         profilesByPath={profilesByPath}
         activeProjectPath={activeProjectPath}
+        preset={commandPalettePreset}
         onClose={() => setCommandPaletteOpen(false)}
-        onOpenSession={openTerminalTab}
+        onOpenSession={openSession}
         onLaunchSessionWithAgent={launchSessionWithAgent}
         onNewTerminal={openNewTab}
         onOpenSettings={() => setView('settings')}

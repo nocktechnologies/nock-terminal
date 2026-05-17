@@ -441,11 +441,16 @@ class SessionDiscovery {
     const scriptName = agentRuntime === 'deepseek' ? 'dispatch-deepseek.sh' : 'dispatch-codex.sh';
     const dispatchRoot = await this._findDispatchRoot(agentPath, scriptName);
     const scriptPath = dispatchRoot ? path.join(dispatchRoot, 'core', 'scripts', scriptName) : '';
+    const aliasPath = scriptPath ? await this._findDispatchAliasPath(agentPath, agentName) : '';
+    const directScriptPath = aliasPath || scriptPath;
     const allowlist = scriptPath ? await this._readDispatchAllowlist(scriptPath) : [];
     const allowed = allowlist.includes(agentName);
     const disabledReason = !scriptPath
       ? `${scriptName} was not found for this agent runtime`
       : (allowed ? '' : `${agentName} is not allowlisted in ${scriptName}`);
+    const aliasCommand = aliasPath
+      ? path.relative(dispatchRoot || path.dirname(aliasPath), aliasPath)
+      : `${scriptName} --agent ${agentName}`;
 
     return {
       mode: 'dispatch',
@@ -457,11 +462,25 @@ class SessionDiscovery {
       dispatcher: agentRuntime,
       runtime: agentRuntime,
       scriptPath,
-      commandTemplate: scriptPath
-        ? `${this._shellToken(scriptPath)} --agent ${this._shellToken(agentName)} --payload-file <payload-file>`
+      aliasPath,
+      aliasCommand,
+      directScriptPath,
+      directAgentBound: Boolean(aliasPath),
+      commandTemplate: directScriptPath
+        ? `${this._shellToken(directScriptPath)}${aliasPath ? '' : ` --agent ${this._shellToken(agentName)}`} --payload-file <payload-file>`
         : '',
       directMode: scriptPath ? 'available' : 'missing-script',
     };
+  }
+
+  async _findDispatchAliasPath(agentPath, agentName) {
+    const aliasPath = path.join(agentPath, 'scripts', `dispatch-${agentName}.sh`);
+    try {
+      await fsp.access(aliasPath);
+      return aliasPath;
+    } catch {
+      return '';
+    }
   }
 
   async _findDispatchRoot(agentPath, scriptName) {

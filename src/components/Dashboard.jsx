@@ -83,7 +83,11 @@ export default function Dashboard({
         disabled: isDispatchAgent ? !session.launch?.canLaunch : (!session.agent?.enabled || !session.launch?.command),
         onClick: () => {
           if (isDispatchAgent) {
-            onOpenCommandPalette?.();
+            onOpenCommandPalette?.({
+              sessionId: session.id,
+              query: session.agent?.name || session.name,
+              focusTask: true,
+            });
           } else {
             onLaunchAgentFresh?.(session);
           }
@@ -334,7 +338,12 @@ function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, di
     .slice(0, 4);
   const dispatchAgents = sessions
     .filter((session) => session.kind === 'agent' && session.launch?.mode === 'dispatch')
-    .slice(0, 5);
+    .sort((a, b) => {
+      const launchableA = a.launch?.canLaunch === true ? 1 : 0;
+      const launchableB = b.launch?.canLaunch === true ? 1 : 0;
+      if (launchableA !== launchableB) return launchableB - launchableA;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
   const recentDispatchRuns = Array.isArray(dispatchRuns) ? dispatchRuns.slice(0, 4) : [];
 
   if (sessions.length === 0 && tabs.length === 0) return null;
@@ -374,7 +383,7 @@ function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, di
         <div className="flex flex-wrap items-center gap-2 border-t border-nock-border px-4 py-3">
           <span className="font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">// Dispatch</span>
           {dispatchAgents.map((agent) => (
-            <span key={agent.id} className="inline-flex min-w-0 items-center gap-1.5 rounded border border-nock-accent-purple/30 bg-nock-accent-purple/5 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-nock-text-dim">
+            <span key={agent.id} title={agent.launch?.aliasCommand || agent.launch?.commandTemplate || undefined} className="inline-flex min-w-0 items-center gap-1.5 rounded border border-nock-accent-purple/30 bg-nock-accent-purple/5 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-nock-text-dim">
               <span className={`h-1.5 w-1.5 rounded-full ${agent.launch?.canLaunch ? 'bg-nock-accent-cyan' : 'bg-nock-text-muted'}`} />
               <span className="max-w-[120px] truncate text-nock-text">{agent.name}</span>
               <span>{agent.agent?.runtime || 'dispatch'}</span>

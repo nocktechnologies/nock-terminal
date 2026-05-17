@@ -89,6 +89,10 @@ export function resolveSessionLaunch(session, profile = {}, agentId) {
         broker: trimString(session?.launch?.broker) || 'mira-nockos',
         dispatcher: trimString(session?.launch?.dispatcher) || runtime,
         scriptPath: trimString(session?.launch?.scriptPath),
+        aliasPath: trimString(session?.launch?.aliasPath),
+        aliasCommand: trimString(session?.launch?.aliasCommand),
+        directScriptPath: trimString(session?.launch?.directScriptPath),
+        directAgentBound: session?.launch?.directAgentBound === true,
         commandTemplate: trimString(session?.launch?.commandTemplate),
         disabledReason: session?.launch?.canLaunch === true
           ? ''
