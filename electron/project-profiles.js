@@ -110,7 +110,7 @@ class ProjectProfiles {
       for (const file of files) {
         try {
           const raw = fs.readFileSync(path.join(this.dir, file), 'utf8');
-          profiles.push(JSON.parse(raw));
+          profiles.push(sanitizeProfile(JSON.parse(raw)));
         } catch (parseErr) {
           console.error('[ProjectProfiles] Skipping corrupt file:', file, parseErr.message);
         }

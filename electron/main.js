@@ -36,6 +36,7 @@ function getSettingsSnapshot() {
 function serializeSettingsForRenderer() {
   const all = getSettingsSnapshot();
   if (all.telegramBotToken) all.telegramBotToken = '••••••••';
+  if (all.nockccApiKey) all.nockccApiKey = '••••••••';
   return all;
 }
 
