@@ -21,6 +21,16 @@ const SECTIONS = [
   { id: 'about',         label: 'About',          icon: Info },
 ];
 
+function isSensitiveSettingKey(key) {
+  return /(?:token|secret|password|credential|private[_-]?key|api[_-]?key|apikey)/i.test(String(key || ''));
+}
+
+function sanitizeSettingsForClientExport(settings = {}) {
+  return Object.fromEntries(
+    Object.entries(settings).filter(([key]) => !isSensitiveSettingKey(key))
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Reusable sub-components
 // ---------------------------------------------------------------------------
@@ -210,9 +220,9 @@ export default function Settings() {
   // Data: export / import / reset
   // -----------------------------------------------------------------------
   const exportSettings = useCallback(async () => {
-    const exportable = window.nockTerminal.settings.getExport
+    const exportable = typeof window.nockTerminal.settings.getExport === 'function'
       ? await window.nockTerminal.settings.getExport()
-      : settings;
+      : sanitizeSettingsForClientExport(settings);
     const blob = new Blob([JSON.stringify(exportable, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

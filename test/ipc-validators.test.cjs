@@ -159,3 +159,28 @@ test('files operations reject malformed payloads with clear validation errors', 
   assert.equal(result.ok, true);
   assert.deepEqual(result.value, { filePath: '/tmp/a.txt', content: 'ok' });
 });
+
+test('files operations enforce allowed roots and write size limits before service calls', () => {
+  const sandbox = makeSandbox();
+  const allowedRoot = path.join(sandbox, 'project');
+  const outsideRoot = path.join(sandbox, 'outside');
+  fs.mkdirSync(allowedRoot, { recursive: true });
+  fs.mkdirSync(outsideRoot, { recursive: true });
+
+  const isAllowedPath = (candidate) => candidate.startsWith(allowedRoot);
+  assert.equal(validateFilesPayload('read', path.join(outsideRoot, 'a.txt'), { isAllowedPath }).ok, false);
+  assert.equal(validateFilesPayload('gitOp', { dirPath: outsideRoot, operation: 'fetch' }, { isAllowedPath }).ok, false);
+
+  const oversized = 'x'.repeat((2 * 1024 * 1024) + 1);
+  assert.equal(
+    validateFilesPayload('write', { filePath: path.join(allowedRoot, 'large.txt'), content: oversized }, { isAllowedPath }).ok,
+    false
+  );
+
+  const result = validateFilesPayload(
+    'write',
+    { filePath: path.join(allowedRoot, 'small.txt'), content: 'ok' },
+    { isAllowedPath }
+  );
+  assert.equal(result.ok, true);
+});

@@ -5,6 +5,7 @@ const { normalizeSettingValue } = require('./settings-utils');
 
 const VALIDATION_CODE = 'IPC_VALIDATION_ERROR';
 const MAX_PATH_LENGTH = 2000;
+const MAX_FILE_WRITE_BYTES = 2 * 1024 * 1024;
 
 function ok(value) {
   return { ok: true, value };
@@ -83,6 +84,13 @@ function pickTrustedValue(requested, trustedValues, fallback) {
     return requested;
   }
   return fallback;
+}
+
+function validateAllowedPath(label, filePath, context = {}) {
+  if (typeof context.isAllowedPath === 'function' && !context.isAllowedPath(filePath)) {
+    return invalid(`${label} is outside allowed project roots`);
+  }
+  return ok(filePath);
 }
 
 function validateTerminalCreatePayload(payload, context = {}) {
@@ -307,25 +315,30 @@ function validateDispatchCreatePayload(payload) {
   });
 }
 
-function validateFilesPayload(operation, payload) {
+function validateFilesPayload(operation, payload, context = {}) {
   switch (operation) {
     case 'tree':
     case 'read':
     case 'stat': {
       const filePath = normalizePathString(payload);
       if (!filePath) return invalid(`files:${operation} path must be a non-empty string`);
-      return ok(filePath);
+      return validateAllowedPath(`files:${operation} path`, filePath, context);
     }
     case 'gitStatus': {
       const dirPath = normalizePathString(payload);
       if (!dirPath) return invalid('files:gitStatus dirPath must be a non-empty string');
-      return ok(dirPath);
+      return validateAllowedPath('files:gitStatus dirPath', dirPath, context);
     }
     case 'write': {
       if (!isPlainObject(payload)) return invalid('files:write payload must be an object');
       const filePath = normalizePathString(payload.filePath);
       if (!filePath) return invalid('files:write filePath must be a non-empty string');
       if (typeof payload.content !== 'string') return invalid('files:write content must be a string');
+      if (Buffer.byteLength(payload.content, 'utf8') > MAX_FILE_WRITE_BYTES) {
+        return invalid('files:write content exceeds the 2 MB IPC limit');
+      }
+      const allowedPath = validateAllowedPath('files:write filePath', filePath, context);
+      if (!allowedPath.ok) return allowedPath;
       return ok({ filePath, content: payload.content });
     }
     case 'gitOp': {
@@ -334,12 +347,14 @@ function validateFilesPayload(operation, payload) {
       const op = normalizeString(payload.operation, { maxLength: 20, allowEmpty: false });
       if (!dirPath) return invalid('files:gitOp dirPath must be a non-empty string');
       if (!['pull', 'push', 'fetch'].includes(op)) return invalid('files:gitOp operation is not allowed');
+      const allowedPath = validateAllowedPath('files:gitOp dirPath', dirPath, context);
+      if (!allowedPath.ok) return allowedPath;
       return ok({ dirPath, operation: op });
     }
     case 'watch': {
       const dirPath = normalizePathString(payload);
       if (!dirPath) return invalid('files:watch dirPath must be a non-empty string');
-      return ok(dirPath);
+      return validateAllowedPath('files:watch dirPath', dirPath, context);
     }
     default:
       return invalid(`files:${operation} is not a known operation`);
