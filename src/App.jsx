@@ -311,6 +311,9 @@ export default function App() {
             scriptPath: launch.directScriptPath || launch.scriptPath,
             agentBound: launch.directAgentBound === true,
           });
+          if (payload?.success === false) {
+            throw new Error(payload.error || 'Dispatch payload validation failed');
+          }
           const tabId = createTabId();
           const newTab = {
             id: tabId,

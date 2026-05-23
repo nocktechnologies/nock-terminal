@@ -13,7 +13,22 @@ const TelegramNotifier = require('./telegram-notifier');
 const ProjectProfiles = require('./project-profiles');
 const SessionHistory = require('./session-history');
 const PromptStore = require('./prompt-store');
-const { DEFAULT_SETTINGS, normalizeSettingValue, sanitizeStoredSettings } = require('./settings-utils');
+const {
+  DEFAULT_SETTINGS,
+  normalizeSettingValue,
+  sanitizeSettingsForExport,
+  sanitizeSettingsForRenderer,
+  sanitizeStoredSettings,
+} = require('./settings-utils');
+const {
+  errorPayload,
+  validateDispatchCreatePayload,
+  validateFilesPayload,
+  validateProfileSavePayload,
+  validatePromptSavePayload,
+  validateSettingsSetPayload,
+  validateTerminalCreatePayload,
+} = require('./ipc-validators');
 const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
@@ -26,6 +41,14 @@ const store = new Store({
 
 function getSettingsSnapshot() {
   return sanitizeStoredSettings(store.store);
+}
+
+function getAllowedProjectRoots() {
+  const settings = getSettingsSnapshot();
+  return [
+    ...(settings.devRoots || []),
+    ...(fileService?.grantedRoots || []),
+  ];
 }
 
 function repairStoredSettings() {
@@ -122,7 +145,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false, // Required for node-pty via preload
+      // Current Electron 28 preload is CommonJS-based. Keep sandbox disabled
+      // until the preload bridge is migrated and smoke-tested under sandbox:true.
+      // node-pty remains isolated to the main process.
+      sandbox: false,
     },
     icon: getPlatformIconPath(),
     show: false,
@@ -274,7 +300,17 @@ function registerIPC() {
   ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false);
 
   // Terminal management
-  ipcMain.handle('terminal:create', async (_, { id, cwd, shell: shellPath, shellArgs, envVars }) => {
+  ipcMain.handle('terminal:create', async (_, payload) => {
+    const projectPath = typeof payload?.cwd === 'string' ? payload.cwd : '';
+    const profile = projectPath ? projectProfiles.get(projectPath) : {};
+    const validated = validateTerminalCreatePayload(payload, {
+      allowedRoots: getAllowedProjectRoots(),
+      settings: getSettingsSnapshot(),
+      profile,
+    });
+    if (!validated.ok) return errorPayload(validated);
+
+    const { id, cwd, shell: shellPath, shellArgs, envVars } = validated.value;
     return terminalManager.create(id, cwd, {
       shell: shellPath,
       shellArgs,
@@ -306,7 +342,13 @@ function registerIPC() {
     return agentDispatchService.sendBrokered(payload);
   });
   ipcMain.handle('dispatch:createPayload', async (_, payload) => {
-    return agentDispatchService.createPayload(payload);
+    const validated = validateDispatchCreatePayload(payload);
+    if (!validated.ok) return errorPayload(validated);
+    try {
+      return await agentDispatchService.createPayload(validated.value);
+    } catch (err) {
+      return { success: false, error: err.message || 'Failed to create dispatch payload' };
+    }
   });
 
   // Ollama chat
@@ -506,23 +548,22 @@ function registerIPC() {
     return getSettingsSnapshot()[key];
   });
   ipcMain.handle('settings:getAll', () => {
-    const all = getSettingsSnapshot();
-    if (all.telegramBotToken) all.telegramBotToken = '••••••••';
-    return all;
+    return sanitizeSettingsForRenderer(store.store);
+  });
+  ipcMain.handle('settings:export', () => {
+    return sanitizeSettingsForExport(store.store);
   });
   ipcMain.handle('settings:getSecure', (_, key) => {
     const allowed = ['telegramBotToken', 'nockccApiKey'];
     if (!allowed.includes(key)) return null;
     return getSettingsSnapshot()[key];
   });
-  ipcMain.on('settings:set', (_, payload) => {
-    if (!payload || typeof payload.key !== 'string') return;
+  const applySettingPayload = (payload) => {
+    const validated = validateSettingsSetPayload(payload);
+    if (!validated.ok) return errorPayload(validated);
 
-    const { key } = payload;
-    const normalized = normalizeSettingValue(key, payload.value);
-    if (!normalized.ok) return;
-
-    store.set(key, normalized.value);
+    const { key, value } = validated.value;
+    store.set(key, value);
     const currentValue = getSettingsSnapshot()[key];
     // Update services when settings change
     if (key === 'ollamaUrl') {
@@ -550,30 +591,50 @@ function registerIPC() {
     if (key === 'launchAtStartup') {
       app.setLoginItemSettings({ openAtLogin: !!currentValue });
     }
+    return { success: true, key, value: currentValue };
+  };
+  ipcMain.handle('settings:set', (_, payload) => {
+    return applySettingPayload(payload);
+  });
+  ipcMain.on('settings:set', (_, payload) => {
+    applySettingPayload(payload);
   });
 
   // File operations
-  ipcMain.handle('files:tree', (_, dirPath) => {
-    return fileService.tree(dirPath);
+  ipcMain.handle('files:tree', (_, payload) => {
+    const validated = validateFilesPayload('tree', payload);
+    if (!validated.ok) return { error: validated.error.message, code: validated.error.code };
+    return fileService.tree(validated.value);
   });
-  ipcMain.handle('files:read', (_, filePath) => {
-    return fileService.read(filePath);
+  ipcMain.handle('files:read', (_, payload) => {
+    const validated = validateFilesPayload('read', payload);
+    if (!validated.ok) return { error: validated.error.message, code: validated.error.code };
+    return fileService.read(validated.value);
   });
-  ipcMain.handle('files:write', (_, { filePath, content }) => {
-    return fileService.write(filePath, content);
+  ipcMain.handle('files:write', (_, payload) => {
+    const validated = validateFilesPayload('write', payload);
+    if (!validated.ok) return errorPayload(validated);
+    return fileService.write(validated.value.filePath, validated.value.content);
   });
-  ipcMain.handle('files:stat', (_, filePath) => {
-    return fileService.stat(filePath);
+  ipcMain.handle('files:stat', (_, payload) => {
+    const validated = validateFilesPayload('stat', payload);
+    if (!validated.ok) return { exists: false, size: 0, mtime: 0, error: validated.error.message, code: validated.error.code };
+    return fileService.stat(validated.value);
   });
-  ipcMain.handle('files:gitStatus', (_, dirPath) => {
-    return fileService.gitStatus(dirPath);
+  ipcMain.handle('files:gitStatus', (_, payload) => {
+    const validated = validateFilesPayload('gitStatus', payload);
+    if (!validated.ok) return { error: validated.error.message, code: validated.error.code };
+    return fileService.gitStatus(validated.value);
   });
-  ipcMain.handle('files:gitOp', (_, { dirPath, operation }) => {
-    return fileService.gitOp(dirPath, operation);
+  ipcMain.handle('files:gitOp', (_, payload) => {
+    const validated = validateFilesPayload('gitOp', payload);
+    if (!validated.ok) return errorPayload(validated);
+    return fileService.gitOp(validated.value.dirPath, validated.value.operation);
   });
-  ipcMain.on('files:watch', (_, dirPath) => {
-    if (!fileService.isAllowedPath(dirPath)) return;
-    fileWatcher.watch(dirPath);
+  ipcMain.on('files:watch', (_, payload) => {
+    const validated = validateFilesPayload('watch', payload);
+    if (!validated.ok || !fileService.isAllowedPath(validated.value)) return;
+    fileWatcher.watch(validated.value);
   });
   ipcMain.on('files:stopWatch', () => {
     fileWatcher.stop();
@@ -627,8 +688,15 @@ function registerIPC() {
   ipcMain.handle('profiles:get', (_, projectPath) => {
     return projectProfiles.get(projectPath);
   });
-  ipcMain.handle('profiles:save', (_, { projectPath, profile }) => {
-    return projectProfiles.save(projectPath, profile);
+  ipcMain.handle('profiles:save', (_, payload) => {
+    const validated = validateProfileSavePayload(payload, {
+      isAllowedPath: candidate => fileService.isAllowedPath(candidate),
+    });
+    if (!validated.ok) {
+      const error = errorPayload(validated);
+      return { ...error, message: error.error };
+    }
+    return projectProfiles.save(validated.value.projectPath, validated.value.profile);
   });
   ipcMain.handle('profiles:delete', (_, projectPath) => {
     return projectProfiles.delete(projectPath);
@@ -655,8 +723,13 @@ function registerIPC() {
   ipcMain.handle('prompts:get', (_, id) => {
     return promptStore.get(id);
   });
-  ipcMain.handle('prompts:save', (_, { id, data }) => {
-    return promptStore.save(id, data);
+  ipcMain.handle('prompts:save', (_, payload) => {
+    const validated = validatePromptSavePayload(payload);
+    if (!validated.ok) {
+      const error = errorPayload(validated);
+      return { ...error, message: error.error };
+    }
+    return promptStore.save(validated.value.id, validated.value.data);
   });
   ipcMain.handle('prompts:delete', (_, id) => {
     return promptStore.delete(id);

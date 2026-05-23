@@ -79,10 +79,11 @@ function normalizeBoolean(value) {
   return typeof value === 'boolean' ? ok(value) : invalid();
 }
 
-function normalizeString(value, { maxLength = 500, trim = true } = {}) {
+function normalizeString(value, { maxLength = 500, trim = true, allowControl = false } = {}) {
   if (typeof value !== 'string') return invalid();
   const normalized = trim ? value.trim() : value;
   if (normalized.length > maxLength) return invalid();
+  if (!allowControl && /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(normalized)) return invalid();
   return ok(normalized);
 }
 
@@ -134,6 +135,31 @@ function normalizeTime(value) {
   const [hours, minutes] = normalized.value.split(':').map(Number);
   if (hours > 23 || minutes > 59) return invalid();
   return ok(normalized.value);
+}
+
+function normalizeShellPath(value) {
+  const normalized = normalizeString(value, { maxLength: 1000 });
+  if (!normalized.ok) return normalized;
+  if (!normalized.value) return ok('');
+
+  const base = normalized.value.split(/[\\/]/).pop().toLowerCase();
+  const allowedNames = process.platform === 'win32'
+    ? new Set(['pwsh.exe', 'powershell.exe', 'cmd.exe', 'wsl.exe', 'pwsh', 'powershell', 'cmd', 'wsl'])
+    : new Set(['zsh', 'bash', 'fish', 'dash', 'sh']);
+  const hasPathSeparator = /[\\/]/.test(normalized.value);
+
+  if (!allowedNames.has(base)) return invalid();
+  if (process.platform !== 'win32' && !normalized.value.startsWith('/')) return invalid();
+  if (process.platform === 'win32' && !hasPathSeparator && !allowedNames.has(normalized.value.toLowerCase())) return invalid();
+
+  return ok(normalized.value);
+}
+
+function normalizeShellArgs(value) {
+  const normalized = normalizeString(value, { maxLength: 1000, trim: false });
+  if (!normalized.ok) return normalized;
+  if (/[\r\n\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(normalized.value)) return invalid();
+  return normalized;
 }
 
 function normalizeWindowBounds(value) {
@@ -199,8 +225,6 @@ const STRING_KEYS = {
   claudeCodePath: { maxLength: 1000 },
   maraBriefPath: { maxLength: 1000 },
   terminalFontFamily: { maxLength: 200, trim: false },
-  defaultShell: { maxLength: 1000 },
-  shellArgs: { maxLength: 1000, trim: false },
   editorFontFamily: { maxLength: 200, trim: false },
   telegramBotToken: { maxLength: 500 },
   telegramChatId: { maxLength: 200 },
@@ -243,6 +267,10 @@ function normalizeSettingValue(key, value) {
       return normalizeInteger(value, { min: 10, max: 24 });
     case 'scrollbackSize':
       return normalizeInteger(value, { min: 1000, max: 50000 });
+    case 'defaultShell':
+      return normalizeShellPath(value);
+    case 'shellArgs':
+      return normalizeShellArgs(value);
     case 'cursorStyle':
       return normalizeStringEnum(value, ['block', 'underline', 'bar']);
     case 'telegramQuietStart':
@@ -268,8 +296,37 @@ function sanitizeStoredSettings(settings = {}) {
   return sanitized;
 }
 
+function isSensitiveSettingKey(key) {
+  return /(?:token|secret|password|credential|private(?:_|-)?key|api(?:_|-)?key|apikey)/i.test(String(key || ''));
+}
+
+function sanitizeSettingsForExport(settings = {}) {
+  const sanitized = sanitizeStoredSettings(settings);
+  const exported = {};
+
+  for (const [key, value] of Object.entries(sanitized)) {
+    if (isSensitiveSettingKey(key)) continue;
+    exported[key] = value;
+  }
+
+  return exported;
+}
+
+function sanitizeSettingsForRenderer(settings = {}) {
+  const sanitized = sanitizeStoredSettings(settings);
+  for (const key of Object.keys(sanitized)) {
+    if (isSensitiveSettingKey(key)) {
+      sanitized[key] = '';
+    }
+  }
+  return sanitized;
+}
+
 module.exports = {
   DEFAULT_SETTINGS,
+  isSensitiveSettingKey,
   normalizeSettingValue,
+  sanitizeSettingsForExport,
+  sanitizeSettingsForRenderer,
   sanitizeStoredSettings,
 };

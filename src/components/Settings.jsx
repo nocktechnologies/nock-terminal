@@ -209,8 +209,11 @@ export default function Settings() {
   // -----------------------------------------------------------------------
   // Data: export / import / reset
   // -----------------------------------------------------------------------
-  const exportSettings = useCallback(() => {
-    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+  const exportSettings = useCallback(async () => {
+    const exportable = window.nockTerminal.settings.getExport
+      ? await window.nockTerminal.settings.getExport()
+      : settings;
+    const blob = new Blob([JSON.stringify(exportable, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
