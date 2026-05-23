@@ -13,7 +13,12 @@ const TelegramNotifier = require('./telegram-notifier');
 const ProjectProfiles = require('./project-profiles');
 const SessionHistory = require('./session-history');
 const PromptStore = require('./prompt-store');
-const { DEFAULT_SETTINGS, normalizeSettingValue, sanitizeStoredSettings } = require('./settings-utils');
+const {
+  DEFAULT_SETTINGS,
+  createSettingsResetSnapshot,
+  normalizeSettingValue,
+  sanitizeStoredSettings,
+} = require('./settings-utils');
 const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
@@ -28,6 +33,12 @@ function getSettingsSnapshot() {
   return sanitizeStoredSettings(store.store);
 }
 
+function serializeSettingsForRenderer() {
+  const all = getSettingsSnapshot();
+  if (all.telegramBotToken) all.telegramBotToken = '••••••••';
+  return all;
+}
+
 function repairStoredSettings() {
   const sanitized = getSettingsSnapshot();
 
@@ -37,6 +48,43 @@ function repairStoredSettings() {
       store.set(key, value);
     }
   }
+}
+
+function applySettingsRuntimeEffects(key, currentValue) {
+  if (key === 'ollamaUrl') {
+    ollamaClient?.setUrl(currentValue);
+  }
+  if (key === 'claudeCodePath') {
+    claudeCodeClient?.setBinaryPath(currentValue);
+  }
+  if (key === 'devRoots' || key === 'projectSkipList') {
+    sessionDiscovery?.setConfig({
+      devRoots: getSettingsSnapshot().devRoots,
+      skipList: getSettingsSnapshot().projectSkipList,
+    });
+    fileWatcher?.revalidate();
+  }
+  if (key === 'alwaysOnTop') {
+    if (mainWindow) mainWindow.setAlwaysOnTop(!!currentValue);
+  }
+  if (key === 'windowOpacity') {
+    if (mainWindow) {
+      const clamped = Math.max(0.7, Math.min(1.0, currentValue / 100));
+      mainWindow.setOpacity(clamped);
+    }
+  }
+  if (key === 'launchAtStartup') {
+    app.setLoginItemSettings({ openAtLogin: !!currentValue });
+  }
+}
+
+function applyResetRuntimeEffects(settings) {
+  applySettingsRuntimeEffects('ollamaUrl', settings.ollamaUrl);
+  applySettingsRuntimeEffects('claudeCodePath', settings.claudeCodePath);
+  applySettingsRuntimeEffects('devRoots', settings.devRoots);
+  applySettingsRuntimeEffects('alwaysOnTop', settings.alwaysOnTop);
+  applySettingsRuntimeEffects('windowOpacity', settings.windowOpacity);
+  applySettingsRuntimeEffects('launchAtStartup', settings.launchAtStartup);
 }
 
 let mainWindow = null;
@@ -506,14 +554,25 @@ function registerIPC() {
     return getSettingsSnapshot()[key];
   });
   ipcMain.handle('settings:getAll', () => {
-    const all = getSettingsSnapshot();
-    if (all.telegramBotToken) all.telegramBotToken = '••••••••';
-    return all;
+    return serializeSettingsForRenderer();
   });
   ipcMain.handle('settings:getSecure', (_, key) => {
     const allowed = ['telegramBotToken', 'nockccApiKey'];
     if (!allowed.includes(key)) return null;
     return getSettingsSnapshot()[key];
+  });
+  ipcMain.handle('settings:reset', (_, options = {}) => {
+    const resetSnapshot = createSettingsResetSnapshot(store.store, {
+      preserveWindowBounds: options?.preserveWindowBounds !== false,
+    });
+
+    store.clear();
+    for (const [key, value] of Object.entries(resetSnapshot)) {
+      store.set(key, value);
+    }
+
+    applyResetRuntimeEffects(resetSnapshot);
+    return serializeSettingsForRenderer();
   });
   ipcMain.on('settings:set', (_, payload) => {
     if (!payload || typeof payload.key !== 'string') return;
@@ -524,32 +583,7 @@ function registerIPC() {
 
     store.set(key, normalized.value);
     const currentValue = getSettingsSnapshot()[key];
-    // Update services when settings change
-    if (key === 'ollamaUrl') {
-      ollamaClient.setUrl(currentValue);
-    }
-    if (key === 'claudeCodePath') {
-      claudeCodeClient.setBinaryPath(currentValue);
-    }
-    if (key === 'devRoots' || key === 'projectSkipList') {
-      sessionDiscovery.setConfig({
-        devRoots: getSettingsSnapshot().devRoots,
-        skipList: getSettingsSnapshot().projectSkipList,
-      });
-      fileWatcher.revalidate();
-    }
-    if (key === 'alwaysOnTop') {
-      if (mainWindow) mainWindow.setAlwaysOnTop(!!currentValue);
-    }
-    if (key === 'windowOpacity') {
-      if (mainWindow) {
-        const clamped = Math.max(0.7, Math.min(1.0, currentValue / 100));
-        mainWindow.setOpacity(clamped);
-      }
-    }
-    if (key === 'launchAtStartup') {
-      app.setLoginItemSettings({ openAtLogin: !!currentValue });
-    }
+    applySettingsRuntimeEffects(key, currentValue);
   });
 
   // File operations

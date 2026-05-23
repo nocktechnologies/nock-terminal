@@ -3,8 +3,6 @@ const path = require('path');
 const crypto = require('crypto');
 
 const DEFAULT_PROFILE = {
-  preferredModel: '',
-  systemPrompt: '',
   defaultAgent: 'claude',
   defaultShell: '',
   shellArgs: '',
@@ -15,6 +13,18 @@ const DEFAULT_PROFILE = {
   customAgentCommand: '',
   notes: '',
 };
+
+const REMOVED_PROFILE_FIELDS = new Set(['preferredModel', 'systemPrompt']);
+
+function sanitizeProfile(profile = {}) {
+  const sanitized = {};
+  for (const [key, value] of Object.entries(profile || {})) {
+    if (!REMOVED_PROFILE_FIELDS.has(key)) {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
 
 class ProjectProfiles {
   constructor() {
@@ -53,7 +63,7 @@ class ProjectProfiles {
     try {
       const raw = fs.readFileSync(filePath, 'utf8');
       const parsed = JSON.parse(raw);
-      return { ...DEFAULT_PROFILE, ...parsed, projectPath };
+      return { ...DEFAULT_PROFILE, ...sanitizeProfile(parsed), projectPath };
     } catch (err) {
       if (err.code !== 'ENOENT') {
         console.error('[ProjectProfiles] Error reading profile:', err.message);
@@ -66,7 +76,7 @@ class ProjectProfiles {
     const filePath = this._filePath(projectPath);
     const data = {
       ...DEFAULT_PROFILE,
-      ...profile,
+      ...sanitizeProfile(profile),
       projectPath,
       updatedAt: new Date().toISOString(),
     };
