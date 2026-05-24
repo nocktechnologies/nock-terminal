@@ -5,6 +5,7 @@ const {
   DEFAULT_SETTINGS,
   createSettingsResetSnapshot,
   normalizeSettingValue,
+  sanitizeSettingsForExport,
   sanitizeStoredSettings,
 } = require('../electron/settings-utils');
 
@@ -13,6 +14,8 @@ test('normalizeSettingValue rejects invalid types for known settings', () => {
   assert.equal(normalizeSettingValue('alwaysOnTop', 'yes').ok, false);
   assert.equal(normalizeSettingValue('ollamaUrl', 'ftp://localhost:11434').ok, false);
   assert.equal(normalizeSettingValue('telegramQuietStart', '25:99').ok, false);
+  assert.equal(normalizeSettingValue('defaultShell', '/tmp/evil').ok, false);
+  assert.equal(normalizeSettingValue('shellArgs', '--login\n-c whoami').ok, false);
 });
 
 test('normalizeSettingValue rejects removed no-op settings', () => {
@@ -94,4 +97,24 @@ test('createSettingsResetSnapshot resets window bounds when requested', () => {
   );
 
   assert.deepEqual(reset.windowBounds, DEFAULT_SETTINGS.windowBounds);
+});
+
+test('sanitizeSettingsForExport excludes sensitive values and preserves known safe settings', () => {
+  const exported = sanitizeSettingsForExport({
+    theme: 'dark',
+    defaultModel: 'qwen3.5:9b',
+    telegramBotToken: '123:secret',
+    nockccApiKey: 'nock-secret',
+    futureAccessToken: 'future-secret',
+    nested: { apiToken: 'nested-secret' },
+    projectSkipList: ['ok'],
+  });
+
+  assert.equal(exported.defaultModel, 'qwen3.5:9b');
+  assert.equal(exported.theme, undefined);
+  assert.deepEqual(exported.projectSkipList, ['ok']);
+  assert.equal(exported.telegramBotToken, undefined);
+  assert.equal(exported.nockccApiKey, undefined);
+  assert.equal(exported.futureAccessToken, undefined);
+  assert.equal(exported.nested, undefined);
 });
