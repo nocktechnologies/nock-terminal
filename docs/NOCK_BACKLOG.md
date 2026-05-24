@@ -30,7 +30,8 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 | `7608` | Done | `10 Active Foundation` | PR #48 merged | Phase F slice 6: system/window IPC extraction. |
 | `7614` | Done | `10 Active Foundation` | PR #49 merged: `f11036a` | Phase F slice 7: NockCC activity IPC extraction. |
 | `7620` | Done | `10 Active Foundation` | PR #50 merged: `f059b2f` | Phase F final slice: session discovery, Ollama, and Telegram IPC extraction. |
-| `7621` | In progress | `30 Roadmap` | Branch `codex/phase-h-execution-plan` | Phase H Task 0: execution plan and release Nock rewrite. |
+| `7621` | Done | `30 Roadmap` | PR #51 merged: `891e8a8` | Phase H Task 0: execution plan and release Nock rewrite. |
+| `7627` | In progress | `30 Roadmap` | Branch `codex/phase-h-dispatch-completion-contract` | Phase H H3: dispatch completion tracking contract. |
 | `886` | Backlog | `30 Roadmap` | Still valid | Marketing/GTM positioning is useful, but should use this ledger and current release docs. |
 | `123` | Backlog | `30 Roadmap` | Rewritten for Phase H | Distribution readiness now tracks signed artifact smoke, credentials, update channel, crash/error reporting, support path, and beta feedback. |
 | `7451` | Done | None | Historical assessment | Keep as archived historical launch-readiness report. |
@@ -55,7 +56,7 @@ Those acceptance criteria were not implemented by PR #33. The stale-contract cle
    Phase F moved settings, file, dispatch, local-data, terminal, system/window, NockCC activity, session discovery, Ollama, and Telegram IPC out of `electron/main.js`. Further work in this area should be framed as adapter/product behavior, not generic main-process decomposition.
 
 2. **Execute Phase H from `docs/PHASE_H_EXECUTION_PLAN.md`.**
-   The first follow-up should be either signed artifact smoke evidence for Nock `123` or the dispatch completion tracking contract. Those can run in parallel after H0 merges.
+   The next follow-up should be either signed artifact smoke evidence for Nock `123` or dispatch completion tracking implementation after Nock `7627` lands. Those can run in parallel if release-machine access and product-contract work have separate owners.
 
 3. **Keep Nock `886` as product/GTM work.**
    It should be informed by current truth: Claude transcript discovery is real, Codex/Gemini launch profiles exist, Codex/DeepSeek dispatch exists, Linux unpacked packaged smoke exists, and full Codex/Gemini transcript discovery, attach/reconnect, signed installer smoke, update distribution, crash reporting, worktree lanes, and replay remain roadmap.

@@ -104,7 +104,7 @@ Phase H is successful when:
 
 **Acceptance criteria:**
 - A dispatch run has a stable request id that can correlate Nock Terminal local telemetry with NockCC/Mira responses.
-- The NockCC response source is chosen and documented: polling API, live messages, reply thread, or Mira callback.
+- The NockCC response source is chosen and documented: live AgentMessages keyed by `request_id`, initially consumed through bounded polling unless a push API is available.
 - UI state names and failure modes are documented before implementation.
 - Privacy and retention behavior for dispatch run history is documented.
 

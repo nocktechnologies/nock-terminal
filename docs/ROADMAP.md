@@ -49,6 +49,7 @@ Current execution posture:
 - Nock `7620` / Phase F final slice is done via PR #50: session discovery, Ollama chat/status, and Telegram notifications now register through focused main-process modules with handler-level tests.
 - Phase F's `electron/main.js` IPC extraction is complete. Remaining work in this area should be framed as product adapter work, not IPC cleanup: Codex/Gemini transcript discovery, resume/attach support, and dispatch completion-thread tracking.
 - Nock `7621` / Phase H Task 0 captures the Phase H execution plan and Nock #123 rewrite.
+- Nock `7627` / Phase H H3 covers the dispatch completion tracking contract before implementation.
 - Nock `123` has been rewritten around the real release gap: signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback.
 
 ### May 24 Phase H Execution Plan
