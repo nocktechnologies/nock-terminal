@@ -6,7 +6,7 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 
 ## Current Baseline
 
-- Repo baseline: `origin/main` at merge commit `f11036a` after PRs #31, #32, #37, #38, #39, #40, #42, #43, #44, #46, #47, #48, and #49.
+- Repo baseline: `origin/main` at merge commit `f059b2f` after PRs #31, #32, #37, #38, #39, #40, #42, #43, #44, #46, #47, #48, #49, and #50.
 - NockCC live update: message `#1443` sent to `mira-nockos` when Phase E/G PRs opened; later closeout messages should reference PRs #39 and #40.
 - Project board: Nocks `7530`, `7531`, `7532`, `7533`, `7551`, and `7552` are attached to the Terminal project.
 - Primary local checkout note: `/Users/kevin/Dev/nock-terminal` had unrelated dirty work and was behind `origin/main` during this pass, so implementation and audit work used clean worktrees.
@@ -29,9 +29,10 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 | `7604` | Done | `10 Active Foundation` | PR #47 merged | Phase F slice 5: terminal IPC extraction. |
 | `7608` | Done | `10 Active Foundation` | PR #48 merged | Phase F slice 6: system/window IPC extraction. |
 | `7614` | Done | `10 Active Foundation` | PR #49 merged: `f11036a` | Phase F slice 7: NockCC activity IPC extraction. |
-| `7620` | Done | `10 Active Foundation` | PR #50 | Phase F final slice: session discovery, Ollama, and Telegram IPC extraction. |
+| `7620` | Done | `10 Active Foundation` | PR #50 merged: `f059b2f` | Phase F final slice: session discovery, Ollama, and Telegram IPC extraction. |
+| `7621` | In progress | `30 Roadmap` | Branch `codex/phase-h-execution-plan` | Phase H Task 0: execution plan and release Nock rewrite. |
 | `886` | Backlog | `30 Roadmap` | Still valid | Marketing/GTM positioning is useful, but should use this ledger and current release docs. |
-| `123` | Backlog | `30 Roadmap` | Partially stale | App icons and signing config have moved forward; rewrite this around signed artifact smoke, actual certificates, update channel, crash/error reporting, and support path. |
+| `123` | Backlog | `30 Roadmap` | Rewritten for Phase H | Distribution readiness now tracks signed artifact smoke, credentials, update channel, crash/error reporting, support path, and beta feedback. |
 | `7451` | Done | None | Historical assessment | Keep as archived historical launch-readiness report. |
 
 Declined historical rows `7468`, `7482`, `7483`, `7484`, and `7485` are not active execution inputs.
@@ -50,11 +51,11 @@ Those acceptance criteria were not implemented by PR #33. The stale-contract cle
 
 ## Next Execution Order
 
-1. **Treat Phase F as closed after the final inline IPC extraction slice.**
-   Phase F has moved settings, file, dispatch, local-data, terminal, system/window, NockCC activity, session discovery, Ollama, and Telegram IPC out of `electron/main.js`. Further work in this area should be framed as adapter/product behavior, not generic main-process decomposition.
+1. **Treat Phase F as closed.**
+   Phase F moved settings, file, dispatch, local-data, terminal, system/window, NockCC activity, session discovery, Ollama, and Telegram IPC out of `electron/main.js`. Further work in this area should be framed as adapter/product behavior, not generic main-process decomposition.
 
-2. **Rewrite or replace Nock `123`.**
-   It still points at app icon/code-signing work as if none of it happened. The remaining work is signed installer smoke on macOS/Windows/Linux release artifacts, actual credential setup, update-channel decision, crash/error reporting, and support path.
+2. **Execute Phase H from `docs/PHASE_H_EXECUTION_PLAN.md`.**
+   The first follow-up should be either signed artifact smoke evidence for Nock `123` or the dispatch completion tracking contract. Those can run in parallel after H0 merges.
 
 3. **Keep Nock `886` as product/GTM work.**
    It should be informed by current truth: Claude transcript discovery is real, Codex/Gemini launch profiles exist, Codex/DeepSeek dispatch exists, Linux unpacked packaged smoke exists, and full Codex/Gemini transcript discovery, attach/reconnect, signed installer smoke, update distribution, crash reporting, worktree lanes, and replay remain roadmap.

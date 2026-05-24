@@ -4,6 +4,8 @@ Updated: 2026-05-24
 
 Nock Terminal has a release pipeline, but public distribution should stay gated until the checks below pass on a tagged release and the signed installers are smoked on each target OS.
 
+Phase H is the release-readiness execution wave. See `docs/PHASE_H_EXECUTION_PLAN.md` for task ordering. Nock #123 now tracks the real distribution work: signed artifact smoke, credential setup, update-channel decision, crash/error reporting, support path, and beta feedback.
+
 ## Local Release Gate
 
 Run this before cutting a release branch or tag:
@@ -85,6 +87,18 @@ Public beta still needs:
 - Crash/error reporting decision and support path.
 - Update-channel decision.
 - One clear public onboarding/demo path around agent observability, not generic chat.
+
+## Phase H Decision Log
+
+Record Phase H decisions here as they are made:
+
+| Area | Decision | Owner | Evidence |
+| --- | --- | --- | --- |
+| Update channel | Pending | TBD | Nock #123 |
+| Crash/error reporting | Pending | TBD | Nock #123 |
+| Support path | Pending | TBD | Nock #123 |
+| Beta feedback channel | Pending | TBD | Nock #123 |
+| Signed artifact smoke | Pending | TBD | Nock #123 |
 
 ## Rollback
 
