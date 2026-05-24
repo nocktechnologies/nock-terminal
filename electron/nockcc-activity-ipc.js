@@ -5,9 +5,15 @@ const DEFAULT_NOCKCC_ACTIVITY = Object.freeze({
 });
 
 function sanitizeList(value) {
-  return Array.isArray(value)
-    ? value.filter(item => typeof item === 'string' && item.length <= 200).slice(0, 100)
-    : [];
+  if (!Array.isArray(value)) return [];
+  const sanitized = [];
+  for (let index = 0; index < value.length && sanitized.length < 100; index += 1) {
+    const item = value[index];
+    if (typeof item === 'string' && item.length <= 200) {
+      sanitized.push(item);
+    }
+  }
+  return sanitized;
 }
 
 function sanitizeNockCCActivity(activity = {}) {

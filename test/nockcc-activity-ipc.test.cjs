@@ -84,6 +84,24 @@ test('sanitizeNockCCActivity normalizes renderer-controlled payloads', () => {
   });
 });
 
+test('sanitizeNockCCActivity stops reading session ids after 100 valid items', () => {
+  const sessionIds = Array.from({ length: 101 }, (_, index) => `agent:${index}`);
+  let readPastCap = false;
+  Object.defineProperty(sessionIds, '100', {
+    get() {
+      readPastCap = true;
+      return 'agent:100';
+    },
+  });
+
+  assert.deepEqual(sanitizeNockCCActivity({ activeAgentSessionIds: sessionIds }), {
+    activeProjectCount: 0,
+    activeClaudeSessionIds: [],
+    activeAgentSessionIds: Array.from({ length: 100 }, (_, index) => `agent:${index}`),
+  });
+  assert.equal(readPastCap, false);
+});
+
 test('createNockCCActivityIPC registers the activity update channel', () => {
   const ipc = createController();
 
