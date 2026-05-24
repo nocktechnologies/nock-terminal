@@ -137,26 +137,6 @@ export default function ProjectSettingsModal({ projectPath, projectName, onClose
             </select>
           </Field>
 
-          <Field label="Preferred AI Model" description="Model to use for this project's AI chat sessions">
-            <input
-              type="text"
-              className="settings-input font-mono"
-              placeholder="e.g., qwen3.5:9b"
-              value={profile.preferredModel}
-              onChange={(e) => updateField('preferredModel', e.target.value)}
-            />
-          </Field>
-
-          <Field label="System Prompt" description="Custom system prompt prepended to AI conversations">
-            <textarea
-              className="settings-input font-mono resize-none"
-              rows={3}
-              placeholder="You are a helpful assistant for this project..."
-              value={profile.systemPrompt}
-              onChange={(e) => updateField('systemPrompt', e.target.value)}
-            />
-          </Field>
-
           <Field label="Default Shell" description="Override the global default shell for this project">
             <input
               type="text"

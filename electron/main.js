@@ -15,6 +15,7 @@ const SessionHistory = require('./session-history');
 const PromptStore = require('./prompt-store');
 const {
   DEFAULT_SETTINGS,
+  createSettingsResetSnapshot,
   normalizeSettingValue,
   sanitizeSettingsForExport,
   sanitizeSettingsForRenderer,
@@ -60,6 +61,43 @@ function repairStoredSettings() {
       store.set(key, value);
     }
   }
+}
+
+function applySettingsRuntimeEffects(key, currentValue) {
+  if (key === 'ollamaUrl') {
+    ollamaClient?.setUrl(currentValue);
+  }
+  if (key === 'claudeCodePath') {
+    claudeCodeClient?.setBinaryPath(currentValue);
+  }
+  if (key === 'devRoots' || key === 'projectSkipList') {
+    sessionDiscovery?.setConfig({
+      devRoots: getSettingsSnapshot().devRoots,
+      skipList: getSettingsSnapshot().projectSkipList,
+    });
+    fileWatcher?.revalidate();
+  }
+  if (key === 'alwaysOnTop') {
+    if (mainWindow) mainWindow.setAlwaysOnTop(!!currentValue);
+  }
+  if (key === 'windowOpacity') {
+    if (mainWindow) {
+      const clamped = Math.max(0.7, Math.min(1.0, currentValue / 100));
+      mainWindow.setOpacity(clamped);
+    }
+  }
+  if (key === 'launchAtStartup') {
+    app.setLoginItemSettings({ openAtLogin: !!currentValue });
+  }
+}
+
+function applyResetRuntimeEffects(settings) {
+  applySettingsRuntimeEffects('ollamaUrl', settings.ollamaUrl);
+  applySettingsRuntimeEffects('claudeCodePath', settings.claudeCodePath);
+  applySettingsRuntimeEffects('devRoots', settings.devRoots);
+  applySettingsRuntimeEffects('alwaysOnTop', settings.alwaysOnTop);
+  applySettingsRuntimeEffects('windowOpacity', settings.windowOpacity);
+  applySettingsRuntimeEffects('launchAtStartup', settings.launchAtStartup);
 }
 
 let mainWindow = null;
@@ -558,6 +596,19 @@ function registerIPC() {
     if (!allowed.includes(key)) return null;
     return getSettingsSnapshot()[key];
   });
+  ipcMain.handle('settings:reset', (_, options = {}) => {
+    const resetSnapshot = createSettingsResetSnapshot(store.store, {
+      preserveWindowBounds: options?.preserveWindowBounds !== false,
+    });
+
+    store.clear();
+    for (const [key, value] of Object.entries(resetSnapshot)) {
+      store.set(key, value);
+    }
+
+    applyResetRuntimeEffects(resetSnapshot);
+    return sanitizeSettingsForRenderer(store.store);
+  });
   const applySettingPayload = (payload) => {
     const validated = validateSettingsSetPayload(payload);
     if (!validated.ok) return errorPayload(validated);
@@ -565,32 +616,7 @@ function registerIPC() {
     const { key, value } = validated.value;
     store.set(key, value);
     const currentValue = getSettingsSnapshot()[key];
-    // Update services when settings change
-    if (key === 'ollamaUrl') {
-      ollamaClient.setUrl(currentValue);
-    }
-    if (key === 'claudeCodePath') {
-      claudeCodeClient.setBinaryPath(currentValue);
-    }
-    if (key === 'devRoots' || key === 'projectSkipList') {
-      sessionDiscovery.setConfig({
-        devRoots: getSettingsSnapshot().devRoots,
-        skipList: getSettingsSnapshot().projectSkipList,
-      });
-      fileWatcher.revalidate();
-    }
-    if (key === 'alwaysOnTop') {
-      if (mainWindow) mainWindow.setAlwaysOnTop(!!currentValue);
-    }
-    if (key === 'windowOpacity') {
-      if (mainWindow) {
-        const clamped = Math.max(0.7, Math.min(1.0, currentValue / 100));
-        mainWindow.setOpacity(clamped);
-      }
-    }
-    if (key === 'launchAtStartup') {
-      app.setLoginItemSettings({ openAtLogin: !!currentValue });
-    }
+    applySettingsRuntimeEffects(key, currentValue);
     return { success: true, key, value: currentValue };
   };
   ipcMain.handle('settings:set', (_, payload) => {

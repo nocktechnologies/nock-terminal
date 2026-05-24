@@ -108,16 +108,6 @@ export default function Dashboard({
 
     items.push(
       {
-        label: 'Open in VS Code',
-        icon: (
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-          </svg>
-        ),
-        disabled: true,
-        onClick: () => {},
-      },
-      {
         label: 'Open in Explorer',
         icon: (
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">

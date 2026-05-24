@@ -152,7 +152,6 @@ export function buildSessionSearchText(session, profile = {}) {
     defaultLauncher?.label,
     defaultLauncher?.shortLabel,
     profile?.notes,
-    profile?.preferredModel,
   ];
 
   return fields

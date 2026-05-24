@@ -3,7 +3,6 @@ const { sanitizeDevRoots, sanitizeStringList } = require('./security-utils');
 const DEFAULT_SETTINGS = {
   windowBounds: { width: 1400, height: 900 },
   // General
-  theme: 'dark',
   startMinimized: false,
   alwaysOnTop: false,
   launchAtStartup: false,
@@ -11,10 +10,6 @@ const DEFAULT_SETTINGS = {
   // AI / Models
   ollamaUrl: 'http://localhost:11434',
   defaultModel: 'qwen3.5:9b',
-  systemPrompt: '',
-  temperature: 0.7,
-  maxTokens: 4096,
-  showThinking: false,
   // Claude Code
   claudeCodePath: '',
   maraBriefPath: '',
@@ -26,24 +21,11 @@ const DEFAULT_SETTINGS = {
   scrollbackSize: 5000,
   cursorStyle: 'block',
   cursorBlink: true,
-  bellSound: false,
-  copyOnSelect: false,
-  rightClickPaste: true,
   // Editor
   editorFontFamily: "'JetBrains Mono', 'Consolas', monospace",
   editorFontSize: 15,
   editorMinimap: false,
   editorWordWrap: false,
-  // File Tree
-  fileTreeOpen: true,
-  showDotfiles: false,
-  // Notifications
-  desktopNotifications: true,
-  notificationSound: false,
-  notifyPrMerged: true,
-  notifyBuildComplete: true,
-  notifySessionEnded: true,
-  notifyFenceEvent: false,
   // Telegram
   telegramEnabled: false,
   telegramBotToken: '',
@@ -193,21 +175,9 @@ const BOOLEAN_KEYS = new Set([
   'startMinimized',
   'alwaysOnTop',
   'launchAtStartup',
-  'showThinking',
   'cursorBlink',
-  'bellSound',
-  'copyOnSelect',
-  'rightClickPaste',
   'editorMinimap',
   'editorWordWrap',
-  'fileTreeOpen',
-  'showDotfiles',
-  'desktopNotifications',
-  'notificationSound',
-  'notifyPrMerged',
-  'notifyBuildComplete',
-  'notifySessionEnded',
-  'notifyFenceEvent',
   'telegramEnabled',
   'telegramNotifyPrMerged',
   'telegramNotifyBuildComplete',
@@ -219,9 +189,7 @@ const BOOLEAN_KEYS = new Set([
 ]);
 
 const STRING_KEYS = {
-  theme: { maxLength: 40 },
   defaultModel: { maxLength: 200 },
-  systemPrompt: { maxLength: 20000, trim: false },
   claudeCodePath: { maxLength: 1000 },
   maraBriefPath: { maxLength: 1000 },
   terminalFontFamily: { maxLength: 200, trim: false },
@@ -258,10 +226,6 @@ function normalizeSettingValue(key, value) {
     case 'ollamaUrl':
     case 'nockccUrl':
       return normalizeUrl(value);
-    case 'temperature':
-      return normalizeNumber(value, { min: 0, max: 2, decimals: 1 });
-    case 'maxTokens':
-      return normalizeInteger(value, { min: 256, max: 32768 });
     case 'terminalFontSize':
     case 'editorFontSize':
       return normalizeInteger(value, { min: 10, max: 24 });
@@ -322,8 +286,26 @@ function sanitizeSettingsForRenderer(settings = {}) {
   return sanitized;
 }
 
+function cloneDefaultSettings() {
+  return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+}
+
+function createSettingsResetSnapshot(settings = {}, { preserveWindowBounds = true } = {}) {
+  const reset = cloneDefaultSettings();
+
+  if (preserveWindowBounds) {
+    const normalizedBounds = normalizeSettingValue('windowBounds', settings.windowBounds);
+    if (normalizedBounds.ok) {
+      reset.windowBounds = normalizedBounds.value;
+    }
+  }
+
+  return reset;
+}
+
 module.exports = {
   DEFAULT_SETTINGS,
+  createSettingsResetSnapshot,
   isSensitiveSettingKey,
   normalizeSettingValue,
   sanitizeSettingsForExport,
