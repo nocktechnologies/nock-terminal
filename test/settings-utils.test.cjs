@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   DEFAULT_SETTINGS,
   createSettingsResetSnapshot,
+  getSettingForRenderer,
   normalizeSettingValue,
   sanitizeSettingsForExport,
   sanitizeStoredSettings,
@@ -117,4 +118,17 @@ test('sanitizeSettingsForExport excludes sensitive values and preserves known sa
   assert.equal(exported.nockccApiKey, undefined);
   assert.equal(exported.futureAccessToken, undefined);
   assert.equal(exported.nested, undefined);
+});
+
+test('getSettingForRenderer does not expose sensitive settings by key', () => {
+  const settings = {
+    defaultModel: 'llama3.2',
+    telegramBotToken: '123:secret',
+    nockccApiKey: 'nock-secret',
+  };
+
+  assert.equal(getSettingForRenderer(settings, 'defaultModel'), 'llama3.2');
+  assert.equal(getSettingForRenderer(settings, 'telegramBotToken'), undefined);
+  assert.equal(getSettingForRenderer(settings, 'nockccApiKey'), undefined);
+  assert.equal(getSettingForRenderer(settings, 'notASetting'), undefined);
 });

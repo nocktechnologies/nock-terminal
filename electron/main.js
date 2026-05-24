@@ -17,6 +17,7 @@ const { listAvailableShells } = require('./system-shells');
 const {
   DEFAULT_SETTINGS,
   createSettingsResetSnapshot,
+  getSettingForRenderer,
   normalizeSettingValue,
   sanitizeSettingsForExport,
   sanitizeSettingsForRenderer,
@@ -588,8 +589,7 @@ function registerIPC() {
 
   // Settings
   ipcMain.handle('settings:get', (_, key) => {
-    if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) return undefined;
-    return getSettingsSnapshot()[key];
+    return getSettingForRenderer(store.store, key);
   });
   ipcMain.handle('settings:getAll', () => {
     return sanitizeSettingsForRenderer(store.store);
