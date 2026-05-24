@@ -2,6 +2,7 @@ const {
   errorPayload,
   validateTerminalCreatePayload,
 } = require('./ipc-validators');
+const { sanitizeDevRoots } = require('./security-utils');
 
 function safePayload(payload) {
   return payload && typeof payload === 'object' ? payload : {};
@@ -15,6 +16,11 @@ function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
 }
 
+function profileProjectPath(payload, allowedRoots) {
+  if (typeof payload?.cwd === 'string' && payload.cwd) return payload.cwd;
+  return allowedRoots[0] || '';
+}
+
 function registerTerminalIPC({
   ipcMain,
   terminalManager,
@@ -23,11 +29,13 @@ function registerTerminalIPC({
   getSettingsSnapshot,
 }) {
   ipcMain.handle('terminal:create', async (_, payload) => {
-    const projectPath = typeof payload?.cwd === 'string' ? payload.cwd : '';
+    const allowedRoots = sanitizeDevRoots(getAllowedProjectRoots());
+    const settings = getSettingsSnapshot();
+    const projectPath = profileProjectPath(payload, allowedRoots);
     const profile = projectPath ? projectProfiles.get(projectPath) : {};
     const validated = validateTerminalCreatePayload(payload, {
-      allowedRoots: getAllowedProjectRoots(),
-      settings: getSettingsSnapshot(),
+      allowedRoots,
+      settings,
       profile,
     });
     if (!validated.ok) return errorPayload(validated);

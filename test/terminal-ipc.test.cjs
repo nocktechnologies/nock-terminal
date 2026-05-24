@@ -141,6 +141,39 @@ test('terminal:create validates payloads and delegates trusted launch options', 
   }]);
 });
 
+test('terminal:create uses the default cwd profile when payload omits cwd', async () => {
+  const sandbox = makeSandbox();
+  const projectPath = path.join(sandbox, 'project');
+  fs.mkdirSync(projectPath, { recursive: true });
+  const effectiveProjectPath = fs.realpathSync.native(projectPath);
+  const ipc = registerHarness({
+    allowedRoots: [projectPath],
+    settings: { defaultShell: SHELL_FIXTURES.settingsShell, shellArgs: '--login' },
+    profiles: {
+      [effectiveProjectPath]: {
+        defaultShell: SHELL_FIXTURES.profileShell,
+        shellArgs: '--interactive',
+        envVars: 'NODE_ENV=test',
+      },
+    },
+  });
+
+  const result = await ipc.invoke('terminal:create', { id: 'tab-1' });
+
+  assert.deepEqual(result, { success: true, id: 'tab-1', pid: 1234 });
+  assert.deepEqual(ipc.profileLookups, [effectiveProjectPath]);
+  assert.deepEqual(ipc.calls, [{
+    method: 'create',
+    id: 'tab-1',
+    cwd: path.resolve(effectiveProjectPath),
+    options: {
+      shell: SHELL_FIXTURES.profileShell,
+      shellArgs: '--interactive',
+      envVars: 'NODE_ENV=test',
+    },
+  }]);
+});
+
 test('terminal:create returns the shared IPC validation error shape', async () => {
   const sandbox = makeSandbox();
   const projectPath = path.join(sandbox, 'project');
