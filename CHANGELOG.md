@@ -4,6 +4,13 @@ This changelog is summarized from git history. The repository has no version tag
 
 ## Unreleased
 
+### 2026-05-24
+
+- Reconciled the live NockCC backlog for Nock Terminal after PRs #31-#35.
+- Added `docs/NOCK_BACKLOG.md` as the repo-side source of truth for completed, reopened, blocked, and stale Nocks.
+- Recorded that Nock `7532` remains open for file tree/editor correctness because PR #33 covered stale contract cleanup instead.
+- Linked the Nock backlog ledger from the docs index and roadmap.
+
 ### 2026-05-16
 
 - Added the `Ctrl+K` command launcher for searching repos, agent folders, branches, lifecycle state, models, and launch commands.

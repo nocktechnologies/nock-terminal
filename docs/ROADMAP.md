@@ -1,6 +1,6 @@
 # Product Roadmap
 
-Updated: 2026-05-16
+Updated: 2026-05-24
 
 This roadmap follows the audit in `docs/PRODUCT_AUDIT_GTM_READINESS.md`. It assumes Nock Terminal should become a local-first cockpit for supervising coding agents, not a generic AI IDE.
 
@@ -26,6 +26,18 @@ Do not lead with "Codex app" or "Claude app." Lead with the workflow:
 - **Dense, calm, repeated-use UI**: this is an operator console, not a marketing dashboard.
 
 ## Near-Term Roadmap
+
+### May 24 NockCC Backlog Reconciliation
+
+The live NockCC backlog has been reconciled against `origin/main` after PRs #31-#35. See `docs/NOCK_BACKLOG.md` for the source-of-truth queue state.
+
+Current execution posture:
+
+- Nock `7530` / Phase A is done via PR #31.
+- Nock `7531` / Phase B is done via PR #32.
+- Nock `7532` is reopened because its live scope is file tree/editor correctness; PR #33 did useful stale-contract cleanup but did not satisfy that Nock.
+- Nock `7533` stays blocked until the true `7532` work lands.
+- Nock `123` should be rewritten before execution because icon/signing config has partially moved on; the remaining work is signed installer smoke, real credential setup, update distribution, crash/error reporting, and support path.
 
 ### May 16 Agent-Agnostic Cockpit Slice
 
