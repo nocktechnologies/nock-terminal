@@ -49,7 +49,8 @@ Current execution posture:
 - Nock `7620` / Phase F final slice is done via PR #50: session discovery, Ollama chat/status, and Telegram notifications now register through focused main-process modules with handler-level tests.
 - Phase F's `electron/main.js` IPC extraction is complete. Remaining work in this area should be framed as product adapter work, not IPC cleanup: Codex/Gemini transcript discovery, resume/attach support, and dispatch completion-thread tracking.
 - Nock `7621` / Phase H Task 0 captures the Phase H execution plan and Nock #123 rewrite.
-- Nock `7627` / Phase H H3 covers the dispatch completion tracking contract before implementation.
+- Nock `7627` / Phase H H3 closed the dispatch completion tracking contract in PR #52.
+- Nock `7628` / Phase H H4a covers the local dispatch status reducer and history normalization foundation. It deliberately stops short of live completion polling until NockCC exposes a confirmed live-message read or subscription API.
 - Nock `123` has been rewritten around the real release gap: signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback.
 
 ### May 24 Phase H Execution Plan
@@ -142,7 +143,7 @@ Current adapter posture:
 - Claude Code: current transcript discovery and launch behavior remain preserved.
 - Local agent folders: discovered from config and file-bus state; terminal launch is supported; true reconnect/attach remains future work.
 - Codex CLI: context/process detection and profile-driven terminal launch are implemented; transcript discovery and resume/attach remain future work.
-- Codex dispatch agents: CRM brokered/direct dispatch is implemented for allowlisted agents; completion-thread tracking remains future work.
+- Codex dispatch agents: CRM brokered/direct dispatch is implemented for allowlisted agents; local dispatch-run history now has a shared status normalizer, while completion-thread tracking remains future work until a live NockCC read/subscription API is confirmed.
 - DeepSeek dispatch agents: API-backed CRM brokered/direct dispatch is implemented for allowlisted agents; there is no standalone DeepSeek CLI launcher.
 - Gemini CLI: process detection, `GEMINI.md` context checks, and profile-driven terminal launch are implemented; transcript discovery is not claimed.
 

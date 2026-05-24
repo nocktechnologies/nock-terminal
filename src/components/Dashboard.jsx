@@ -381,7 +381,7 @@ function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, di
           ))}
           {recentDispatchRuns.map((run) => (
             <span key={run.id} className="inline-flex min-w-0 items-center gap-1.5 rounded border border-nock-border bg-nock-bg/70 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-nock-text-dim">
-              <span className={`h-1.5 w-1.5 rounded-full ${run.status === 'failed' ? 'bg-nock-red' : 'bg-nock-green'}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${dispatchStatusDotClass(run.status)}`} />
               <span className="max-w-[100px] truncate text-nock-text">{run.agentDisplayName || run.agentName}</span>
               <span>{run.mode}</span>
               <span>{run.status}</span>
@@ -391,6 +391,21 @@ function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, di
       )}
     </div>
   );
+}
+
+function dispatchStatusDotClass(status) {
+  const tones = {
+    accepted: 'bg-nock-accent-cyan',
+    blocked: 'bg-nock-yellow',
+    completed: 'bg-nock-green',
+    expired: 'bg-nock-text-muted',
+    failed: 'bg-nock-red',
+    launched: 'bg-nock-accent-cyan',
+    running: 'bg-nock-accent-cyan',
+    sent: 'bg-nock-accent-cyan',
+    unknown: 'bg-nock-text-muted',
+  };
+  return tones[status] || 'bg-nock-text-muted';
 }
 
 function OpsCell({ Icon, label, value, detail, tone }) {

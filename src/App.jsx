@@ -12,22 +12,17 @@ import EditorPane from './components/EditorPane';
 import Settings from './components/Settings';
 import StatusBar from './components/StatusBar';
 import CommandPalette from './components/CommandPalette';
+import {
+  MAX_DISPATCH_RUNS,
+  createDispatchRun,
+  readDispatchRunsFromStorage,
+  writeDispatchRunsToStorage,
+} from './utils/dispatchRuns.mjs';
 import { buildUnsavedFilesMessage, normalizeUnsavedFiles } from './utils/unsavedFiles.mjs';
 import { resolveSessionLaunch, sanitizeStagedTerminalInput } from './utils/agentLaunchers.mjs';
 
-const DISPATCH_RUN_STORAGE_KEY = 'nock-terminal.dispatchRuns.v1';
-
 function createTabId(prefix = 'tab') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-function readStoredDispatchRuns() {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(DISPATCH_RUN_STORAGE_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed.slice(0, 12) : [];
-  } catch {
-    return [];
-  }
 }
 
 function projectNameFromPath(projectPath) {
@@ -50,7 +45,7 @@ export default function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [commandPalettePreset, setCommandPalettePreset] = useState(null);
   const [profilesByPath, setProfilesByPath] = useState({});
-  const [dispatchRuns, setDispatchRuns] = useState(() => readStoredDispatchRuns());
+  const [dispatchRuns, setDispatchRuns] = useState(() => readDispatchRunsFromStorage(window.localStorage));
   const [notice, setNotice] = useState(null);
   const queuedPromptIdRef = useRef(0);
 
@@ -110,11 +105,7 @@ export default function App() {
   }, [sessions]);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(DISPATCH_RUN_STORAGE_KEY, JSON.stringify(dispatchRuns.slice(0, 12)));
-    } catch {
-      // Local storage may be unavailable in hardened renderer contexts.
-    }
+    writeDispatchRunsToStorage(window.localStorage, dispatchRuns);
   }, [dispatchRuns]);
 
   useEffect(() => {
@@ -206,11 +197,10 @@ export default function App() {
     && Boolean(session.launch?.command);
 
   const recordDispatchRun = useCallback((run) => {
-    setDispatchRuns(prev => [{
-      id: createTabId('dispatch'),
-      createdAt: Date.now(),
-      ...run,
-    }, ...prev].slice(0, 12));
+    setDispatchRuns(prev => [
+      createDispatchRun(run, { id: createTabId('dispatch') }),
+      ...prev,
+    ].slice(0, MAX_DISPATCH_RUNS));
   }, []);
 
   const getProfileForPath = useCallback(async (projectPath) => {
