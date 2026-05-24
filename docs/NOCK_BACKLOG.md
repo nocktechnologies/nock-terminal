@@ -6,7 +6,7 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 
 ## Current Baseline
 
-- Repo baseline: `origin/main` at merge commit `ed5751b` after PRs #31, #32, #37, #38, #39, and #40.
+- Repo baseline: `origin/main` at merge commit `f11036a` after PRs #31, #32, #37, #38, #39, #40, #42, #43, #44, #46, #47, #48, and #49.
 - NockCC live update: message `#1443` sent to `mira-nockos` when Phase E/G PRs opened; later closeout messages should reference PRs #39 and #40.
 - Project board: Nocks `7530`, `7531`, `7532`, `7533`, `7551`, and `7552` are attached to the Terminal project.
 - Primary local checkout note: `/Users/kevin/Dev/nock-terminal` had unrelated dirty work and was behind `origin/main` during this pass, so implementation and audit work used clean worktrees.
@@ -22,6 +22,14 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 | `7533` | Done | `30 Roadmap` | PR #38 merged: `9751a36` | Post-A/B/C integration audit complete. See `docs/POST_ABC_INTEGRATION_AUDIT.md`. |
 | `7551` | Done | `10 Active Foundation` | PR #39 merged: `1cd45fd` | Phase E closed: settings/profile/AI deletion pass, explicit secret reveal UX, and shared `dispatch:brokered` validation. |
 | `7552` | Done | `10 Active Foundation` | PR #40 merged: `ed5751b` | Phase G closed: schema-versioned settings, project profile, prompt, and session-history migrations. |
+| `7576` | Done | `10 Active Foundation` | PR #42 merged | Phase F slice 1: settings IPC extraction. |
+| `7578` | Done | `10 Active Foundation` | PR #43 merged | Phase F slice 2: file IPC extraction. |
+| `7579` | Done | `10 Active Foundation` | PR #44 merged | Phase F slice 3: dispatch IPC extraction. |
+| `7598` | Done | `10 Active Foundation` | PR #46 merged | Phase F slice 4: local-data IPC extraction. |
+| `7604` | Done | `10 Active Foundation` | PR #47 merged | Phase F slice 5: terminal IPC extraction. |
+| `7608` | Done | `10 Active Foundation` | PR #48 merged | Phase F slice 6: system/window IPC extraction. |
+| `7614` | Done | `10 Active Foundation` | PR #49 merged: `f11036a` | Phase F slice 7: NockCC activity IPC extraction. |
+| `7620` | Done | `10 Active Foundation` | Final Phase F IPC extraction PR | Phase F final slice: session discovery, Ollama, and Telegram IPC extraction. |
 | `886` | Backlog | `30 Roadmap` | Still valid | Marketing/GTM positioning is useful, but should use this ledger and current release docs. |
 | `123` | Backlog | `30 Roadmap` | Partially stale | App icons and signing config have moved forward; rewrite this around signed artifact smoke, actual certificates, update channel, crash/error reporting, and support path. |
 | `7451` | Done | None | Historical assessment | Keep as archived historical launch-readiness report. |
@@ -42,8 +50,8 @@ Those acceptance criteria were not implemented by PR #33. The stale-contract cle
 
 ## Next Execution Order
 
-1. **Start Phase F only after syncing to `origin/main` at or after `ed5751b`.**
-   Phase E and Phase G have settled the settings/IPC/local-data contracts. Module decomposition can now begin, but it should stay mechanical and avoid new product behavior.
+1. **Treat Phase F as closed after the final inline IPC extraction slice.**
+   Phase F has moved settings, file, dispatch, local-data, terminal, system/window, NockCC activity, session discovery, Ollama, and Telegram IPC out of `electron/main.js`. Further work in this area should be framed as adapter/product behavior, not generic main-process decomposition.
 
 2. **Rewrite or replace Nock `123`.**
    It still points at app icon/code-signing work as if none of it happened. The remaining work is signed installer smoke on macOS/Windows/Linux release artifacts, actual credential setup, update-channel decision, crash/error reporting, and support path.
