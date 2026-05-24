@@ -4,6 +4,7 @@ Current docs:
 
 - [Product Audit And GTM Readiness](PRODUCT_AUDIT_GTM_READINESS.md) - May 15 audit plus May 16 cockpit/dispatch updates, market read, launch decision, and GTM readiness.
 - [Product Roadmap](ROADMAP.md) - recommended positioning, completed cockpit and dispatch slices, roadmap, GTM experiments, and product ideas.
+- [Nock Backlog Reconciliation](NOCK_BACKLOG.md) - live NockCC queue reconciliation for Nock Terminal after PRs #31-#35.
 - [Agent Folder Intelligence](AGENT_FOLDER_INTELLIGENCE.md) - agent-folder detection, local NockCC file-bus state mapping, command launcher behavior, and launch behavior.
 - [Agent Dispatch](AGENT_DISPATCH.md) - Codex/DeepSeek dispatch-agent discovery, Mira-brokered requests, direct dispatcher scripts, telemetry, and current limits.
 - [Release Readiness](RELEASE_READINESS.md) - release gate, packaged smoke automation, signing/notarization requirements, artifact checksums, command launcher smoke checks, and signed installer smoke checklist.
