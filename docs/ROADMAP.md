@@ -46,7 +46,7 @@ Current execution posture:
 - Nock `7604` / Phase F slice 5 is done via PR #47: terminal command IPC extraction for create/write/resize/destroy handlers.
 - Nock `7608` / Phase F slice 6 is done via PR #48: system/window IPC extraction for window controls, ports, shell/clipboard, and system discovery handlers.
 - Nock `7614` / Phase F slice 7 is done via PR #49: NockCC activity IPC extraction for `nockcc:updateActivity` sanitization plus session start, heartbeat, and shutdown lifecycle wiring.
-- Nock `7620` / Phase F final slice closes the remaining inline IPC groups: session discovery, Ollama chat/status, and Telegram notifications now register through focused main-process modules with handler-level tests.
+- Nock `7620` / Phase F final slice is represented by PR #50 and closes the remaining inline IPC groups: session discovery, Ollama chat/status, and Telegram notifications now register through focused main-process modules with handler-level tests.
 - Phase F's `electron/main.js` IPC extraction is complete. Remaining work in this area should be framed as product adapter work, not IPC cleanup: Codex/Gemini transcript discovery, resume/attach support, and dispatch completion-thread tracking.
 - Nock `123` should be rewritten before execution because icon/signing config has partially moved on; the remaining work is signed installer smoke, real credential setup, update distribution, crash/error reporting, and support path.
 

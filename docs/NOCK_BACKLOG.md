@@ -29,7 +29,7 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 | `7604` | Done | `10 Active Foundation` | PR #47 merged | Phase F slice 5: terminal IPC extraction. |
 | `7608` | Done | `10 Active Foundation` | PR #48 merged | Phase F slice 6: system/window IPC extraction. |
 | `7614` | Done | `10 Active Foundation` | PR #49 merged: `f11036a` | Phase F slice 7: NockCC activity IPC extraction. |
-| `7620` | Done | `10 Active Foundation` | Final Phase F IPC extraction PR | Phase F final slice: session discovery, Ollama, and Telegram IPC extraction. |
+| `7620` | Done | `10 Active Foundation` | PR #50 | Phase F final slice: session discovery, Ollama, and Telegram IPC extraction. |
 | `886` | Backlog | `30 Roadmap` | Still valid | Marketing/GTM positioning is useful, but should use this ledger and current release docs. |
 | `123` | Backlog | `30 Roadmap` | Partially stale | App icons and signing config have moved forward; rewrite this around signed artifact smoke, actual certificates, update channel, crash/error reporting, and support path. |
 | `7451` | Done | None | Historical assessment | Keep as archived historical launch-readiness report. |
