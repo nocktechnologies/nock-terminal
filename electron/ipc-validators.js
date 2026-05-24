@@ -78,8 +78,9 @@ function normalizeEnvVars(value) {
 }
 
 function pickTrustedValue(requested, trustedValues, fallback) {
-  const trusted = trustedValues.filter(value => typeof value === 'string');
+  const trusted = trustedValues.filter(value => typeof value === 'string' && value !== '');
   if (requested !== undefined) {
+    if (requested === '' && fallback === '') return '';
     if (!trusted.includes(requested)) return null;
     return requested;
   }
@@ -87,10 +88,11 @@ function pickTrustedValue(requested, trustedValues, fallback) {
 }
 
 function validateAllowedPath(label, filePath, context = {}) {
-  if (typeof context.isAllowedPath === 'function' && !context.isAllowedPath(filePath)) {
+  const resolved = path.resolve(filePath);
+  if (typeof context.isAllowedPath === 'function' && !context.isAllowedPath(resolved)) {
     return invalid(`${label} is outside allowed project roots`);
   }
-  return ok(filePath);
+  return ok(resolved);
 }
 
 function validateTerminalCreatePayload(payload, context = {}) {
@@ -226,8 +228,9 @@ function sanitizeProfile(profile) {
 
 function validateProfileSavePayload(payload, context = {}) {
   if (!isPlainObject(payload)) return invalid('profiles:save payload must be an object');
-  const projectPath = normalizePathString(payload.projectPath);
-  if (!projectPath) return invalid('profiles:save projectPath must be a non-empty path string');
+  const projectPathInput = normalizePathString(payload.projectPath);
+  if (!projectPathInput) return invalid('profiles:save projectPath must be a non-empty path string');
+  const projectPath = path.resolve(projectPathInput);
   if (typeof context.isAllowedPath === 'function' && !context.isAllowedPath(projectPath)) {
     return invalid('profiles:save projectPath is outside allowed project roots');
   }

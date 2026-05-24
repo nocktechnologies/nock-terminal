@@ -21,6 +21,18 @@ function makeSandbox() {
   return dir;
 }
 
+const SHELL_FIXTURES = process.platform === 'win32'
+  ? {
+      settingsShell: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      profileShell: 'C:\\Windows\\System32\\cmd.exe',
+      arbitraryShell: 'C:\\Temp\\evil.exe',
+    }
+  : {
+      settingsShell: '/bin/bash',
+      profileShell: '/bin/zsh',
+      arbitraryShell: '/tmp/evil-sh',
+    };
+
 test('terminal:create rejects cwd outside allowed project roots', () => {
   const sandbox = makeSandbox();
   const allowedRoot = path.join(sandbox, 'allowed');
@@ -42,12 +54,11 @@ test('terminal:create rejects renderer shell and args not backed by trusted sett
   const allowedRoot = path.join(sandbox, 'project');
   fs.mkdirSync(allowedRoot, { recursive: true });
 
-  const arbitraryShell = process.platform === 'win32' ? 'C:\\Temp\\evil.exe' : '/tmp/evil-sh';
   const shellResult = validateTerminalCreatePayload(
-    { id: 'tab-1', cwd: allowedRoot, shell: arbitraryShell, shellArgs: '--login' },
+    { id: 'tab-1', cwd: allowedRoot, shell: SHELL_FIXTURES.arbitraryShell, shellArgs: '--login' },
     {
       allowedRoots: [allowedRoot],
-      settings: { defaultShell: '/bin/zsh', shellArgs: '--login' },
+      settings: { defaultShell: SHELL_FIXTURES.settingsShell, shellArgs: '--login' },
       profile: {},
     }
   );
@@ -55,10 +66,10 @@ test('terminal:create rejects renderer shell and args not backed by trusted sett
   assert.match(shellResult.error.message, /shell/i);
 
   const argsResult = validateTerminalCreatePayload(
-    { id: 'tab-1', cwd: allowedRoot, shell: '/bin/zsh', shellArgs: '-c "rm -rf /"' },
+    { id: 'tab-1', cwd: allowedRoot, shell: SHELL_FIXTURES.settingsShell, shellArgs: '-c "rm -rf /"' },
     {
       allowedRoots: [allowedRoot],
-      settings: { defaultShell: '/bin/zsh', shellArgs: '--login' },
+      settings: { defaultShell: SHELL_FIXTURES.settingsShell, shellArgs: '--login' },
       profile: {},
     }
   );
@@ -75,15 +86,43 @@ test('terminal:create accepts configured profile shell values and derives truste
     { id: 'tab-1', cwd: allowedRoot },
     {
       allowedRoots: [allowedRoot],
-      settings: { defaultShell: '/bin/bash', shellArgs: '--login' },
-      profile: { defaultShell: '/bin/zsh', shellArgs: '--interactive', envVars: 'NODE_ENV=test' },
+      settings: { defaultShell: SHELL_FIXTURES.settingsShell, shellArgs: '--login' },
+      profile: { defaultShell: SHELL_FIXTURES.profileShell, shellArgs: '--interactive', envVars: 'NODE_ENV=test' },
     }
   );
 
   assert.equal(result.ok, true);
-  assert.equal(result.value.shell, '/bin/zsh');
+  assert.equal(result.value.shell, SHELL_FIXTURES.profileShell);
   assert.equal(result.value.shellArgs, '--interactive');
   assert.equal(result.value.envVars, 'NODE_ENV=test');
+});
+
+test('terminal:create rejects empty renderer values that would clear trusted defaults', () => {
+  const sandbox = makeSandbox();
+  const allowedRoot = path.join(sandbox, 'project');
+  fs.mkdirSync(allowedRoot, { recursive: true });
+
+  const argsResult = validateTerminalCreatePayload(
+    { id: 'tab-1', cwd: allowedRoot, shellArgs: '' },
+    {
+      allowedRoots: [allowedRoot],
+      settings: { defaultShell: SHELL_FIXTURES.settingsShell, shellArgs: '--login' },
+      profile: {},
+    }
+  );
+  assert.equal(argsResult.ok, false);
+  assert.match(argsResult.error.message, /shell args/i);
+
+  const envResult = validateTerminalCreatePayload(
+    { id: 'tab-1', cwd: allowedRoot, envVars: '' },
+    {
+      allowedRoots: [allowedRoot],
+      settings: { defaultShell: SHELL_FIXTURES.settingsShell },
+      profile: { envVars: 'NODE_ENV=test' },
+    }
+  );
+  assert.equal(envResult.ok, false);
+  assert.match(envResult.error.message, /environment/i);
 });
 
 test('settings:set rejects unknown keys and normalizes valid settings', () => {
@@ -105,7 +144,7 @@ test('profiles:save only accepts allowed project paths and known profile fields'
       profile: {
         defaultAgent: 'codex',
         codexCommand: 'codex --model gpt-5.4',
-        defaultShell: '/bin/zsh',
+        defaultShell: SHELL_FIXTURES.profileShell,
         unknown: 'drop me',
       },
     },
@@ -122,6 +161,23 @@ test('profiles:save only accepts allowed project paths and known profile fields'
     { isAllowedPath: () => false }
   );
   assert.equal(rejected.ok, false);
+});
+
+test('profile and file validators resolve paths before authorization checks', () => {
+  const sandbox = makeSandbox();
+  const allowedRoot = path.join(sandbox, 'allowed');
+  const outsideRoot = path.join(sandbox, 'outside');
+  fs.mkdirSync(allowedRoot, { recursive: true });
+  fs.mkdirSync(outsideRoot, { recursive: true });
+
+  const sneakyPath = `${allowedRoot}${path.sep}..${path.sep}outside${path.sep}a.txt`;
+  const isAllowedPath = (candidate) => candidate.startsWith(allowedRoot);
+
+  assert.equal(validateFilesPayload('read', sneakyPath, { isAllowedPath }).ok, false);
+  assert.equal(
+    validateProfileSavePayload({ projectPath: sneakyPath, profile: {} }, { isAllowedPath }).ok,
+    false
+  );
 });
 
 test('prompts:save rejects malformed ids and non-string bodies', () => {
