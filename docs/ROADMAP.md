@@ -42,7 +42,8 @@ Current execution posture:
 - Nock `7576` / Phase F slice 1 is done via PR #42: settings IPC registration is extracted from `electron/main.js` into a dedicated module with handler-level contract tests.
 - Nock `7578` / Phase F slice 2 is done via PR #43: file IPC registration is extracted behind a tested module boundary while preserving existing validation and error shapes.
 - Nock `7579` / Phase F slice 3 is done via PR #44: dispatch IPC registration is extracted into a tested module so brokered/direct dispatch validation and service failure handling are isolated from the main-process bootstrap.
-- Next Phase F candidates should get new Nocks before execution: project profile/prompt/session-history IPC extraction, terminal IPC extraction, and system/window IPC extraction.
+- Nock `7598` / Phase F slice 4 covers local-data IPC extraction for project profiles, prompt library, and session history handlers.
+- Next Phase F candidates should get new Nocks before execution: terminal IPC extraction and system/window IPC extraction.
 - Nock `123` should be rewritten before execution because icon/signing config has partially moved on; the remaining work is signed installer smoke, real credential setup, update distribution, crash/error reporting, and support path.
 
 ### May 16 Agent-Agnostic Cockpit Slice

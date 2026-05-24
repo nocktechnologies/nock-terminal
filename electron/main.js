@@ -21,8 +21,6 @@ const {
 } = require('./settings-utils');
 const {
   errorPayload,
-  validateProfileSavePayload,
-  validatePromptSavePayload,
   validateTerminalCreatePayload,
 } = require('./ipc-validators');
 const { getAgentAdapters } = require('./agent-adapters');
@@ -30,6 +28,7 @@ const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
 const { registerDispatchIPC } = require('./dispatch-ipc');
 const { registerFileIPC } = require('./file-ipc');
+const { registerLocalDataIPC } = require('./local-data-ipc');
 const { registerSettingsIPC } = require('./settings-ipc');
 
 const APP_NAME = 'Nock Terminal';
@@ -610,55 +609,12 @@ function registerIPC() {
     };
   });
 
-  // Project profiles
-  ipcMain.handle('profiles:get', (_, projectPath) => {
-    return projectProfiles.get(projectPath);
-  });
-  ipcMain.handle('profiles:save', (_, payload) => {
-    const validated = validateProfileSavePayload(payload, {
-      isAllowedPath: candidate => fileService.isAllowedPath(candidate),
-    });
-    if (!validated.ok) {
-      const error = errorPayload(validated);
-      return { ...error, message: error.error };
-    }
-    return projectProfiles.save(validated.value.projectPath, validated.value.profile);
-  });
-  ipcMain.handle('profiles:delete', (_, projectPath) => {
-    return projectProfiles.delete(projectPath);
-  });
-  ipcMain.handle('profiles:list', () => {
-    return projectProfiles.list();
-  });
-
-  // Session history
-  ipcMain.handle('sessionHistory:list', () => {
-    return sessionHistory.list();
-  });
-  ipcMain.handle('sessionHistory:getOutput', (_, { startTime, tabId }) => {
-    return sessionHistory.getOutput(startTime, tabId);
-  });
-  ipcMain.handle('sessionHistory:start', (_, { tabId, metadata }) => {
-    return sessionHistory.startSession(tabId, metadata);
-  });
-
-  // Prompt library
-  ipcMain.handle('prompts:list', () => {
-    return promptStore.list();
-  });
-  ipcMain.handle('prompts:get', (_, id) => {
-    return promptStore.get(id);
-  });
-  ipcMain.handle('prompts:save', (_, payload) => {
-    const validated = validatePromptSavePayload(payload);
-    if (!validated.ok) {
-      const error = errorPayload(validated);
-      return { ...error, message: error.error };
-    }
-    return promptStore.save(validated.value.id, validated.value.data);
-  });
-  ipcMain.handle('prompts:delete', (_, id) => {
-    return promptStore.delete(id);
+  registerLocalDataIPC({
+    ipcMain,
+    fileService,
+    projectProfiles,
+    promptStore,
+    sessionHistory,
   });
 }
 
