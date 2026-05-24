@@ -50,7 +50,7 @@ Current execution posture:
 - Phase F's `electron/main.js` IPC extraction is complete. Remaining work in this area should be framed as product adapter work, not IPC cleanup: Codex/Gemini transcript discovery, resume/attach support, and dispatch completion-thread tracking.
 - Nock `7621` / Phase H Task 0 captures the Phase H execution plan and Nock #123 rewrite.
 - Nock `7627` / Phase H H3 closed the dispatch completion tracking contract in PR #52.
-- Nock `7628` / Phase H H4a covers the local dispatch status reducer and history normalization foundation. It deliberately stops short of live completion polling until NockCC exposes a confirmed live-message read or subscription API.
+- Nock `7628` / Phase H H4a is in PR #53 for the local dispatch status reducer and history normalization foundation. It deliberately stops short of live completion polling until NockCC exposes a confirmed live-message read or subscription API.
 - Nock `123` has been rewritten around the real release gap: signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback.
 
 ### May 24 Phase H Execution Plan
