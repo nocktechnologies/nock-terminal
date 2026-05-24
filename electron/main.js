@@ -23,8 +23,11 @@ const { registerDispatchIPC } = require('./dispatch-ipc');
 const { registerFileIPC } = require('./file-ipc');
 const { registerLocalDataIPC } = require('./local-data-ipc');
 const { createNockCCActivityIPC } = require('./nockcc-activity-ipc');
+const { registerOllamaIPC } = require('./ollama-ipc');
 const { registerSettingsIPC } = require('./settings-ipc');
+const { registerSessionIPC } = require('./session-ipc');
 const { registerSystemWindowIPC } = require('./system-window-ipc');
+const { registerTelegramIPC } = require('./telegram-ipc');
 const { registerTerminalIPC } = require('./terminal-ipc');
 const { version: appVersion } = require('../package.json');
 
@@ -403,12 +406,11 @@ function registerIPC() {
 
   // (Terminal data/exit events are wired in wireTerminalEvents() — not here)
 
-  // Session discovery
-  ipcMain.handle('sessions:discover', async () => {
-    const sessions = await sessionDiscovery.discover();
-    fileService.setGrantedRoots(sessions.map((session) => session.path));
-    fileWatcher.revalidate();
-    return sessions;
+  registerSessionIPC({
+    ipcMain,
+    sessionDiscovery,
+    fileService,
+    fileWatcher,
   });
 
   registerDispatchIPC({
@@ -416,18 +418,10 @@ function registerIPC() {
     agentDispatchService,
   });
 
-  // Ollama chat
-  ipcMain.handle('ai:ollama:chat', async (event, { model, messages }) => {
-    const response = await ollamaClient.chat(model, messages, (chunk) => {
-      mainWindow?.webContents.send('ai:stream', { chunk });
-    });
-    return response;
-  });
-  ipcMain.handle('ai:ollama:models', async () => {
-    return ollamaClient.listModels();
-  });
-  ipcMain.handle('ai:ollama:status', async () => {
-    return ollamaClient.checkStatus();
+  registerOllamaIPC({
+    ipcMain,
+    ollamaClient,
+    getMainWindow: () => mainWindow,
   });
 
   registerSettingsIPC({
@@ -444,12 +438,9 @@ function registerIPC() {
     fileWatcher,
   });
 
-  // Telegram notifications
-  ipcMain.handle('telegram:test', async () => {
-    return telegramNotifier.test();
-  });
-  ipcMain.handle('telegram:notify', async (_, { eventType, details }) => {
-    return telegramNotifier.notify(eventType, details);
+  registerTelegramIPC({
+    ipcMain,
+    telegramNotifier,
   });
 
   nockccActivityController = createNockCCActivityIPC({

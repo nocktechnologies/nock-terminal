@@ -8,7 +8,7 @@ This document describes the current codebase, not aspirational product copy. Tod
 
 - `src/main.jsx` mounts the React app.
 - `src/App.jsx` owns top-level renderer state for the active view, terminal tabs, session list, profile cache, port list, process status, command launcher, dispatch-run telemetry, chat panel, queued prompts, and active project path.
-- `electron/main.js` creates the frameless window, tray, global shortcuts, service instances, and IPC handlers.
+- `electron/main.js` creates the frameless window, tray, global shortcuts, service instances, and composes focused IPC registration modules.
 - `electron/preload.js` exposes `window.nockTerminal` through `contextBridge`.
 - The renderer does not import Node APIs directly. It calls preload methods, which route to `ipcMain` handlers and main-process services.
 
@@ -29,9 +29,9 @@ This document describes the current codebase, not aspirational product copy. Tod
 - `FileWatcher` emits file and git status changes for the active project tree.
 - `ProcessDetector` observes terminal processes and reports active agent identities under each PTY through the adapter registry.
 - `agent-adapters.js` defines known terminal agents for main-process detection and context checks. The current registry covers Claude Code, Codex CLI, and Gemini CLI.
-- `OllamaClient` streams local model chat through `/api/chat` and lists models through `/api/tags`.
+- `OllamaClient` streams local model chat through `/api/chat` and lists models through `/api/tags`; `electron/ollama-ipc.js` owns the renderer IPC bridge and stream forwarding.
 - `ClaudeCodeClient` can spawn `claude -p --output-format stream-json` for Claude Code chat-style calls.
-- `TelegramNotifier` sends configured notification events.
+- `TelegramNotifier` sends configured notification events; `electron/telegram-ipc.js` owns the renderer IPC bridge.
 - `ProjectProfiles`, `SessionHistory`, and `PromptStore` persist project settings, terminal output metadata, and prompt library entries.
 - `NockCCClient` links this desktop app instance to the NockCC server.
 
@@ -41,7 +41,7 @@ This document describes the current codebase, not aspirational product copy. Tod
 
 1. `App` calls `window.nockTerminal.sessions.discover()` on mount and every 30 seconds.
 2. `SessionDiscovery` reads Claude transcripts, scans configured dev roots, reads agent `config.json` files, checks local NockCC file-bus state, resolves dispatch runtimes/allowlists, dedupes copied worktree configs, and returns normalized sessions/projects/agents.
-3. `main.js` grants discovered project paths to `FileService` and revalidates `FileWatcher`.
+3. `electron/session-ipc.js` grants discovered project paths to `FileService` and revalidates `FileWatcher`.
 4. Dashboard and sidebar render sessions, project status, file trees, context checks, and cards from the returned data.
 
 ### Terminal Tabs
@@ -64,8 +64,8 @@ This document describes the current codebase, not aspirational product copy. Tod
 
 ### AI Chat
 
-1. `AIChatPanel` polls Ollama status and model list.
-2. Local model chat streams through `OllamaClient` and `ai:stream`.
+1. `AIChatPanel` polls Ollama status and model list through `electron/ollama-ipc.js`.
+2. Local model chat streams through `OllamaClient`, and `ollama-ipc` forwards chunks through `ai:stream`.
 3. The Kit option opens a new terminal tab that launches the configured Claude command.
 4. The Mara option opens `https://claude.ai`.
 
