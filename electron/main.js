@@ -15,15 +15,8 @@ const PromptStore = require('./prompt-store');
 const { listAvailableShells } = require('./system-shells');
 const {
   DEFAULT_SETTINGS,
-  SETTINGS_SCHEMA_KEY,
-  SETTINGS_SCHEMA_VERSION,
-  createSettingsResetSnapshot,
-  getSecureSettingStatus,
-  getSettingForRenderer,
   migrateSettingsStore,
   normalizeSettingValue,
-  sanitizeSettingsForExport,
-  sanitizeSettingsForRenderer,
   sanitizeStoredSettings,
 } = require('./settings-utils');
 const {
@@ -33,12 +26,12 @@ const {
   validateFilesPayload,
   validateProfileSavePayload,
   validatePromptSavePayload,
-  validateSettingsSetPayload,
   validateTerminalCreatePayload,
 } = require('./ipc-validators');
 const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
+const { registerSettingsIPC } = require('./settings-ipc');
 
 const APP_NAME = 'Nock Terminal';
 const IS_PACKAGED_SMOKE = process.env.NOCK_TERMINAL_PACKAGED_SMOKE === '1';
@@ -575,50 +568,12 @@ function registerIPC() {
     }
   });
 
-  // Settings
-  ipcMain.handle('settings:get', (_, key) => {
-    return getSettingForRenderer(store.store, key);
-  });
-  ipcMain.handle('settings:getAll', () => {
-    return sanitizeSettingsForRenderer(store.store);
-  });
-  ipcMain.handle('settings:export', () => {
-    return sanitizeSettingsForExport(store.store);
-  });
-  ipcMain.handle('settings:getSecure', (_, key) => {
-    const allowed = ['telegramBotToken', 'nockccApiKey'];
-    if (!allowed.includes(key)) return null;
-    return getSettingsSnapshot()[key];
-  });
-  ipcMain.handle('settings:getSecureStatus', (_, key) => {
-    return getSecureSettingStatus(store.store, key);
-  });
-  ipcMain.handle('settings:reset', (_, options = {}) => {
-    const resetSnapshot = createSettingsResetSnapshot(store.store, {
-      preserveWindowBounds: options?.preserveWindowBounds !== false,
-    });
-
-    store.clear();
-    for (const [key, value] of Object.entries(resetSnapshot)) {
-      store.set(key, value);
-    }
-    store.set(SETTINGS_SCHEMA_KEY, SETTINGS_SCHEMA_VERSION);
-
-    applyResetRuntimeEffects(resetSnapshot);
-    return sanitizeSettingsForRenderer(store.store);
-  });
-  const applySettingPayload = (payload) => {
-    const validated = validateSettingsSetPayload(payload);
-    if (!validated.ok) return errorPayload(validated);
-
-    const { key, value } = validated.value;
-    store.set(key, value);
-    const currentValue = getSettingsSnapshot()[key];
-    applySettingsRuntimeEffects(key, currentValue);
-    return { success: true, key, value: currentValue };
-  };
-  ipcMain.handle('settings:set', (_, payload) => {
-    return applySettingPayload(payload);
+  registerSettingsIPC({
+    ipcMain,
+    store,
+    getSettingsSnapshot,
+    applySettingsRuntimeEffects,
+    applyResetRuntimeEffects,
   });
 
   // File operations
