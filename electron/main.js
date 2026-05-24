@@ -12,20 +12,18 @@ const TelegramNotifier = require('./telegram-notifier');
 const ProjectProfiles = require('./project-profiles');
 const SessionHistory = require('./session-history');
 const PromptStore = require('./prompt-store');
-const { listAvailableShells } = require('./system-shells');
 const {
   DEFAULT_SETTINGS,
   migrateSettingsStore,
-  normalizeSettingValue,
   sanitizeStoredSettings,
 } = require('./settings-utils');
-const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
 const { registerDispatchIPC } = require('./dispatch-ipc');
 const { registerFileIPC } = require('./file-ipc');
 const { registerLocalDataIPC } = require('./local-data-ipc');
 const { registerSettingsIPC } = require('./settings-ipc');
+const { registerSystemWindowIPC } = require('./system-window-ipc');
 const { registerTerminalIPC } = require('./terminal-ipc');
 
 const APP_NAME = 'Nock Terminal';
@@ -387,17 +385,16 @@ function initServices() {
 }
 
 function registerIPC() {
-  // Window controls
-  ipcMain.on('window:minimize', () => mainWindow?.minimize());
-  ipcMain.on('window:maximize', () => {
-    if (mainWindow?.isMaximized()) {
-      mainWindow.unmaximize();
-    } else {
-      mainWindow?.maximize();
-    }
+  registerSystemWindowIPC({
+    ipcMain,
+    app,
+    shell,
+    clipboard,
+    portScanner,
+    fileService,
+    getMainWindow: () => mainWindow,
+    getSettingsSnapshot,
   });
-  ipcMain.on('window:close', () => mainWindow?.close());
-  ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false);
 
   registerTerminalIPC({
     ipcMain,
@@ -436,98 +433,6 @@ function registerIPC() {
     return ollamaClient.checkStatus();
   });
 
-  // Port scanning
-  ipcMain.handle('ports:scan', async () => {
-    return portScanner.scan();
-  });
-
-  // System info
-  ipcMain.handle('system:detectShells', async () => {
-    return listAvailableShells();
-  });
-
-  ipcMain.handle('system:ollamaVersion', async () => {
-    try {
-      const url = getSettingsSnapshot().ollamaUrl || 'http://localhost:11434';
-      const http = require('http');
-      return await new Promise((resolve, reject) => {
-        const req = http.get(`${url}/api/version`, { timeout: 3000 }, (res) => {
-          let data = '';
-          res.on('data', (chunk) => { data += chunk; });
-          res.on('end', () => {
-            try {
-              resolve(JSON.parse(data).version || 'unknown');
-            } catch {
-              resolve('unknown');
-            }
-          });
-        });
-        req.on('error', () => resolve(null));
-        req.on('timeout', () => { req.destroy(); resolve(null); });
-      });
-    } catch {
-      return null;
-    }
-  });
-
-  ipcMain.handle('system:appVersion', () => {
-    return app.getVersion();
-  });
-
-  ipcMain.handle('system:detectAgents', async () => {
-    const fs = require('fs');
-    const { execFile } = require('child_process');
-    const { promisify } = require('util');
-    const execFileAsync = promisify(execFile);
-
-    const findCommand = async (command) => {
-      const candidates = process.platform === 'win32'
-        ? [`${command}.cmd`, `${command}.exe`, command]
-        : [command];
-
-      for (const candidate of candidates) {
-        try {
-          const { stdout } = await execFileAsync(process.platform === 'win32' ? 'where' : 'which', [candidate], {
-            encoding: 'utf8',
-            timeout: 3000,
-            windowsHide: true,
-          });
-          const output = stdout.trim();
-          const firstLine = output.split(/\r?\n/).find(Boolean);
-          if (firstLine) return firstLine;
-        } catch {
-          // try next candidate
-        }
-      }
-
-      const absoluteCandidates = process.platform === 'win32'
-        ? []
-        : [`/usr/local/bin/${command}`, `/opt/homebrew/bin/${command}`, path.join(process.env.HOME || '', '.local', 'bin', command)];
-      for (const candidate of absoluteCandidates) {
-        if (fs.existsSync(candidate)) return candidate;
-      }
-      return null;
-    };
-
-    const agents = await Promise.all(getAgentAdapters().map(async ({ id, label, command }) => {
-      const agentPath = command ? await findCommand(command) : null;
-      return { id, label, command, path: agentPath };
-    }));
-    return agents.map(agent => ({ ...agent, installed: !!agent.path }));
-  });
-
-  ipcMain.handle('window:setAlwaysOnTop', (_, value) => {
-    if (mainWindow) mainWindow.setAlwaysOnTop(!!value);
-  });
-
-  ipcMain.handle('window:setOpacity', (_, value) => {
-    const normalized = normalizeSettingValue('windowOpacity', value);
-    if (mainWindow && normalized.ok) {
-      const clamped = Math.max(0.7, Math.min(1.0, normalized.value / 100));
-      mainWindow.setOpacity(clamped);
-    }
-  });
-
   registerSettingsIPC({
     ipcMain,
     store,
@@ -541,24 +446,6 @@ function registerIPC() {
     fileService,
     fileWatcher,
   });
-
-  // Shell / external — restrict to http/https URLs
-  ipcMain.on('shell:openExternal', (_, url) => {
-    if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
-      shell.openExternal(url);
-    }
-  });
-
-  // Shell / show item in folder (Explorer / Finder)
-  ipcMain.on('shell:showItemInFolder', (_, filePath) => {
-    if (typeof filePath === 'string' && filePath.length > 0 && fileService.isAllowedPath(filePath)) {
-      shell.showItemInFolder(filePath);
-    }
-  });
-
-  // Clipboard (routed via IPC so renderer doesn't need permission prompts)
-  ipcMain.handle('clipboard:read', () => clipboard.readText());
-  ipcMain.on('clipboard:write', (_, text) => clipboard.writeText(text || ''));
 
   // Telegram notifications
   ipcMain.handle('telegram:test', async () => {
