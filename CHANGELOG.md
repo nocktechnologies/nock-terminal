@@ -8,9 +8,11 @@ This changelog is summarized from git history. The repository has no version tag
 
 - Added bounded file-tree traversal metadata, large-file preview reads, and editor cache refresh behavior for Nock `7532`.
 - Added regression coverage for file-tree bounds, large-file reads, symlink rejection, watcher change events, and editor cache policy.
-- Reconciled the live NockCC backlog for Nock Terminal after PRs #31-#35.
+- Added the Nock `7533` post-A/B/C integration audit report and next-wave sequencing recommendation.
+- Prevented generic renderer `settings:get` calls from returning sensitive settings; secret reads now require the explicit allowlist path.
+- Reconciled the live NockCC backlog for Nock Terminal after PRs #31, #32, and #37.
 - Added `docs/NOCK_BACKLOG.md` as the repo-side source of truth for completed, reopened, blocked, and stale Nocks.
-- Recorded that Nock `7532` remains open for file tree/editor correctness because PR #33 covered stale contract cleanup instead.
+- Recorded that PR #37, not PR #33, satisfies Nock `7532` file tree/editor correctness.
 - Linked the Nock backlog ledger from the docs index and roadmap.
 
 ### 2026-05-16

@@ -286,6 +286,16 @@ function sanitizeSettingsForRenderer(settings = {}) {
   return sanitized;
 }
 
+function getSettingForRenderer(settings = {}, key) {
+  if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) {
+    return undefined;
+  }
+  if (isSensitiveSettingKey(key)) {
+    return undefined;
+  }
+  return sanitizeStoredSettings(settings)[key];
+}
+
 function cloneDefaultSettings() {
   return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 }
@@ -306,6 +316,7 @@ function createSettingsResetSnapshot(settings = {}, { preserveWindowBounds = tru
 module.exports = {
   DEFAULT_SETTINGS,
   createSettingsResetSnapshot,
+  getSettingForRenderer,
   normalizeSettingValue,
   sanitizeSettingsForExport,
   sanitizeSettingsForRenderer,
