@@ -34,6 +34,7 @@ class FileWatcher extends EventEmitter {
     this.watcher
       .on('error', (err) => console.error('FileWatcher: chokidar error:', err.message))
       .on('add', (filePath) => this._emitChanged('add', filePath))
+      .on('change', (filePath) => this._emitChanged('change', filePath))
       .on('unlink', (filePath) => this._emitChanged('unlink', filePath))
       .on('addDir', (dirPath) => this._emitChanged('addDir', dirPath))
       .on('unlinkDir', (dirPath) => this._emitChanged('unlinkDir', dirPath));

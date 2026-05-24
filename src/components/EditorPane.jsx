@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { shouldRefreshOpenFile, updateSavedFileContent } from '../utils/editorFileState.mjs';
 
 const EXT_TO_LANG = {
   js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
@@ -55,6 +56,8 @@ export default function EditorPane({
   const monacoRef = useRef(null);
   const modelsRef = useRef({});
   const activeFileRef = useRef(activeFile);
+  const filesRef = useRef(files);
+  const fileContentsRef = useRef({});
   const onUnsavedFilesChangeRef = useRef(onUnsavedFilesChange);
   const [loading, setLoading] = useState(true);
   const [fileContents, setFileContents] = useState({});
@@ -65,6 +68,9 @@ export default function EditorPane({
     onUnsavedFilesChangeRef.current = onUnsavedFilesChange;
   }, [onUnsavedFilesChange]);
 
+  useEffect(() => { filesRef.current = files; }, [files]);
+  useEffect(() => { fileContentsRef.current = fileContents; }, [fileContents]);
+
   const notifyUnsavedFiles = useCallback(() => {
     const unsavedFiles = Object.entries(modelsRef.current)
       .filter(([, entry]) => entry.modified)
@@ -74,6 +80,40 @@ export default function EditorPane({
 
   // Keep ref in sync so Monaco command closure reads current value
   useEffect(() => { activeFileRef.current = activeFile; }, [activeFile]);
+
+  const cacheFileResult = useCallback((filePath, result) => {
+    setFileContents(prev => {
+      const next = { ...prev, [filePath]: result };
+      fileContentsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const applyContentToCleanModel = useCallback((filePath, content) => {
+    const entry = modelsRef.current[filePath];
+    if (!entry || entry.modified || typeof content !== 'string') return;
+    if (entry.model.getValue() === content) return;
+
+    entry.applyingExternalContent = true;
+    try {
+      entry.model.setValue(content);
+      entry.modified = false;
+    } finally {
+      entry.applyingExternalContent = false;
+    }
+    notifyUnsavedFiles();
+    forceUpdate(n => n + 1);
+  }, [notifyUnsavedFiles]);
+
+  const readAndCacheFile = useCallback(async (filePath, { force = false, applyToModel = false } = {}) => {
+    if (!force && fileContentsRef.current[filePath]) return fileContentsRef.current[filePath];
+    const result = await window.nockTerminal.files.read(filePath);
+    cacheFileResult(filePath, result);
+    if (applyToModel && result && !result.error) {
+      applyContentToCleanModel(filePath, result.content);
+    }
+    return result;
+  }, [applyContentToCleanModel, cacheFileResult]);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +148,11 @@ export default function EditorPane({
             window.nockTerminal.files.write(file, content).then(result => {
               if (result.success) {
                 entry.modified = false;
+                setFileContents(prev => {
+                  const next = updateSavedFileContent(prev, file, content);
+                  fileContentsRef.current = next;
+                  return next;
+                });
                 setSaveError(null);
                 notifyUnsavedFiles();
                 forceUpdate(n => n + 1);
@@ -131,18 +176,32 @@ export default function EditorPane({
   useEffect(() => {
     const loadNewFiles = async () => {
       for (const filePath of files) {
-        if (fileContents[filePath]) continue;
         try {
-          const result = await window.nockTerminal.files.read(filePath);
-          setFileContents(prev => ({ ...prev, [filePath]: result }));
+          await readAndCacheFile(filePath);
         } catch (err) {
           console.error(`Failed to load file ${filePath}:`, err);
-          setFileContents(prev => ({ ...prev, [filePath]: { error: err.message } }));
+          cacheFileResult(filePath, { error: err.message });
         }
       }
     };
     loadNewFiles();
-  }, [files]);
+  }, [files, cacheFileResult, readAndCacheFile]);
+
+  useEffect(() => {
+    if (typeof window.nockTerminal.files.onChanged !== 'function') return undefined;
+    return window.nockTerminal.files.onChanged((event) => {
+      for (const filePath of filesRef.current) {
+        const entry = modelsRef.current[filePath];
+        if (!shouldRefreshOpenFile(filePath, event, entry)) continue;
+        readAndCacheFile(filePath, { force: true, applyToModel: true })
+          .catch(err => {
+            console.error(`Failed to refresh changed file ${filePath}:`, err);
+            cacheFileResult(filePath, { error: err.message });
+          });
+      }
+      return undefined;
+    });
+  }, [cacheFileResult, readAndCacheFile]);
 
   useEffect(() => {
     if (!editorRef.current || !monacoRef.current || !activeFile) return;
@@ -165,16 +224,19 @@ export default function EditorPane({
       const ext = activeFile.split('.').pop()?.toLowerCase() || '';
       const language = EXT_TO_LANG[ext] || 'plaintext';
       const model = monaco.editor.createModel(content.content, language);
+      const filePath = activeFile;
 
       model.onDidChangeContent(() => {
-        const entry = modelsRef.current[activeFile];
-        if (!entry || entry.modified) return;
+        const entry = modelsRef.current[filePath];
+        if (!entry || entry.applyingExternalContent || entry.modified) return;
         entry.modified = true;
         notifyUnsavedFiles();
         forceUpdate(n => n + 1);
       });
 
       modelsRef.current[activeFile] = { model, viewState: null, modified: false };
+    } else if (!modelsRef.current[activeFile].modified && typeof content.content === 'string') {
+      applyContentToCleanModel(activeFile, content.content);
     }
 
     const entry = modelsRef.current[activeFile];
@@ -193,6 +255,13 @@ export default function EditorPane({
         delete modelsRef.current[path];
       }
     }
+    setFileContents(prev => {
+      const next = Object.fromEntries(
+        Object.entries(prev).filter(([filePath]) => openPaths.has(filePath))
+      );
+      fileContentsRef.current = next;
+      return next;
+    });
     notifyUnsavedFiles();
   }, [files, notifyUnsavedFiles]);
 

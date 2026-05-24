@@ -11,6 +11,7 @@ const GIT_STATUS_COLORS = {
 
 export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
   const [tree, setTree] = useState([]);
+  const [treeMeta, setTreeMeta] = useState(null);
   const [gitStatus, setGitStatus] = useState({});
   const [filter, setFilter] = useState('');
   const [contextMenu, setContextMenu] = useState(null);
@@ -20,10 +21,17 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
     if (!rootPath) return;
     try {
       const result = await window.nockTerminal.files.tree(rootPath);
-      setTree(Array.isArray(result) ? result : []);
+      if (Array.isArray(result)) {
+        setTree(result);
+        setTreeMeta(null);
+      } else {
+        setTree(Array.isArray(result?.entries) ? result.entries : []);
+        setTreeMeta(result?.meta || null);
+      }
     } catch (err) {
       console.error('FileTree: failed to load tree:', err);
       setTree([]);
+      setTreeMeta({ error: err.message });
     }
   }, [rootPath]);
 
@@ -152,6 +160,16 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
           className="w-full bg-nock-card border border-nock-border rounded px-2 py-1 text-[10px] text-nock-text font-mono focus:outline-none focus:border-nock-accent-blue placeholder:text-nock-text-muted"
         />
       </div>
+
+      {(treeMeta?.truncated || treeMeta?.error) && (
+        <div className="mx-2 mb-2 rounded border border-nock-yellow/20 bg-nock-yellow/10 px-2 py-1 text-[10px] font-mono text-nock-yellow">
+          {treeMeta.error || (
+            treeMeta.truncatedByEntries
+              ? `Partial tree shown (${treeMeta.entryCount}/${treeMeta.maxEntries} entries)`
+              : `Partial tree shown (depth limit ${treeMeta.maxDepth})`
+          )}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-1">
         {filteredTree.map(node => (
