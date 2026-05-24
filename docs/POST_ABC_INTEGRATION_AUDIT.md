@@ -10,6 +10,19 @@ This is the Nock `7533` checkpoint after the first remediation wave landed:
 
 The goal is to name the risks that are actually closed, identify the remaining load-bearing risks, and decide what the next wave should be. This is not a broad module-split task.
 
+## Follow-Up Status
+
+The next-wave E/G contracts have now landed on `origin/main`:
+
+- Nock `7551` / Phase E: PR #39, merge `1cd45fd`.
+- Nock `7552` / Phase G: PR #40, merge `ed5751b`.
+
+Phase E removed the unused Claude chat IPC/client path and the misleading global Claude/Mara settings, kept Kit launch behavior profile-driven, moved Telegram token access behind explicit reveal/status UI, and normalized `dispatch:brokered` onto the shared IPC validator/error response pattern.
+
+Phase G added schema-versioned migrations for settings, project profiles, prompt markdown, and session-history metadata. It also tightened migration behavior after review: whole-store replacement for `electron-store`, stable nested-object comparison, invalid legacy `defaultAgent` reset, and safer prompt-file read metadata.
+
+Phase F is now unblocked, but should remain a mechanical decomposition of `App.jsx`, `electron/main.js`, and `electron/session-discovery.js`. Phase H remains release readiness rather than local architecture work.
+
 ## Verification
 
 Run from branch `codex/n7533-integration-audit` based on `origin/main` at `1ba415f`.
@@ -61,17 +74,17 @@ Do not reopen the old A/B/C defect list wholesale. The next work should target t
 
 ## Recommended Next Nocks
 
-Phase E: settings/profile/AI wiring and deletion pass.
+Phase E: settings/profile/AI wiring and deletion pass. **Done via PR #39.**
 
 Scope: decide which AI/profile fields are real product surface, wire the ones that are real, delete the rest, tighten `settings:getSecure` UX, and normalize `dispatch:brokered` onto the shared validator/error response pattern.
 
-Phase G: versioned local data migrations.
+Phase G: versioned local data migrations. **Done via PR #40.**
 
 Scope: introduce a persisted schema version for settings, project profiles, prompt library entries, and session history; migrate removed fields; add regression tests for old stored shapes.
 
 Phase F: module decomposition.
 
-Scope: split `App.jsx`, `electron/main.js`, and `electron/session-discovery.js` after Phase E/G. Preserve behavior, keep commits small, and avoid combining extraction with feature changes.
+Scope: split `App.jsx`, `electron/main.js`, and `electron/session-discovery.js` after Phase E/G. Preserve behavior, keep commits small, and avoid combining extraction with feature changes. Start from `origin/main` at or after `ed5751b`.
 
 Phase H: production release readiness.
 

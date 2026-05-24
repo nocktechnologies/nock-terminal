@@ -27,17 +27,19 @@ Do not lead with "Codex app" or "Claude app." Lead with the workflow:
 
 ## Near-Term Roadmap
 
-### May 24 NockCC Backlog Reconciliation And Post-A/B/C Audit
+### May 24 NockCC Backlog Reconciliation, Post-A/B/C Audit, And E/G Closeout
 
-The live NockCC backlog has been reconciled against `origin/main` after PRs #31, #32, and #37. See `docs/NOCK_BACKLOG.md` for the source-of-truth queue state and `docs/POST_ABC_INTEGRATION_AUDIT.md` for the current post-A/B/C checkpoint.
+The live NockCC backlog has been reconciled against `origin/main` after PRs #31, #32, #37, #38, #39, and #40. See `docs/NOCK_BACKLOG.md` for the source-of-truth queue state and `docs/POST_ABC_INTEGRATION_AUDIT.md` for the current post-A/B/C checkpoint.
 
 Current execution posture:
 
 - Nock `7530` / Phase A is done via PR #31.
 - Nock `7531` / Phase B is done via PR #32.
 - Nock `7532` / Phase C is done via PR #37; PR #33 remains a useful stale-contract cleanup but not the true Phase C.
-- Nock `7533` is active as the post-A/B/C integration audit and next-wave planning checkpoint.
-- Phase E and Phase G can run in parallel after `7533`; Phase F should wait until those contracts settle.
+- Nock `7533` is done via PR #38 as the post-A/B/C integration audit and next-wave planning checkpoint.
+- Nock `7551` / Phase E is done via PR #39: misleading global Claude/Mara settings and unused Claude chat IPC/client path are gone, Telegram token access is explicit reveal/status UI, and `dispatch:brokered` uses the shared validator/error pattern.
+- Nock `7552` / Phase G is done via PR #40: settings, project profiles, prompt markdown, and session history now have schema-versioned local migrations.
+- Phase F is now unblocked, but should start from `origin/main` at or after `ed5751b` and stay focused on module decomposition.
 - Nock `123` should be rewritten before execution because icon/signing config has partially moved on; the remaining work is signed installer smoke, real credential setup, update distribution, crash/error reporting, and support path.
 
 ### May 16 Agent-Agnostic Cockpit Slice

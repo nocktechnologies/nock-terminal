@@ -6,9 +6,9 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 
 ## Current Baseline
 
-- Repo baseline: `origin/main` at merge commit `1ba415f` after PRs #31, #32, and #37.
-- NockCC live update: message `#1436` sent to `mira-nockos` when Nock `7532` closed and Nock `7533` started.
-- Project board: Nocks `7530`, `7531`, `7532`, and `7533` are attached to the Terminal project.
+- Repo baseline: `origin/main` at merge commit `ed5751b` after PRs #31, #32, #37, #38, #39, and #40.
+- NockCC live update: message `#1443` sent to `mira-nockos` when Phase E/G PRs opened; later closeout messages should reference PRs #39 and #40.
+- Project board: Nocks `7530`, `7531`, `7532`, `7533`, `7551`, and `7552` are attached to the Terminal project.
 - Primary local checkout note: `/Users/kevin/Dev/nock-terminal` had unrelated dirty work and was behind `origin/main` during this pass, so implementation and audit work used clean worktrees.
 
 ## Reconciled Nocks
@@ -19,7 +19,9 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 | `7530` | Done | `40 Product Ops / Polish` | PR #31 merged: `9eb0558` | Correctly closed Phase A: UI/settings truth cleanup. |
 | `7531` | Done | `40 Product Ops / Polish` | PR #32 merged: `e970df0` | Correctly closed Phase B: Electron IPC and secret hardening. |
 | `7532` | Done | `10 Active Foundation` | PR #37 merged: `1ba415f` | True Phase C is complete: bounded tree traversal, large-file preview behavior, and editor stale-cache refresh. |
-| `7533` | In progress | `30 Roadmap` | Branch `codex/n7533-integration-audit` | Post-A/B/C integration audit is active. See `docs/POST_ABC_INTEGRATION_AUDIT.md`. |
+| `7533` | Done | `30 Roadmap` | PR #38 merged: `9751a36` | Post-A/B/C integration audit complete. See `docs/POST_ABC_INTEGRATION_AUDIT.md`. |
+| `7551` | Done | `10 Active Foundation` | PR #39 merged: `1cd45fd` | Phase E closed: settings/profile/AI deletion pass, explicit secret reveal UX, and shared `dispatch:brokered` validation. |
+| `7552` | Done | `10 Active Foundation` | PR #40 merged: `ed5751b` | Phase G closed: schema-versioned settings, project profile, prompt, and session-history migrations. |
 | `886` | Backlog | `30 Roadmap` | Still valid | Marketing/GTM positioning is useful, but should use this ledger and current release docs. |
 | `123` | Backlog | `30 Roadmap` | Partially stale | App icons and signing config have moved forward; rewrite this around signed artifact smoke, actual certificates, update channel, crash/error reporting, and support path. |
 | `7451` | Done | None | Historical assessment | Keep as archived historical launch-readiness report. |
@@ -40,16 +42,13 @@ Those acceptance criteria were not implemented by PR #33. The stale-contract cle
 
 ## Next Execution Order
 
-1. **Finish Nock `7533`.**
-   Complete the post-A/B/C report, record closed and remaining risks, and make a current go/no-go recommendation for the next wave.
+1. **Start Phase F only after syncing to `origin/main` at or after `ed5751b`.**
+   Phase E and Phase G have settled the settings/IPC/local-data contracts. Module decomposition can now begin, but it should stay mechanical and avoid new product behavior.
 
-2. **Create or assign the next-wave Nocks from `7533`.**
-   Recommended sequence: Phase E and Phase G can run in parallel; Phase F waits for E/G contracts; Phase H can start as docs/checklist work before packaged smoke automation.
-
-3. **Rewrite or replace Nock `123`.**
+2. **Rewrite or replace Nock `123`.**
    It still points at app icon/code-signing work as if none of it happened. The remaining work is signed installer smoke on macOS/Windows/Linux release artifacts, actual credential setup, update-channel decision, crash/error reporting, and support path.
 
-4. **Keep Nock `886` as product/GTM work.**
+3. **Keep Nock `886` as product/GTM work.**
    It should be informed by current truth: Claude transcript discovery is real, Codex/Gemini launch profiles exist, Codex/DeepSeek dispatch exists, Linux unpacked packaged smoke exists, and full Codex/Gemini transcript discovery, attach/reconnect, signed installer smoke, update distribution, crash reporting, worktree lanes, and replay remain roadmap.
 
 ## Notes For Future Agents
@@ -57,4 +56,4 @@ Those acceptance criteria were not implemented by PR #33. The stale-contract cle
 - When closing a Nock, set the live Nock `repo`, `branch`, `pr_number`, and `pr_url` fields.
 - If a PR title references a Nock but the implementation does not satisfy that Nock's acceptance criteria, leave the Nock open and add an audit note.
 - Keep Terminal project placement current. Active implementation belongs in `10 Active Foundation`; future planning belongs in `30 Roadmap`; completed hardening evidence belongs in `40 Product Ops / Polish`.
-- Do not start broad `App.jsx`, `main.js`, or session-discovery extraction before `7532` and `7533` are complete.
+- Do not start broad `App.jsx`, `main.js`, or session-discovery extraction from a branch older than PR #40.
