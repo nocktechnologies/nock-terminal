@@ -21,8 +21,6 @@ const {
 } = require('./settings-utils');
 const {
   errorPayload,
-  validateDispatchCreatePayload,
-  validateDispatchBrokeredPayload,
   validateProfileSavePayload,
   validatePromptSavePayload,
   validateTerminalCreatePayload,
@@ -30,6 +28,7 @@ const {
 const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
+const { registerDispatchIPC } = require('./dispatch-ipc');
 const { registerFileIPC } = require('./file-ipc');
 const { registerSettingsIPC } = require('./settings-ipc');
 
@@ -442,24 +441,9 @@ function registerIPC() {
     return sessions;
   });
 
-  // Dispatch-and-die agent requests (Codex / DeepSeek via Mira or direct script)
-  ipcMain.handle('dispatch:brokered', async (_, payload) => {
-    const validated = validateDispatchBrokeredPayload(payload);
-    if (!validated.ok) return errorPayload(validated);
-    try {
-      return await agentDispatchService.sendBrokered(validated.value);
-    } catch (err) {
-      return { success: false, error: err.message || 'Failed to send brokered dispatch request' };
-    }
-  });
-  ipcMain.handle('dispatch:createPayload', async (_, payload) => {
-    const validated = validateDispatchCreatePayload(payload);
-    if (!validated.ok) return errorPayload(validated);
-    try {
-      return await agentDispatchService.createPayload(validated.value);
-    } catch (err) {
-      return { success: false, error: err.message || 'Failed to create dispatch payload' };
-    }
+  registerDispatchIPC({
+    ipcMain,
+    agentDispatchService,
   });
 
   // Ollama chat
