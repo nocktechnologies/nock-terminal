@@ -1,5 +1,7 @@
-const fs = require('fs');
+const { constants } = require('fs');
+const { access } = require('fs/promises');
 const http = require('http');
+const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
@@ -14,6 +16,11 @@ async function defaultFetchOllamaVersion(url) {
   try {
     return await new Promise((resolve) => {
       const req = http.get(`${url}/api/version`, { timeout: 3000 }, (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          resolve(null);
+          return;
+        }
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
@@ -54,9 +61,14 @@ async function defaultFindCommand(command) {
 
   const absoluteCandidates = process.platform === 'win32'
     ? []
-    : [`/usr/local/bin/${command}`, `/opt/homebrew/bin/${command}`, path.join(process.env.HOME || '', '.local', 'bin', command)];
+    : [`/usr/local/bin/${command}`, `/opt/homebrew/bin/${command}`, path.join(os.homedir(), '.local', 'bin', command)];
   for (const candidate of absoluteCandidates) {
-    if (fs.existsSync(candidate)) return candidate;
+    try {
+      await access(candidate, constants.F_OK);
+      return candidate;
+    } catch {
+      // try next candidate
+    }
   }
   return null;
 }

@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const http = require('node:http');
 
 const { registerSystemWindowIPC } = require('../electron/system-window-ipc');
 
@@ -196,6 +197,42 @@ test('system handlers delegate ports, shell discovery, versions, and agents', as
       id: 'custom',
       label: 'Custom',
       command: '',
+      path: null,
+      installed: false,
+    },
+  ]);
+});
+
+test('system ollama version default returns null for non-200 responses', async (t) => {
+  const server = http.createServer((_, res) => {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end('{"version":"bad"}');
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const { port } = server.address();
+  const ipc = registerHarness({
+    fetchOllamaVersion: undefined,
+    getSettingsSnapshot: () => ({ ollamaUrl: `http://127.0.0.1:${port}` }),
+  });
+
+  assert.equal(await ipc.invoke('system:ollamaVersion'), null);
+});
+
+test('system detectAgents default finder keeps missing commands uninstalled', async () => {
+  const ipc = registerHarness({
+    findCommand: undefined,
+    agentAdapters: () => [
+      { id: 'missing', label: 'Missing', command: 'nock-missing-agent-command-for-tests' },
+    ],
+  });
+
+  assert.deepEqual(await ipc.invoke('system:detectAgents'), [
+    {
+      id: 'missing',
+      label: 'Missing',
+      command: 'nock-missing-agent-command-for-tests',
       path: null,
       installed: false,
     },
