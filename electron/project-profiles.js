@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const PROFILE_SCHEMA_VERSION = 1;
+
 const DEFAULT_PROFILE = {
   defaultAgent: 'claude',
   defaultShell: '',
@@ -15,15 +17,45 @@ const DEFAULT_PROFILE = {
 };
 
 const REMOVED_PROFILE_FIELDS = new Set(['preferredModel', 'systemPrompt']);
+const PROFILE_STRING_FIELDS = new Set(Object.keys(DEFAULT_PROFILE));
+const VALID_PROFILE_AGENTS = new Set(['claude', 'codex', 'gemini', 'custom']);
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 
 function sanitizeProfile(profile = {}) {
   const sanitized = {};
-  for (const [key, value] of Object.entries(profile || {})) {
-    if (!REMOVED_PROFILE_FIELDS.has(key)) {
+  if (!isPlainObject(profile)) return sanitized;
+
+  for (const [key, value] of Object.entries(profile)) {
+    if (PROFILE_STRING_FIELDS.has(key) && typeof value === 'string' && !REMOVED_PROFILE_FIELDS.has(key)) {
+      if (key === 'defaultAgent' && !VALID_PROFILE_AGENTS.has(value)) continue;
       sanitized[key] = value;
     }
   }
   return sanitized;
+}
+
+function migrateProfileRecord(profile = {}, projectPath) {
+  const source = isPlainObject(profile) ? profile : {};
+  const migrated = {
+    ...DEFAULT_PROFILE,
+    ...sanitizeProfile(source),
+    schemaVersion: PROFILE_SCHEMA_VERSION,
+  };
+
+  const resolvedProjectPath = typeof projectPath === 'string'
+    ? projectPath
+    : (typeof source.projectPath === 'string' ? source.projectPath : '');
+  if (resolvedProjectPath) migrated.projectPath = resolvedProjectPath;
+  if (typeof source.updatedAt === 'string') migrated.updatedAt = source.updatedAt;
+
+  return migrated;
+}
+
+function recordsEqual(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 class ProjectProfiles {
@@ -58,28 +90,39 @@ class ProjectProfiles {
     return path.join(this.dir, `${this._hash(projectPath)}.json`);
   }
 
+  _writeMigratedProfile(filePath, data) {
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+    } catch (err) {
+      console.error('[ProjectProfiles] Failed to persist migrated profile:', err.message);
+    }
+  }
+
   get(projectPath) {
     const filePath = this._filePath(projectPath);
     try {
       const raw = fs.readFileSync(filePath, 'utf8');
       const parsed = JSON.parse(raw);
-      return { ...DEFAULT_PROFILE, ...sanitizeProfile(parsed), projectPath };
+      const migrated = migrateProfileRecord(parsed, projectPath);
+      if (!recordsEqual(parsed, migrated)) {
+        this._writeMigratedProfile(filePath, migrated);
+      }
+      return migrated;
     } catch (err) {
       if (err.code !== 'ENOENT') {
         console.error('[ProjectProfiles] Error reading profile:', err.message);
       }
-      return { ...DEFAULT_PROFILE, projectPath };
+      return migrateProfileRecord({}, projectPath);
     }
   }
 
   save(projectPath, profile) {
     const filePath = this._filePath(projectPath);
-    const data = {
-      ...DEFAULT_PROFILE,
-      ...sanitizeProfile(profile),
+    const data = migrateProfileRecord({
+      ...profile,
       projectPath,
       updatedAt: new Date().toISOString(),
-    };
+    }, projectPath);
     try {
       fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
       return { success: true, data };
@@ -109,8 +152,14 @@ class ProjectProfiles {
       const profiles = [];
       for (const file of files) {
         try {
-          const raw = fs.readFileSync(path.join(this.dir, file), 'utf8');
-          profiles.push({ ...DEFAULT_PROFILE, ...sanitizeProfile(JSON.parse(raw)) });
+          const filePath = path.join(this.dir, file);
+          const raw = fs.readFileSync(filePath, 'utf8');
+          const parsed = JSON.parse(raw);
+          const migrated = migrateProfileRecord(parsed);
+          if (!recordsEqual(parsed, migrated)) {
+            this._writeMigratedProfile(filePath, migrated);
+          }
+          profiles.push(migrated);
         } catch (parseErr) {
           console.error('[ProjectProfiles] Skipping corrupt file:', file, parseErr.message);
         }
@@ -122,5 +171,9 @@ class ProjectProfiles {
     }
   }
 }
+
+ProjectProfiles.SCHEMA_VERSION = PROFILE_SCHEMA_VERSION;
+ProjectProfiles.DEFAULT_PROFILE = DEFAULT_PROFILE;
+ProjectProfiles.migrateProfileRecord = migrateProfileRecord;
 
 module.exports = ProjectProfiles;

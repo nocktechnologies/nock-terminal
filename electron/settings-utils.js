@@ -1,5 +1,8 @@
 const { sanitizeDevRoots, sanitizeStringList } = require('./security-utils');
 
+const SETTINGS_SCHEMA_KEY = 'schemaVersion';
+const SETTINGS_SCHEMA_VERSION = 1;
+
 const DEFAULT_SETTINGS = {
   windowBounds: { width: 1400, height: 900 },
   // General
@@ -255,6 +258,68 @@ function sanitizeStoredSettings(settings = {}) {
   return sanitized;
 }
 
+function sortForStableStringify(value) {
+  if (Array.isArray(value)) {
+    return value.map(sortForStableStringify);
+  }
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce((sorted, key) => {
+      sorted[key] = sortForStableStringify(value[key]);
+      return sorted;
+    }, {});
+  }
+  return value;
+}
+
+function stableStringify(value) {
+  return JSON.stringify(sortForStableStringify(value));
+}
+
+function canReplaceStoreObject(store) {
+  let current = store;
+  while (current) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, 'store');
+    if (descriptor) return typeof descriptor.set === 'function';
+    current = Object.getPrototypeOf(current);
+  }
+  return false;
+}
+
+function migrateSettingsObject(settings = {}) {
+  return {
+    ...sanitizeStoredSettings(settings && typeof settings === 'object' ? settings : {}),
+    [SETTINGS_SCHEMA_KEY]: SETTINGS_SCHEMA_VERSION,
+  };
+}
+
+function migrateSettingsStore(store) {
+  const current = store && typeof store.store === 'object' && store.store !== null
+    ? store.store
+    : {};
+  const migrated = migrateSettingsObject(current);
+  const currentKeys = Object.keys(current).sort();
+  const migratedKeys = Object.keys(migrated).sort();
+  const changed = stableStringify(currentKeys) !== stableStringify(migratedKeys)
+    || migratedKeys.some((key) => stableStringify(current[key]) !== stableStringify(migrated[key]));
+
+  if (changed && store) {
+    if (canReplaceStoreObject(store)) {
+      store.store = migrated;
+    } else if (typeof store.clear === 'function' && typeof store.set === 'function') {
+      store.clear();
+      for (const [key, value] of Object.entries(migrated)) {
+        store.set(key, value);
+      }
+    }
+  }
+
+  return {
+    changed,
+    schemaVersion: SETTINGS_SCHEMA_VERSION,
+    removedKeys: currentKeys.filter((key) => !Object.prototype.hasOwnProperty.call(migrated, key)),
+  };
+}
+
 function isSensitiveSettingKey(key) {
   return /(?:token|secret|password|credential|private(?:_|-)?key|api(?:_|-)?key|apikey)/i.test(String(key || ''));
 }
@@ -321,9 +386,12 @@ function createSettingsResetSnapshot(settings = {}, { preserveWindowBounds = tru
 
 module.exports = {
   DEFAULT_SETTINGS,
+  SETTINGS_SCHEMA_KEY,
+  SETTINGS_SCHEMA_VERSION,
   createSettingsResetSnapshot,
   getSecureSettingStatus,
   getSettingForRenderer,
+  migrateSettingsStore,
   normalizeSettingValue,
   sanitizeSettingsForExport,
   sanitizeSettingsForRenderer,

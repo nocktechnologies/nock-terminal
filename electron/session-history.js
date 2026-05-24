@@ -1,6 +1,55 @@
 const fs = require('fs');
 const path = require('path');
 
+const SESSION_HISTORY_SCHEMA_VERSION = 1;
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeString(value, maxLength = 1000) {
+  if (typeof value !== 'string') return undefined;
+  return value.length > maxLength ? value.slice(0, maxLength) : value;
+}
+
+function normalizeNumber(value) {
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function migrateSessionMetadata(metadata = {}) {
+  const source = isPlainObject(metadata) ? metadata : {};
+  const migrated = {
+    schemaVersion: SESSION_HISTORY_SCHEMA_VERSION,
+  };
+
+  for (const key of ['project', 'shell', 'cwd', 'tabId']) {
+    const value = normalizeString(source[key]);
+    if (value !== undefined) migrated[key] = value;
+  }
+
+  for (const key of ['startTime', 'endTime']) {
+    if (source[key] === null) {
+      migrated[key] = null;
+      continue;
+    }
+    const value = normalizeNumber(source[key]);
+    if (value !== undefined) migrated[key] = value;
+  }
+
+  if (source.exitCode === null) {
+    migrated.exitCode = null;
+  } else {
+    const exitCode = normalizeNumber(source.exitCode);
+    if (exitCode !== undefined) migrated.exitCode = exitCode;
+  }
+
+  return migrated;
+}
+
+function recordsEqual(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 class SessionHistory {
   constructor(store) {
     this.store = store;
@@ -27,13 +76,13 @@ class SessionHistory {
 
   startSession(tabId, metadata) {
     const session = {
-      metadata: {
+      metadata: migrateSessionMetadata({
         ...metadata,
         tabId,
         startTime: Date.now(),
         endTime: null,
         exitCode: null,
-      },
+      }),
       buffer: [],
       bufferSize: 0,
     };
@@ -103,8 +152,17 @@ class SessionHistory {
 
       return files.map(f => {
         try {
-          const raw = fs.readFileSync(path.join(this.dir, f), 'utf8');
-          const meta = JSON.parse(raw);
+          const metaPath = path.join(this.dir, f);
+          const raw = fs.readFileSync(metaPath, 'utf8');
+          const parsed = JSON.parse(raw);
+          const meta = migrateSessionMetadata(parsed);
+          if (!recordsEqual(parsed, meta)) {
+            try {
+              fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf8');
+            } catch (err) {
+              console.error('SessionHistory: failed to persist migrated metadata:', err.message);
+            }
+          }
           // Check if a matching .txt file exists
           const txtFile = f.replace(/\.json$/, '.txt');
           meta.hasOutput = fs.existsSync(path.join(this.dir, txtFile));
@@ -149,5 +207,8 @@ class SessionHistory {
     }
   }
 }
+
+SessionHistory.SCHEMA_VERSION = SESSION_HISTORY_SCHEMA_VERSION;
+SessionHistory.migrateSessionMetadata = migrateSessionMetadata;
 
 module.exports = SessionHistory;
