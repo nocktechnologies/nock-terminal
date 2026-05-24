@@ -14,6 +14,7 @@
     "preview": "vite preview",
     "test": "node --test",
     "check:bundle": "node scripts/check-bundle-budget.mjs",
+    "smoke:package": "node scripts/package-smoke.mjs",
     "release:check": "npm test && npm audit --audit-level=moderate && npx vite build && npm run check:bundle"
   },
   "dependencies": {
@@ -85,7 +86,9 @@
       "src/main.jsx",
       "electron/main.js",
       "electron/preload.js",
-      "test/**/*.test.cjs"
+      "scripts/*.mjs",
+      "test/**/*.test.cjs",
+      "test/**/*.test.mjs"
     ]
   }
 }

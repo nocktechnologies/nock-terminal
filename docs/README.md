@@ -6,7 +6,7 @@ Current docs:
 - [Product Roadmap](ROADMAP.md) - recommended positioning, completed cockpit and dispatch slices, roadmap, GTM experiments, and product ideas.
 - [Agent Folder Intelligence](AGENT_FOLDER_INTELLIGENCE.md) - agent-folder detection, local NockCC file-bus state mapping, command launcher behavior, and launch behavior.
 - [Agent Dispatch](AGENT_DISPATCH.md) - Codex/DeepSeek dispatch-agent discovery, Mira-brokered requests, direct dispatcher scripts, telemetry, and current limits.
-- [Release Readiness](RELEASE_READINESS.md) - release gate, signing/notarization requirements, artifact checksums, command launcher smoke checks, and packaged smoke checklist.
+- [Release Readiness](RELEASE_READINESS.md) - release gate, packaged smoke automation, signing/notarization requirements, artifact checksums, command launcher smoke checks, and signed installer smoke checklist.
 - [Brand Assets](BRAND_ASSETS.md) - current green Nock asset sources and app-surface mapping.
 
 Root docs:

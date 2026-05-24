@@ -1,8 +1,8 @@
 # Release Readiness
 
-Updated: 2026-05-16
+Updated: 2026-05-24
 
-Nock Terminal has a release pipeline, but public distribution should stay gated until the checks below pass on a tagged release and the packaged installers are manually smoked on each target OS.
+Nock Terminal has a release pipeline, but public distribution should stay gated until the checks below pass on a tagged release and the signed installers are smoked on each target OS.
 
 ## Local Release Gate
 
@@ -21,6 +21,14 @@ The gate runs:
 
 The bundle budget accepts the known Monaco worker sizes but blocks unexpected growth in the app entry chunk, editor API chunk, Monaco workers, and xterm chunk.
 
+For packaged launch coverage, run:
+
+```bash
+npm run smoke:package
+```
+
+The packaged smoke builds an unpacked app with `electron-builder --dir`, launches the packaged binary with an isolated user-data directory, waits for the renderer-ready smoke marker, verifies the packaged renderer rendered the Nock Terminal shell, and exits cleanly. CI runs this on Linux under `xvfb`.
+
 ## GitHub Release Gate
 
 `.github/workflows/release.yml` runs on `v*.*.*` tags and now requires:
@@ -32,6 +40,8 @@ The bundle budget accepts the known Monaco worker sizes but blocks unexpected gr
 - SHA-256 checksum files for every platform artifact.
 - GitHub Release upload of macOS, Windows, Linux, and checksum artifacts.
 
+`.github/workflows/ci.yml` also runs an unpacked packaged-app smoke on Linux for pull requests and `main` pushes. This catches packaged renderer/load regressions before a tagged release, while signed installer verification remains a release-machine/manual target-OS check.
+
 Required GitHub secrets:
 
 - `MACOS_CERTIFICATE`
@@ -42,7 +52,7 @@ Required GitHub secrets:
 - `WINDOWS_CERTIFICATE`
 - `WINDOWS_CERTIFICATE_PASSWORD`
 
-## Packaged Smoke Checklist
+## Signed Installer Smoke Checklist
 
 Before a public beta announcement, install the generated artifacts on clean machines or VMs and verify:
 
@@ -67,11 +77,11 @@ Before a public beta announcement, install the generated artifacts on clean mach
 
 ## Release Decision
 
-Private alpha is acceptable when the local release gate passes and at least one packaged artifact per target OS has passed the smoke checklist.
+Private alpha is acceptable when the local release gate passes, CI packaged smoke is green, and at least one packaged artifact per target OS has passed the signed installer smoke checklist.
 
 Public beta still needs:
 
-- Packaged smoke tests automated in CI.
+- Signed installer smoke results for macOS, Windows, and Linux release artifacts.
 - Crash/error reporting decision and support path.
 - Update-channel decision.
 - One clear public onboarding/demo path around agent observability, not generic chat.
