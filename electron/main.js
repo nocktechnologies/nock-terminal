@@ -36,6 +36,19 @@ const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
 
 const APP_NAME = 'Nock Terminal';
+const IS_PACKAGED_SMOKE = process.env.NOCK_TERMINAL_PACKAGED_SMOKE === '1';
+const SMOKE_READY_PREFIX = '[nock-terminal-smoke] ready ';
+const SMOKE_FAILURE_PREFIX = '[nock-terminal-smoke] failure ';
+const SMOKE_RENDER_TIMEOUT_MS = 10_000;
+const SMOKE_RENDER_POLL_MS = 100;
+
+if (IS_PACKAGED_SMOKE && process.env.NOCK_TERMINAL_USER_DATA_DIR) {
+  try {
+    app.setPath('userData', process.env.NOCK_TERMINAL_USER_DATA_DIR);
+  } catch (err) {
+    console.error(`${SMOKE_FAILURE_PREFIX}${JSON.stringify({ error: err.message })}`);
+  }
+}
 
 const store = new Store({
   defaults: DEFAULT_SETTINGS,
@@ -132,9 +145,7 @@ function getAssetPath(fileName) {
 
 function getPlatformIconPath() {
   if (process.platform === 'win32') return getAssetPath('icon.ico');
-  if (process.platform === 'darwin') {
-    return app.isPackaged ? path.join(process.resourcesPath, 'icon.icns') : getAssetPath('icon.icns');
-  }
+  if (process.platform === 'darwin') return getAssetPath('icon.icns');
   return getAssetPath('icon.png');
 }
 
@@ -170,7 +181,7 @@ function createWindow() {
   const settings = getSettingsSnapshot();
   const { width, height, x, y } = settings.windowBounds;
 
-  mainWindow = new BrowserWindow({
+  const windowOptions = {
     width,
     height,
     x,
@@ -189,9 +200,13 @@ function createWindow() {
       // node-pty remains isolated to the main process.
       sandbox: false,
     },
-    icon: getPlatformIconPath(),
     show: false,
-  });
+  };
+  if (process.platform !== 'darwin') {
+    windowOptions.icon = getPlatformIconPath();
+  }
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -214,6 +229,18 @@ function createWindow() {
   mainWindow.once('ready-to-show', showInitialWindow);
   mainWindow.webContents.once('did-finish-load', () => {
     setTimeout(showInitialWindow, 100);
+    if (IS_PACKAGED_SMOKE) {
+      finishPackagedSmokeCheck();
+    }
+  });
+  mainWindow.webContents.once('did-fail-load', (_, errorCode, errorDescription, validatedURL) => {
+    if (!IS_PACKAGED_SMOKE) return;
+    console.error(`${SMOKE_FAILURE_PREFIX}${JSON.stringify({
+      errorCode,
+      errorDescription,
+      validatedURL,
+    })}`);
+    app.exit(1);
   });
   setTimeout(showInitialWindow, 2500);
 
@@ -302,6 +329,60 @@ function showMainWindow() {
   }
   mainWindow.show();
   mainWindow.focus();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readPackagedSmokeRendererState() {
+  return mainWindow.webContents.executeJavaScript(`
+    (() => {
+      const text = document.body?.innerText || '';
+      return {
+        title: document.title || '',
+        bodyHasBrand: text.includes('NOCK TERMINAL'),
+        bodyHasDashboard: text.includes('DASHBOARD') || text.includes('Sessions'),
+        textLength: text.length,
+      };
+    })()
+  `, true);
+}
+
+async function finishPackagedSmokeCheck() {
+  if (!IS_PACKAGED_SMOKE || !mainWindow || mainWindow.isDestroyed()) return;
+
+  try {
+    const deadline = Date.now() + SMOKE_RENDER_TIMEOUT_MS;
+    let renderer = null;
+    let lastError = null;
+
+    while (Date.now() < deadline) {
+      try {
+        renderer = await readPackagedSmokeRendererState();
+        if (renderer.bodyHasBrand || renderer.bodyHasDashboard) {
+          break;
+        }
+      } catch (err) {
+        lastError = err;
+      }
+      await sleep(SMOKE_RENDER_POLL_MS);
+    }
+
+    if (!renderer?.bodyHasBrand && !renderer?.bodyHasDashboard) {
+      throw new Error(lastError?.message || 'Timed out waiting for packaged renderer content');
+    }
+
+    console.log(`${SMOKE_READY_PREFIX}${JSON.stringify({
+      isPackaged: app.isPackaged,
+      url: mainWindow.webContents.getURL(),
+      renderer,
+    })}`);
+    setTimeout(() => app.exit(0), 250);
+  } catch (err) {
+    console.error(`${SMOKE_FAILURE_PREFIX}${JSON.stringify({ error: err.message })}`);
+    app.exit(1);
+  }
 }
 
 function initServices() {

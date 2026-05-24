@@ -11,7 +11,7 @@ Nock Terminal is not ready for public GTM or paid launch.
 
 After the May 15 remediation pass, it is ready for renewed internal dogfood and a controlled private alpha. The previous launch blockers around dependency audit, terminal settings, unsaved editor protection, NockCC placeholder activity, first-run onboarding, and release gates have been fixed or materially reduced.
 
-The remaining public-GTM blockers are product depth and distribution proof: true reconnect/attach for live agents, Codex transcript/launch adapters, worktree lanes, session replay, packaged-app smoke automation, update distribution, crash/error reporting, and a crisp public demo/support path.
+The remaining public-GTM blockers are product depth and distribution proof: true reconnect/attach for live agents, Codex transcript/launch adapters, worktree lanes, session replay, signed installer smoke coverage on every target OS, update distribution, crash/error reporting, and a crisp public demo/support path.
 
 The product has useful bones: a real PTY-backed terminal, Claude transcript discovery, agent-folder discovery, project cards, file tree, Monaco editing, local model chat, prompt/session history, git controls, port awareness, and notifications. The main problem is not lack of product surface. The problem is that the surface is not yet formed into a sharp promise people can immediately understand and trust.
 
@@ -29,7 +29,7 @@ The approved agent-agnostic cockpit phases now have a working private-alpha slic
 - Brokered dispatch requests through Mira via NockCC AgentMessage and an operator direct-dispatch route through CRM scripts.
 - Dispatch-run telemetry in the dashboard and deduping for copied dispatch/worktree agent configs.
 
-Readiness impact: this improves private-alpha usefulness and product clarity, especially for agent-agnostic orchestration. It does not remove the public-GTM blockers around real transcript discovery beyond Claude, attach/reconnect semantics, dispatch completion-thread tracking, worktree lanes, session replay, packaged smoke automation, update distribution, crash/error reporting, and public support/demo material.
+Readiness impact: this improves private-alpha usefulness and product clarity, especially for agent-agnostic orchestration. It does not remove the public-GTM blockers around real transcript discovery beyond Claude, attach/reconnect semantics, dispatch completion-thread tracking, worktree lanes, session replay, signed installer smoke coverage, update distribution, crash/error reporting, and public support/demo material.
 
 ## Verification Summary
 
@@ -60,9 +60,9 @@ Readiness impact: this improves private-alpha usefulness and product clarity, es
 | Product clarity | 3/5 | Docs now lead with local agent observability; Claude-first transcript discovery remains the honest current state. |
 | Differentiation | 2/5 | "Agent cockpit" is promising, but OpenAI, Cursor, Warp, Claude, Windsurf, GitHub, and JetBrains now all tell multi-agent stories. |
 | Onboarding | 3/5 | First-run checklist now covers dev roots, agent binaries, context files, sessions, and Ollama status. |
-| Reliability | 3/5 | Unit/build/smoke/release checks pass; no automated packaged-app smoke or auto-update validation. |
-| Security | 3/5 | Good Electron boundaries and zero moderate+ audit findings; public launch still needs packaged smoke and support process. |
-| Packaging/distribution | 3/5 | Release workflow now enforces signing/notarization secrets, Linux artifacts, and checksums; packaged smoke automation is still missing. |
+| Reliability | 3/5 | Unit/build/smoke/release checks pass; Linux unpacked packaged smoke is automated; no auto-update validation. |
+| Security | 3/5 | Good Electron boundaries and zero moderate+ audit findings; public launch still needs signed installer smoke on each target OS and support process. |
+| Packaging/distribution | 3/5 | Release workflow enforces signing/notarization secrets, Linux artifacts, checksums, and Linux unpacked packaged smoke; signed installer smoke coverage is still manual. |
 | Feedback/analytics | 3/5 | NockCC heartbeat now receives active project and agent session data from renderer state. |
 | Docs/sales readiness | 3/5 | Repo docs now explain state, roadmap, and release gates; public site, beta guide, support path, and release-note flow remain. |
 | **Overall** | **24/40** | **Controlled private alpha only.** |
@@ -160,7 +160,7 @@ Status: Materially improved, not complete.
 
 macOS notarization is enabled in package config. The release workflow now has a preflight release gate, macOS signing/notarization secret checks, Windows signing secret checks, Linux AppImage/deb artifacts, and platform checksum files. `docs/RELEASE_READINESS.md` documents the packaged smoke checklist and rollback path.
 
-Remaining work: automate packaged app smoke tests and decide update distribution, crash/error reporting, and support flow.
+Remaining work: extend packaged smoke to signed macOS/Windows/Linux release artifacts and decide update distribution, crash/error reporting, and support flow.
 
 ### P2 - Accessibility And Hit Targets Need A Polish Pass
 
@@ -244,7 +244,7 @@ Launch path:
 
 1. Private dogfood: continue exercising the remediated shell settings, unsaved editor protection, onboarding, context checks, and NockCC heartbeat.
 2. Private alpha: position as "local cockpit for terminal coding agents" while staying honest that Claude Code is the only transcript-discovery source today.
-3. Public beta: add Codex transcript/launch adapters, worktree lanes, session replay, crash/error reporting, automated packaged-app smoke tests, update distribution, and a clear support path.
+3. Public beta: add Codex transcript/launch adapters, worktree lanes, session replay, crash/error reporting, signed artifact smoke coverage, update distribution, and a clear support path.
 
 ## What Would Make People Want It
 
@@ -271,6 +271,6 @@ That is more compelling than "a terminal with AI chat."
 2. Implement real Codex transcript discovery and resume/attach semantics; launch/profile settings now exist.
 3. Add worktree lanes for parallel agent attempts.
 4. Add session replay and handoff export from terminal output, diff, commands, and test results.
-5. Automate packaged-app smoke tests for macOS, Windows, and Linux artifacts.
+5. Extend packaged-app smoke coverage to signed macOS, Windows, and Linux release artifacts.
 6. Decide update distribution, crash/error reporting, support path, and beta feedback channel.
 7. Build the public demo around agent observability, worktree safety, and recoverable sessions.

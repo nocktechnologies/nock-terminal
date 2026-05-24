@@ -68,7 +68,7 @@ Completed in the May 15 remediation pass:
 
 Still required before public beta:
 
-- Automate packaged app smoke tests for macOS, Windows, and Linux release artifacts.
+- Extend packaged app smoke automation from Linux unpacked CI coverage to signed macOS, Windows, and Linux release artifacts.
 - Decide update distribution, crash/error reporting, support path, and beta feedback channel.
 
 ### 2. Agent Adapter Layer
