@@ -60,8 +60,13 @@ function createNockCCActivityIPC({
     updateActivity,
 
     start() {
+      if (heartbeatInterval) {
+        clearIntervalFn(heartbeatInterval);
+        heartbeatInterval = null;
+        nockccClient?.endSession();
+      }
+      if (!nockccClient) return null;
       nockccClient.startSession({ machine, appVersion });
-      if (heartbeatInterval) clearIntervalFn(heartbeatInterval);
       heartbeatInterval = setIntervalFn(() => {
         nockccClient.heartbeat(activity);
       }, heartbeatIntervalMs);
@@ -73,7 +78,7 @@ function createNockCCActivityIPC({
         clearIntervalFn(heartbeatInterval);
         heartbeatInterval = null;
       }
-      nockccClient.endSession();
+      nockccClient?.endSession();
     },
   };
 }

@@ -143,7 +143,18 @@ test('start replaces existing heartbeat interval and stop cleans up session', ()
   assert.equal(ipc.intervals[1].cleared, true);
   assert.deepEqual(ipc.calls, [
     ['startSession', { machine: 'test-machine', appVersion: '1.2.3' }],
+    ['endSession'],
     ['startSession', { machine: 'test-machine', appVersion: '1.2.3' }],
     ['endSession'],
   ]);
+});
+
+test('controller tolerates missing NockCC client', () => {
+  const ipc = createController({ nockccClient: null });
+
+  assert.equal(ipc.controller.start(), null);
+  ipc.controller.stop();
+
+  assert.deepEqual(ipc.calls, []);
+  assert.deepEqual(ipc.intervals, []);
 });
