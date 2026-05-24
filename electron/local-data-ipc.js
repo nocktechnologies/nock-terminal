@@ -9,6 +9,10 @@ function rendererSaveError(validated) {
   return { ...error, message: error.error };
 }
 
+function safePayload(payload) {
+  return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+}
+
 function registerLocalDataIPC({
   ipcMain,
   fileService,
@@ -40,11 +44,15 @@ function registerLocalDataIPC({
     return sessionHistory.list();
   });
 
-  ipcMain.handle('sessionHistory:getOutput', (_, { startTime, tabId }) => {
+  ipcMain.handle('sessionHistory:getOutput', (_, payload) => {
+    const { startTime, tabId } = safePayload(payload);
+    if (startTime === undefined || tabId === undefined) return null;
     return sessionHistory.getOutput(startTime, tabId);
   });
 
-  ipcMain.handle('sessionHistory:start', (_, { tabId, metadata }) => {
+  ipcMain.handle('sessionHistory:start', (_, payload) => {
+    const { tabId, metadata } = safePayload(payload);
+    if (!tabId) return null;
     return sessionHistory.startSession(tabId, metadata);
   });
 

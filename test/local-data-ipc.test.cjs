@@ -200,6 +200,19 @@ test('session-history handlers delegate to session history storage', () => {
   ]);
 });
 
+test('session-history handlers ignore missing or malformed payloads', () => {
+  const ipc = createLocalDataHarness();
+
+  assert.equal(ipc.invoke('sessionHistory:getOutput'), null);
+  assert.equal(ipc.invoke('sessionHistory:getOutput', null), null);
+  assert.equal(ipc.invoke('sessionHistory:getOutput', []), null);
+  assert.equal(ipc.invoke('sessionHistory:start'), null);
+  assert.equal(ipc.invoke('sessionHistory:start', null), null);
+  assert.equal(ipc.invoke('sessionHistory:start', { metadata: { project: 'missing tab' } }), null);
+
+  assert.deepEqual(ipc.calls, []);
+});
+
 test('prompt handlers delegate validated payloads to prompt storage', () => {
   const ipc = createLocalDataHarness();
 
