@@ -43,6 +43,8 @@ test('project profiles strip removed legacy fields on get, save, and list', () =
   assert.equal(listed.length, 1);
   assert.equal(listed[0].preferredModel, undefined);
   assert.equal(listed[0].systemPrompt, undefined);
+  assert.equal(listed[0].notes, 'keep me');
+  assert.equal(listed[0].defaultShell, '');
 
   const saved = profiles.save(projectPath, {
     preferredModel: 'still removed',
@@ -53,4 +55,9 @@ test('project profiles strip removed legacy fields on get, save, and list', () =
   assert.equal(saved.data.preferredModel, undefined);
   assert.equal(saved.data.systemPrompt, undefined);
   assert.equal(saved.data.notes, 'still keep');
+
+  const persisted = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  assert.equal(persisted.preferredModel, undefined);
+  assert.equal(persisted.systemPrompt, undefined);
+  assert.equal(persisted.notes, 'still keep');
 });
