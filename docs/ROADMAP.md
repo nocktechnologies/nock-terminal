@@ -40,7 +40,8 @@ Current execution posture:
 - Nock `7551` / Phase E is done via PR #39: misleading global Claude/Mara settings and unused Claude chat IPC/client path are gone, Telegram token access is explicit reveal/status UI, and `dispatch:brokered` uses the shared validator/error pattern.
 - Nock `7552` / Phase G is done via PR #40: settings, project profiles, prompt markdown, and session history now have schema-versioned local migrations.
 - Nock `7576` / Phase F slice 1 is done via PR #42: settings IPC registration is extracted from `electron/main.js` into a dedicated module with handler-level contract tests.
-- Nock `7578` / Phase F slice 2 is active: continue small, behavior-preserving Electron main-process extractions by moving file IPC registration behind a tested module boundary.
+- Nock `7578` / Phase F slice 2 is done via PR #43: file IPC registration is extracted behind a tested module boundary while preserving existing validation and error shapes.
+- Nock `7579` / Phase F slice 3 is active: extract dispatch IPC registration into a tested module so brokered/direct dispatch validation and service failure handling are isolated from the main-process bootstrap.
 - Nock `123` should be rewritten before execution because icon/signing config has partially moved on; the remaining work is signed installer smoke, real credential setup, update distribution, crash/error reporting, and support path.
 
 ### May 16 Agent-Agnostic Cockpit Slice
