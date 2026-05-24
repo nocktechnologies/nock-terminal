@@ -145,6 +145,8 @@ test('profiles:save only accepts allowed project paths and known profile fields'
         defaultAgent: 'codex',
         codexCommand: 'codex --model gpt-5.4',
         defaultShell: SHELL_FIXTURES.profileShell,
+        preferredModel: 'legacy-model',
+        systemPrompt: 'legacy prompt',
         unknown: 'drop me',
       },
     },
@@ -154,6 +156,8 @@ test('profiles:save only accepts allowed project paths and known profile fields'
   assert.equal(result.ok, true);
   assert.equal(result.value.profile.defaultAgent, 'codex');
   assert.equal(result.value.profile.codexCommand, 'codex --model gpt-5.4');
+  assert.equal(result.value.profile.preferredModel, undefined);
+  assert.equal(result.value.profile.systemPrompt, undefined);
   assert.equal(result.value.profile.unknown, undefined);
 
   const rejected = validateProfileSavePayload(

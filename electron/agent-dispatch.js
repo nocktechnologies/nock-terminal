@@ -295,7 +295,6 @@ module.exports = {
   AgentDispatchService,
   buildBrokeredDispatchMessage,
   buildDirectDispatchCommand,
-  buildDispatchRequest,
   createDispatchPayloadFile,
   sanitizeDispatchText,
 };

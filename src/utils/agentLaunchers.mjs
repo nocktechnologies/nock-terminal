@@ -1,5 +1,5 @@
 export const DEFAULT_AGENT_ID = 'claude';
-export const CUSTOM_AGENT_ID = 'custom';
+const CUSTOM_AGENT_ID = 'custom';
 export const AGENT_FOLDER_ID = 'agent-folder';
 export const DISPATCH_AGENT_ID = 'dispatch-agent';
 
@@ -50,7 +50,7 @@ export function getAgentLauncher(agentId) {
   return LAUNCHER_BY_ID.get(agentId) || LAUNCHER_BY_ID.get(DEFAULT_AGENT_ID);
 }
 
-export function normalizeAgentId(agentId) {
+function normalizeAgentId(agentId) {
   const normalized = trimString(agentId).toLowerCase();
   return LAUNCHER_BY_ID.has(normalized) ? normalized : DEFAULT_AGENT_ID;
 }
@@ -131,7 +131,7 @@ export function resolveSessionLaunch(session, profile = {}, agentId) {
   };
 }
 
-export function buildSessionSearchText(session, profile = {}) {
+function buildSessionSearchText(session, profile = {}) {
   const defaultAgentId = resolveDefaultAgentId(profile);
   const defaultLauncher = getAgentLauncher(defaultAgentId);
   const fields = [

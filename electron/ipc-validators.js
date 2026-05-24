@@ -183,8 +183,6 @@ function sanitizeProfile(profile) {
 
   const result = {};
   const stringFields = {
-    preferredModel: 200,
-    systemPrompt: 20000,
     claudeCommand: 1000,
     codexCommand: 1000,
     geminiCommand: 1000,
@@ -194,7 +192,7 @@ function sanitizeProfile(profile) {
 
   for (const [key, maxLength] of Object.entries(stringFields)) {
     if (profile[key] === undefined) continue;
-    const value = normalizeString(profile[key], { maxLength, trim: key !== 'systemPrompt' });
+    const value = normalizeString(profile[key], { maxLength });
     if (value == null) return null;
     result[key] = value;
   }
@@ -374,7 +372,6 @@ function errorPayload(result) {
 }
 
 module.exports = {
-  VALIDATION_CODE,
   errorPayload,
   validateDispatchCreatePayload,
   validateFilesPayload,

@@ -13,7 +13,7 @@ export function normalizeUnsavedFiles(files) {
   return result;
 }
 
-export function fileBasename(filePath) {
+function fileBasename(filePath) {
   if (typeof filePath !== 'string') return '';
   const parts = filePath.split(/[/\\]/);
   return parts[parts.length - 1] || filePath;
