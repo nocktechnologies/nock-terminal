@@ -306,7 +306,6 @@ function createSettingsResetSnapshot(settings = {}, { preserveWindowBounds = tru
 module.exports = {
   DEFAULT_SETTINGS,
   createSettingsResetSnapshot,
-  isSensitiveSettingKey,
   normalizeSettingValue,
   sanitizeSettingsForExport,
   sanitizeSettingsForRenderer,
