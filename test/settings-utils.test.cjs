@@ -3,9 +3,12 @@ const assert = require('node:assert/strict');
 
 const {
   DEFAULT_SETTINGS,
+  SETTINGS_SCHEMA_KEY,
+  SETTINGS_SCHEMA_VERSION,
   createSettingsResetSnapshot,
   getSecureSettingStatus,
   getSettingForRenderer,
+  migrateSettingsStore,
   normalizeSettingValue,
   sanitizeSettingsForExport,
   sanitizeStoredSettings,
@@ -75,6 +78,96 @@ test('sanitizeStoredSettings falls back to defaults for invalid persisted values
   assert.equal(sanitized.ollamaUrl, DEFAULT_SETTINGS.ollamaUrl);
   assert.equal(sanitized.cursorStyle, DEFAULT_SETTINGS.cursorStyle);
   assert.equal(sanitized.terminalFontSize, 18);
+});
+
+test('migrateSettingsStore stamps current schema and removes legacy settings', () => {
+  const backing = {
+    theme: 'dark',
+    systemPrompt: 'removed prompt',
+    temperature: 0.4,
+    defaultModel: 'llama3.2',
+    windowOpacity: 'invalid',
+    telegramBotToken: 'keep-secret',
+  };
+  const fakeStore = {
+    get store() {
+      return backing;
+    },
+    clear() {
+      for (const key of Object.keys(backing)) delete backing[key];
+    },
+    set(key, value) {
+      backing[key] = value;
+    },
+  };
+
+  const result = migrateSettingsStore(fakeStore);
+
+  assert.equal(result.changed, true);
+  assert.equal(backing[SETTINGS_SCHEMA_KEY], SETTINGS_SCHEMA_VERSION);
+  assert.equal(backing.theme, undefined);
+  assert.equal(backing.systemPrompt, undefined);
+  assert.equal(backing.temperature, undefined);
+  assert.equal(backing.defaultModel, 'llama3.2');
+  assert.equal(backing.windowOpacity, DEFAULT_SETTINGS.windowOpacity);
+  assert.equal(backing.telegramBotToken, 'keep-secret');
+
+  assert.equal(migrateSettingsStore(fakeStore).changed, false);
+});
+
+test('migrateSettingsStore uses whole-store replacement when available', () => {
+  let backing = {
+    theme: 'dark',
+    defaultModel: 'llama3.2',
+  };
+  let writes = 0;
+  class FakeElectronStore {
+    get store() {
+      return backing;
+    }
+
+    set store(value) {
+      writes += 1;
+      backing = value;
+    }
+
+    clear() {
+      throw new Error('clear should not be used');
+    }
+
+    set() {
+      throw new Error('set should not be used');
+    }
+  }
+
+  const result = migrateSettingsStore(new FakeElectronStore());
+
+  assert.equal(result.changed, true);
+  assert.equal(writes, 1);
+  assert.equal(backing.theme, undefined);
+  assert.equal(backing.defaultModel, 'llama3.2');
+  assert.equal(backing[SETTINGS_SCHEMA_KEY], SETTINGS_SCHEMA_VERSION);
+});
+
+test('migrateSettingsStore does not rewrite objects solely due to key order', () => {
+  const backing = {
+    ...DEFAULT_SETTINGS,
+    windowBounds: { y: 24, x: 12, height: 900, width: 1600 },
+    [SETTINGS_SCHEMA_KEY]: SETTINGS_SCHEMA_VERSION,
+  };
+  const fakeStore = {
+    get store() {
+      return backing;
+    },
+    clear() {
+      throw new Error('clear should not be used');
+    },
+    set() {
+      throw new Error('set should not be used');
+    },
+  };
+
+  assert.equal(migrateSettingsStore(fakeStore).changed, false);
 });
 
 test('createSettingsResetSnapshot restores defaults and can preserve window bounds', () => {

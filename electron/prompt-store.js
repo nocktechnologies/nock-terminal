@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+const PROMPT_SCHEMA_VERSION = 1;
+
 class PromptStore {
   constructor() {
     this.dir = path.join(
@@ -33,12 +35,12 @@ class PromptStore {
   _parseFrontmatter(content) {
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
     if (!match) {
-      return { title: 'Untitled', tags: [], updatedAt: null, body: content };
+      return { schemaVersion: 0, title: 'Untitled', tags: [], updatedAt: null, body: content };
     }
 
     const frontmatter = match[1];
     const body = match[2];
-    const meta = { title: 'Untitled', tags: [], updatedAt: null };
+    const meta = { schemaVersion: 0, title: 'Untitled', tags: [], updatedAt: null };
 
     for (const line of frontmatter.split('\n')) {
       const colonIdx = line.indexOf(':');
@@ -47,7 +49,7 @@ class PromptStore {
       const value = line.slice(colonIdx + 1).trim();
 
       if (key === 'title') {
-        meta.title = value;
+        meta.title = value || 'Untitled';
       } else if (key === 'tags') {
         meta.tags = value
           .split(',')
@@ -55,16 +57,60 @@ class PromptStore {
           .filter(Boolean);
       } else if (key === 'updatedAt') {
         meta.updatedAt = value;
+      } else if (key === 'schemaVersion') {
+        const version = Number(value);
+        meta.schemaVersion = Number.isFinite(version) ? version : 0;
       }
     }
 
     return { ...meta, body };
   }
 
-  _serialize({ title, tags, body }) {
-    const updatedAt = new Date().toISOString();
+  _serialize({ title, tags, body, updatedAt, schemaVersion = PROMPT_SCHEMA_VERSION }) {
+    const resolvedUpdatedAt = updatedAt || new Date().toISOString();
     const tagStr = Array.isArray(tags) ? tags.join(', ') : (tags || '');
-    return `---\ntitle: ${title || 'Untitled'}\ntags: ${tagStr}\nupdatedAt: ${updatedAt}\n---\n${body || ''}`;
+    return `---\nschemaVersion: ${schemaVersion}\ntitle: ${title || 'Untitled'}\ntags: ${tagStr}\nupdatedAt: ${resolvedUpdatedAt}\n---\n${body || ''}`;
+  }
+
+  _normalizePrompt(parsed, fallbackUpdatedAt) {
+    return {
+      schemaVersion: PROMPT_SCHEMA_VERSION,
+      title: typeof parsed.title === 'string' && parsed.title ? parsed.title : 'Untitled',
+      tags: Array.isArray(parsed.tags)
+        ? parsed.tags.filter((tag) => typeof tag === 'string' && tag.trim()).map((tag) => tag.trim())
+        : [],
+      updatedAt: typeof parsed.updatedAt === 'string' && parsed.updatedAt
+        ? parsed.updatedAt
+        : fallbackUpdatedAt,
+      body: typeof parsed.body === 'string' ? parsed.body : '',
+    };
+  }
+
+  _readAndMigratePrompt(filePath) {
+    let fd;
+    let raw;
+    let fallbackUpdatedAt;
+    try {
+      fd = fs.openSync(filePath, 'r');
+      fallbackUpdatedAt = fs.fstatSync(fd).mtime.toISOString();
+      raw = fs.readFileSync(fd, 'utf8');
+    } finally {
+      if (fd !== undefined) fs.closeSync(fd);
+    }
+
+    const parsed = this._parseFrontmatter(raw);
+    const normalized = this._normalizePrompt(parsed, fallbackUpdatedAt);
+    const migratedContent = this._serialize(normalized);
+
+    if (raw !== migratedContent) {
+      try {
+        fs.writeFileSync(filePath, migratedContent, 'utf8');
+      } catch (err) {
+        console.error('[PromptStore] Failed to persist migrated prompt:', err.message);
+      }
+    }
+
+    return normalized;
   }
 
   list() {
@@ -74,10 +120,10 @@ class PromptStore {
 
       for (const file of files) {
         try {
-          const raw = fs.readFileSync(path.join(this.dir, file), 'utf8');
-          const parsed = this._parseFrontmatter(raw);
+          const parsed = this._readAndMigratePrompt(path.join(this.dir, file));
           prompts.push({
             id: file.replace(/\.md$/, ''),
+            schemaVersion: parsed.schemaVersion,
             title: parsed.title,
             tags: parsed.tags,
             updatedAt: parsed.updatedAt,
@@ -105,8 +151,7 @@ class PromptStore {
   get(id) {
     const filePath = this._safePath(id);
     try {
-      const raw = fs.readFileSync(filePath, 'utf8');
-      const parsed = this._parseFrontmatter(raw);
+      const parsed = this._readAndMigratePrompt(filePath);
       return { id, ...parsed };
     } catch (err) {
       if (err.code !== 'ENOENT') {
@@ -119,7 +164,7 @@ class PromptStore {
   save(id, { title, tags, body }) {
     const promptId = id || crypto.randomBytes(6).toString('hex');
     const filePath = this._safePath(promptId);
-    const content = this._serialize({ title, tags, body });
+    const content = this._serialize({ title, tags, body, schemaVersion: PROMPT_SCHEMA_VERSION });
 
     try {
       fs.writeFileSync(filePath, content, 'utf8');
@@ -144,5 +189,7 @@ class PromptStore {
     }
   }
 }
+
+PromptStore.SCHEMA_VERSION = PROMPT_SCHEMA_VERSION;
 
 module.exports = PromptStore;

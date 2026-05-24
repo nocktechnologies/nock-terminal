@@ -15,9 +15,12 @@ const PromptStore = require('./prompt-store');
 const { listAvailableShells } = require('./system-shells');
 const {
   DEFAULT_SETTINGS,
+  SETTINGS_SCHEMA_KEY,
+  SETTINGS_SCHEMA_VERSION,
   createSettingsResetSnapshot,
   getSecureSettingStatus,
   getSettingForRenderer,
+  migrateSettingsStore,
   normalizeSettingValue,
   sanitizeSettingsForExport,
   sanitizeSettingsForRenderer,
@@ -69,14 +72,7 @@ function getAllowedProjectRoots() {
 }
 
 function repairStoredSettings() {
-  const sanitized = getSettingsSnapshot();
-
-  for (const [key, value] of Object.entries(sanitized)) {
-    const currentValue = store.get(key);
-    if (JSON.stringify(currentValue) !== JSON.stringify(value)) {
-      store.set(key, value);
-    }
-  }
+  migrateSettingsStore(store);
 }
 
 function applySettingsRuntimeEffects(key, currentValue) {
@@ -606,6 +602,7 @@ function registerIPC() {
     for (const [key, value] of Object.entries(resetSnapshot)) {
       store.set(key, value);
     }
+    store.set(SETTINGS_SCHEMA_KEY, SETTINGS_SCHEMA_VERSION);
 
     applyResetRuntimeEffects(resetSnapshot);
     return sanitizeSettingsForRenderer(store.store);
