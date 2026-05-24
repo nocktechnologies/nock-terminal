@@ -119,11 +119,13 @@ Use these status values for future tracked runs:
 Allowed transitions:
 
 - `drafted` -> `sent`, `launched`, or `failed`
-- `sent` -> `accepted`, `blocked`, `failed`, `expired`, or `unknown`
-- `launched` -> `running`, `completed`, `failed`, `expired`, or `unknown`
-- `accepted` -> `running`, `blocked`, `failed`, `expired`, or `completed`
-- `running` -> `completed`, `failed`, `blocked`, or `expired`
+- `sent` -> `accepted`, `running`, `completed`, `blocked`, `failed`, `expired`, or `unknown`
+- `launched` -> `accepted`, `running`, `completed`, `blocked`, `failed`, `expired`, or `unknown`
+- `accepted` -> `running`, `blocked`, `completed`, `failed`, `expired`, or `unknown`
+- `running` -> `completed`, `failed`, `expired`, or `unknown`
 - terminal states: `blocked`, `completed`, `failed`, `expired`, `unknown`
+
+The reducer should tolerate leapfrog transitions because live messages can arrive out of order or skip intermediate acknowledgements. Once a run reaches `running`, policy or credential failures should be represented as `failed` with a specific reason instead of `blocked`, because `blocked` means work did not begin.
 
 H4 should implement this as a reducer with tests before wiring it into polling or UI rendering.
 
