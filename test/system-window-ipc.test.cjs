@@ -219,3 +219,28 @@ test('shell and clipboard handlers guard renderer-controlled payloads', async ()
   assert.deepEqual(ipc.calls.shownItems, ['/allowed.txt']);
   assert.deepEqual(ipc.calls.clipboardWrites, ['copied', '']);
 });
+
+test('shell openExternal catches and logs rejected launches', async () => {
+  const errors = [];
+  const ipc = registerHarness({
+    shell: {
+      openExternal(url) {
+        assert.equal(url, 'https://example.com');
+        return Promise.reject(new Error('open failed'));
+      },
+      showItemInFolder() {},
+    },
+    logger: {
+      error(...args) {
+        errors.push(args);
+      },
+    },
+  });
+
+  ipc.send('shell:openExternal', 'https://example.com');
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0][0], '[system-window-ipc] Failed to open external URL:');
+  assert.equal(errors[0][1], 'open failed');
+});

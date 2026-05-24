@@ -74,6 +74,7 @@ function registerSystemWindowIPC({
   fetchOllamaVersion = defaultFetchOllamaVersion,
   agentAdapters = getAgentAdapters,
   findCommand = defaultFindCommand,
+  logger = console,
 }) {
   ipcMain.on('window:minimize', () => getMainWindow()?.minimize());
 
@@ -132,7 +133,12 @@ function registerSystemWindowIPC({
 
   ipcMain.on('shell:openExternal', (_, url) => {
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
-      shell.openExternal(url);
+      const result = shell.openExternal(url);
+      if (result && typeof result.catch === 'function') {
+        result.catch((err) => {
+          logger.error('[system-window-ipc] Failed to open external URL:', err?.message || err);
+        });
+      }
     }
   });
 
