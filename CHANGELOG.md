@@ -6,6 +6,8 @@ This changelog is summarized from git history. The repository has no version tag
 
 ### 2026-05-24
 
+- Added bounded file-tree traversal metadata, large-file preview reads, and editor cache refresh behavior for Nock `7532`.
+- Added regression coverage for file-tree bounds, large-file reads, symlink rejection, watcher change events, and editor cache policy.
 - Reconciled the live NockCC backlog for Nock Terminal after PRs #31-#35.
 - Added `docs/NOCK_BACKLOG.md` as the repo-side source of truth for completed, reopened, blocked, and stale Nocks.
 - Recorded that Nock `7532` remains open for file tree/editor correctness because PR #33 covered stale contract cleanup instead.

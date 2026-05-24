@@ -18,8 +18,8 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 | `831` | Done | `20 Dispatch Ready` | PR #27 merged | Keep as completed dispatch-agent support record. |
 | `7530` | Done | `40 Product Ops / Polish` | PR #31 merged: `9eb0558` | Correctly closed Phase A: UI/settings truth cleanup. |
 | `7531` | Done | `40 Product Ops / Polish` | PR #32 merged: `e970df0` | Correctly closed Phase B: Electron IPC and secret hardening. |
-| `7532` | Backlog | `10 Active Foundation` | No matching implementation merged | Reopened. The live Nock describes file tree/editor correctness, but PR #33 did stale contract cleanup. |
-| `7533` | Backlog | `30 Roadmap` | Blocked | Keep blocked until the true `7532` file tree/editor work lands. |
+| `7532` | In progress | `10 Active Foundation` | Branch `codex/n7532-file-editor-correctness` | True Phase C is now being implemented: bounded tree traversal, large-file preview behavior, and editor stale-cache refresh. |
+| `7533` | Backlog | `30 Roadmap` | Blocked | Keep blocked until the true `7532` file tree/editor work lands and merges. |
 | `886` | Backlog | `30 Roadmap` | Still valid | Marketing/GTM positioning is useful, but should use this ledger and current release docs. |
 | `123` | Backlog | `30 Roadmap` | Partially stale | App icons and signing config have moved forward; rewrite this around signed artifact smoke, actual certificates, update channel, crash/error reporting, and support path. |
 | `7451` | Done | None | Historical assessment | Keep as archived historical launch-readiness report. |
@@ -40,8 +40,8 @@ Those acceptance criteria were not implemented by PR #33. The stale-contract cle
 
 ## Next Execution Order
 
-1. **Run Nock `7532` next.**
-   Implement bounded file-tree traversal, honest large-file handling, editor stale-cache fixes, and targeted file/editor tests.
+1. **Finish Nock `7532`.**
+   Land bounded file-tree traversal, honest large-file handling, editor stale-cache fixes, and targeted file/editor tests.
 
 2. **Run Nock `7533` after `7532` lands.**
    Re-audit the merged A/B/C state and decide the next wave from current code, not from the old audit text.

@@ -6,6 +6,20 @@ const { promisify } = require('util');
 const execFileAsync = promisify(execFile);
 const { isPathWithinRoots, sanitizeDevRoots } = require('./security-utils');
 
+const DEFAULT_TREE_MAX_DEPTH = 8;
+const DEFAULT_TREE_MAX_ENTRIES = 2000;
+const LARGE_FILE_BYTES = 1024 * 1024;
+const FILE_PREVIEW_BYTES = 8192;
+const IGNORED_TREE_ENTRIES = new Set([
+  'node_modules', '.git', '__pycache__', 'dist', 'build',
+  '.next', '.nuxt', '.cache', '.parcel-cache', 'coverage',
+  '.venv', 'venv', 'env', '.env', '.DS_Store', 'Thumbs.db',
+]);
+
+function normalizePositiveInteger(value, fallback) {
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
 class FileService {
   constructor(store) {
     this.store = store;
@@ -16,40 +30,72 @@ class FileService {
     this.grantedRoots = sanitizeDevRoots(roots || []);
   }
 
-  tree(dirPath, depth = 0) {
-    if (depth > 8) return [];
-    if (!this._isAllowedPath(dirPath)) return [];
+  tree(dirPath, options = {}) {
+    const maxDepth = normalizePositiveInteger(options.maxDepth, DEFAULT_TREE_MAX_DEPTH);
+    const maxEntries = normalizePositiveInteger(options.maxEntries, DEFAULT_TREE_MAX_ENTRIES);
+    const meta = {
+      truncated: false,
+      truncatedByDepth: false,
+      truncatedByEntries: false,
+      entryCount: 0,
+      maxDepth,
+      maxEntries,
+    };
 
-    const IGNORED = new Set([
-      'node_modules', '.git', '__pycache__', 'dist', 'build',
-      '.next', '.nuxt', '.cache', '.parcel-cache', 'coverage',
-      '.venv', 'venv', 'env', '.env', '.DS_Store', 'Thumbs.db',
-    ]);
+    if (!this._isAllowedPath(dirPath)) {
+      return { entries: [], meta: { ...meta, error: 'Path not allowed' } };
+    }
+
+    return {
+      entries: this._treeEntries(path.resolve(dirPath), 0, { maxDepth, maxEntries }, meta),
+      meta,
+    };
+  }
+
+  _treeEntries(dirPath, depth, options, meta) {
+    if (depth >= options.maxDepth) {
+      meta.truncated = true;
+      meta.truncatedByDepth = true;
+      return [];
+    }
 
     try {
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      const dir = fs.opendirSync(dirPath);
       const result = [];
 
-      for (const entry of entries) {
-        if (IGNORED.has(entry.name)) continue;
-        if (entry.name.startsWith('.') && entry.name !== '.claude') continue;
+      try {
+        let entry;
+        while ((entry = dir.readSync()) !== null) {
+          if (IGNORED_TREE_ENTRIES.has(entry.name)) continue;
+          if (entry.name.startsWith('.') && entry.name !== '.claude') continue;
 
-        const fullPath = path.join(dirPath, entry.name);
+          if (meta.entryCount >= options.maxEntries) {
+            meta.truncated = true;
+            meta.truncatedByEntries = true;
+            break;
+          }
 
-        if (entry.isDirectory()) {
-          result.push({
-            name: entry.name,
-            path: fullPath,
-            type: 'dir',
-            children: this.tree(fullPath, depth + 1),
-          });
-        } else if (entry.isFile()) {
-          result.push({
-            name: entry.name,
-            path: fullPath,
-            type: 'file',
-          });
+          const fullPath = path.join(dirPath, entry.name);
+
+          if (entry.isDirectory()) {
+            meta.entryCount += 1;
+            result.push({
+              name: entry.name,
+              path: fullPath,
+              type: 'dir',
+              children: this._treeEntries(fullPath, depth + 1, options, meta),
+            });
+          } else if (entry.isFile()) {
+            meta.entryCount += 1;
+            result.push({
+              name: entry.name,
+              path: fullPath,
+              type: 'file',
+            });
+          }
         }
+      } finally {
+        dir.closeSync();
       }
 
       result.sort((a, b) => {
@@ -71,23 +117,37 @@ class FileService {
 
     try {
       const stat = fs.statSync(filePath);
+      if (!stat.isFile()) {
+        return { error: 'Not a file' };
+      }
       const size = stat.size;
-      const readOnly = size > 1024 * 1024;
 
       let fd;
+      let preview = Buffer.alloc(0);
       try {
         fd = fs.openSync(filePath, 'r');
-        const buf = Buffer.alloc(Math.min(8192, size));
-        fs.readSync(fd, buf, 0, buf.length, 0);
-        if (buf.includes(0)) {
+        const buf = Buffer.alloc(Math.min(FILE_PREVIEW_BYTES, size));
+        const bytesRead = buf.length > 0 ? fs.readSync(fd, buf, 0, buf.length, 0) : 0;
+        preview = buf.subarray(0, bytesRead);
+        if (preview.includes(0)) {
           return { error: 'Binary file — cannot open in editor' };
         }
       } finally {
         if (fd !== undefined) fs.closeSync(fd);
       }
 
+      if (size > LARGE_FILE_BYTES) {
+        return {
+          content: preview.toString('utf-8'),
+          size,
+          readOnly: true,
+          truncated: true,
+          previewBytes: preview.length,
+        };
+      }
+
       const content = fs.readFileSync(filePath, 'utf-8');
-      return { content, size, readOnly };
+      return { content, size, readOnly: false, truncated: false };
     } catch (err) {
       return { error: err.message };
     }
