@@ -19,10 +19,6 @@ const {
   normalizeSettingValue,
   sanitizeStoredSettings,
 } = require('./settings-utils');
-const {
-  errorPayload,
-  validateTerminalCreatePayload,
-} = require('./ipc-validators');
 const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
@@ -30,6 +26,7 @@ const { registerDispatchIPC } = require('./dispatch-ipc');
 const { registerFileIPC } = require('./file-ipc');
 const { registerLocalDataIPC } = require('./local-data-ipc');
 const { registerSettingsIPC } = require('./settings-ipc');
+const { registerTerminalIPC } = require('./terminal-ipc');
 
 const APP_NAME = 'Nock Terminal';
 const IS_PACKAGED_SMOKE = process.env.NOCK_TERMINAL_PACKAGED_SMOKE === '1';
@@ -402,32 +399,12 @@ function registerIPC() {
   ipcMain.on('window:close', () => mainWindow?.close());
   ipcMain.handle('window:isMaximized', () => mainWindow?.isMaximized() ?? false);
 
-  // Terminal management
-  ipcMain.handle('terminal:create', async (_, payload) => {
-    const projectPath = typeof payload?.cwd === 'string' ? payload.cwd : '';
-    const profile = projectPath ? projectProfiles.get(projectPath) : {};
-    const validated = validateTerminalCreatePayload(payload, {
-      allowedRoots: getAllowedProjectRoots(),
-      settings: getSettingsSnapshot(),
-      profile,
-    });
-    if (!validated.ok) return errorPayload(validated);
-
-    const { id, cwd, shell: shellPath, shellArgs, envVars } = validated.value;
-    return terminalManager.create(id, cwd, {
-      shell: shellPath,
-      shellArgs,
-      envVars,
-    });
-  });
-  ipcMain.on('terminal:write', (_, { id, data }) => {
-    terminalManager.write(id, data);
-  });
-  ipcMain.on('terminal:resize', (_, { id, cols, rows }) => {
-    terminalManager.resize(id, cols, rows);
-  });
-  ipcMain.on('terminal:destroy', (_, { id }) => {
-    terminalManager.destroy(id);
+  registerTerminalIPC({
+    ipcMain,
+    terminalManager,
+    projectProfiles,
+    getAllowedProjectRoots,
+    getSettingsSnapshot,
   });
 
   // (Terminal data/exit events are wired in wireTerminalEvents() — not here)
