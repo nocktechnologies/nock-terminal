@@ -5,6 +5,8 @@ const os = require('os');
 const path = require('path');
 
 const {
+  errorPayload,
+  validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
   validateFilesPayload,
   validateProfileSavePayload,
@@ -208,6 +210,41 @@ test('dispatch:createPayload rejects malformed payloads before temp files are cr
   assert.equal(result.ok, true);
   assert.equal(result.value.agentName, 'ash');
   assert.equal(result.value.agentBound, true);
+});
+
+test('dispatch:brokered rejects malformed payloads with the shared IPC error shape', () => {
+  const rejected = validateDispatchBrokeredPayload({
+    agentName: '../ash',
+    runtime: 'codex',
+    taskDescription: 'Do it',
+  });
+
+  assert.equal(rejected.ok, false);
+  assert.deepEqual(errorPayload(rejected), {
+    success: false,
+    error: 'dispatch:brokered requires a valid agentName',
+    code: 'IPC_VALIDATION_ERROR',
+  });
+
+  const accepted = validateDispatchBrokeredPayload({
+    agentName: 'Ash',
+    runtime: 'codex',
+    taskDescription: 'Do it',
+    brokerAgent: 'mira-nockos',
+    priority: 'high',
+  });
+  assert.equal(accepted.ok, true);
+  assert.deepEqual(accepted.value, {
+    agentName: 'ash',
+    runtime: 'codex',
+    taskDescription: 'Do it',
+    targetRepo: '',
+    projectName: '',
+    scriptPath: '',
+    agentBound: false,
+    brokerAgent: 'mira-nockos',
+    priority: 'high',
+  });
 });
 
 test('files operations reject malformed payloads with clear validation errors', () => {

@@ -280,28 +280,28 @@ function sanitizeDispatchText(value) {
     .slice(0, 12000);
 }
 
-function validateDispatchCreatePayload(payload) {
-  if (!isPlainObject(payload)) return invalid('dispatch:createPayload payload must be an object');
+function validateDispatchPayload(payload, operation) {
+  if (!isPlainObject(payload)) return invalid(`${operation} payload must be an object`);
 
   const agentName = safeAgentName(payload.agentName);
   const runtime = safeRuntime(payload.runtime);
   const taskDescription = sanitizeDispatchText(payload.taskDescription);
-  if (!agentName) return invalid('dispatch:createPayload requires a valid agentName');
-  if (!runtime) return invalid('dispatch:createPayload requires a valid runtime');
-  if (!taskDescription) return invalid('dispatch:createPayload requires a taskDescription');
+  if (!agentName) return invalid(`${operation} requires a valid agentName`);
+  if (!runtime) return invalid(`${operation} requires a valid runtime`);
+  if (!taskDescription) return invalid(`${operation} requires a taskDescription`);
 
   const requestId = payload.requestId === undefined
     ? undefined
     : normalizeString(payload.requestId, { maxLength: 120, allowEmpty: true });
   if (requestId !== undefined && requestId && !/^[A-Za-z0-9_-]+$/.test(requestId)) {
-    return invalid('dispatch:createPayload requestId contains unsafe characters');
+    return invalid(`${operation} requestId contains unsafe characters`);
   }
 
   const targetRepo = payload.targetRepo === undefined ? '' : normalizeString(payload.targetRepo, { maxLength: 1000 });
   const projectName = payload.projectName === undefined ? '' : normalizeString(payload.projectName, { maxLength: 200 });
   const scriptPath = payload.scriptPath === undefined ? '' : normalizeString(payload.scriptPath, { maxLength: 1000 });
   if (targetRepo == null || projectName == null || scriptPath == null) {
-    return invalid('dispatch:createPayload contains invalid optional string fields');
+    return invalid(`${operation} contains invalid optional string fields`);
   }
 
   return ok({
@@ -313,6 +313,35 @@ function validateDispatchCreatePayload(payload) {
     ...(requestId ? { requestId } : {}),
     scriptPath,
     agentBound: payload.agentBound === true,
+  });
+}
+
+function validateDispatchCreatePayload(payload) {
+  return validateDispatchPayload(payload, 'dispatch:createPayload');
+}
+
+function validateDispatchBrokeredPayload(payload) {
+  const validated = validateDispatchPayload(payload, 'dispatch:brokered');
+  if (!validated.ok) return validated;
+
+  const brokerAgent = payload.brokerAgent === undefined
+    ? ''
+    : safeAgentName(payload.brokerAgent);
+  if (payload.brokerAgent !== undefined && !brokerAgent) {
+    return invalid('dispatch:brokered requires a valid brokerAgent');
+  }
+
+  const priority = payload.priority === undefined
+    ? ''
+    : normalizeString(payload.priority, { maxLength: 40, allowEmpty: true });
+  if (priority == null) {
+    return invalid('dispatch:brokered contains invalid optional string fields');
+  }
+
+  return ok({
+    ...validated.value,
+    ...(brokerAgent ? { brokerAgent } : {}),
+    ...(priority ? { priority } : {}),
   });
 }
 
@@ -373,6 +402,7 @@ function errorPayload(result) {
 
 module.exports = {
   errorPayload,
+  validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
   validateFilesPayload,
   validateProfileSavePayload,

@@ -355,6 +355,9 @@ export default function App() {
           projectName,
           brokerAgent: launch.broker,
         });
+        if (result?.success === false) {
+          throw new Error(result.error || 'Brokered dispatch validation failed');
+        }
         recordDispatchRun({
           ...runBase,
           mode: 'brokered',

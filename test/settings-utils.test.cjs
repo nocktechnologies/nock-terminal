@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   DEFAULT_SETTINGS,
   createSettingsResetSnapshot,
+  getSecureSettingStatus,
   getSettingForRenderer,
   normalizeSettingValue,
   sanitizeSettingsForExport,
@@ -22,6 +23,8 @@ test('normalizeSettingValue rejects invalid types for known settings', () => {
 test('normalizeSettingValue rejects removed no-op settings', () => {
   [
     'theme',
+    'claudeCodePath',
+    'maraBriefPath',
     'systemPrompt',
     'temperature',
     'maxTokens',
@@ -131,4 +134,21 @@ test('getSettingForRenderer does not expose sensitive settings by key', () => {
   assert.equal(getSettingForRenderer(settings, 'telegramBotToken'), undefined);
   assert.equal(getSettingForRenderer(settings, 'nockccApiKey'), undefined);
   assert.equal(getSettingForRenderer(settings, 'notASetting'), undefined);
+});
+
+test('getSecureSettingStatus exposes only configured state for allowlisted secrets', () => {
+  const settings = {
+    telegramBotToken: '123:secret',
+    nockccApiKey: '',
+  };
+
+  assert.deepEqual(getSecureSettingStatus(settings, 'telegramBotToken'), {
+    key: 'telegramBotToken',
+    configured: true,
+  });
+  assert.deepEqual(getSecureSettingStatus(settings, 'nockccApiKey'), {
+    key: 'nockccApiKey',
+    configured: false,
+  });
+  assert.equal(getSecureSettingStatus(settings, 'futureAccessToken'), null);
 });

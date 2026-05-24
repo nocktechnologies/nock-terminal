@@ -10,9 +10,6 @@ const DEFAULT_SETTINGS = {
   // AI / Models
   ollamaUrl: 'http://localhost:11434',
   defaultModel: 'qwen3.5:9b',
-  // Claude Code
-  claudeCodePath: '',
-  maraBriefPath: '',
   // Terminal
   terminalFontSize: 16,
   terminalFontFamily: "'JetBrains Mono', 'Consolas', monospace",
@@ -190,8 +187,6 @@ const BOOLEAN_KEYS = new Set([
 
 const STRING_KEYS = {
   defaultModel: { maxLength: 200 },
-  claudeCodePath: { maxLength: 1000 },
-  maraBriefPath: { maxLength: 1000 },
   terminalFontFamily: { maxLength: 200, trim: false },
   editorFontFamily: { maxLength: 200, trim: false },
   telegramBotToken: { maxLength: 500 },
@@ -296,6 +291,17 @@ function getSettingForRenderer(settings = {}, key) {
   return sanitizeStoredSettings(settings)[key];
 }
 
+const SECURE_SETTING_KEYS = new Set(['telegramBotToken', 'nockccApiKey']);
+
+function getSecureSettingStatus(settings = {}, key) {
+  if (!SECURE_SETTING_KEYS.has(key)) return null;
+  const sanitized = sanitizeStoredSettings(settings);
+  return {
+    key,
+    configured: typeof sanitized[key] === 'string' && sanitized[key].length > 0,
+  };
+}
+
 function cloneDefaultSettings() {
   return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 }
@@ -316,6 +322,7 @@ function createSettingsResetSnapshot(settings = {}, { preserveWindowBounds = tru
 module.exports = {
   DEFAULT_SETTINGS,
   createSettingsResetSnapshot,
+  getSecureSettingStatus,
   getSettingForRenderer,
   normalizeSettingValue,
   sanitizeSettingsForExport,
