@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Settings2, Cpu, TerminalSquare, Code2, FolderTree,
-  Bell, Send, Keyboard, Database, Info,
+  Send, Keyboard, Database, Info,
   ChevronDown, RotateCcw, Download, Upload, ExternalLink,
 } from 'lucide-react';
 
@@ -14,7 +14,6 @@ const SECTIONS = [
   { id: 'terminal',      label: 'Terminal',       icon: TerminalSquare },
   { id: 'editor',        label: 'Editor',         icon: Code2 },
   { id: 'filetree',      label: 'File Tree',      icon: FolderTree },
-  { id: 'notifications', label: 'Notifications',  icon: Bell },
   { id: 'telegram',      label: 'Telegram',       icon: Send },
   { id: 'shortcuts',     label: 'Shortcuts',      icon: Keyboard },
   { id: 'data',          label: 'Data',           icon: Database },
@@ -149,7 +148,6 @@ export default function Settings() {
   // Draft state for multi-line textareas (committed on blur)
   const [devRootsDraft, setDevRootsDraft] = useState('');
   const [skipListDraft, setSkipListDraft] = useState('');
-  const [systemPromptDraft, setSystemPromptDraft] = useState('');
   const [shellArgsDraft, setShellArgsDraft] = useState('');
 
   // -----------------------------------------------------------------------
@@ -160,7 +158,6 @@ export default function Settings() {
       setSettings(all);
       setDevRootsDraft((all.devRoots || []).join('\n'));
       setSkipListDraft((all.projectSkipList || []).join('\n'));
-      setSystemPromptDraft(all.systemPrompt || '');
       setShellArgsDraft(all.shellArgs || '');
       // Load real bot token (getAll returns redacted placeholder)
       if (window.nockTerminal.settings.getSecure) {
@@ -236,7 +233,6 @@ export default function Settings() {
           });
           setDevRootsDraft((imported.devRoots || []).join('\n'));
           setSkipListDraft((imported.projectSkipList || []).join('\n'));
-          setSystemPromptDraft(imported.systemPrompt || '');
           setShellArgsDraft(imported.shellArgs || '');
         } catch {
           // Silently ignore invalid JSON
@@ -247,17 +243,16 @@ export default function Settings() {
     input.click();
   }, [updateSetting]);
 
-  const resetDefaults = useCallback(() => {
+  const resetDefaults = useCallback(async () => {
     if (!window.confirm('Reset all settings to defaults? This cannot be undone.')) return;
-    // Clear store and reload — electron-store will repopulate defaults
-    window.nockTerminal.settings.getAll().then((all) => {
-      Object.keys(all).forEach((key) => {
-        if (key === 'windowBounds') return; // preserve window position
-        window.nockTerminal.settings.set(key, undefined);
-      });
-      // Reload to get fresh defaults
-      window.location.reload();
-    });
+    const reset = await window.nockTerminal.settings.reset({ preserveWindowBounds: true });
+    setSettings(reset);
+    setDevRootsDraft((reset.devRoots || []).join('\n'));
+    setSkipListDraft((reset.projectSkipList || []).join('\n'));
+    setShellArgsDraft(reset.shellArgs || '');
+    setSaved(true);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSaved(false), 1500);
   }, []);
 
   // -----------------------------------------------------------------------
@@ -283,16 +278,6 @@ export default function Settings() {
       case 'general':
         return (
           <SettingsSection title="General" description="Window behavior and appearance">
-            <Field label="Theme" description="App color scheme">
-              <Select
-                value={settings.theme || 'dark'}
-                onChange={(v) => updateSetting('theme', v)}
-                options={[
-                  { value: 'dark', label: 'Dark (Pitch Black)' },
-                ]}
-                disabled
-              />
-            </Field>
             <Field label="Window Opacity" description="Reduce for transparency effect (70%-100%)">
               <Slider
                 min={70}
@@ -345,41 +330,6 @@ export default function Settings() {
                 onChange={(e) => updateSetting('defaultModel', e.target.value)}
                 className="settings-input font-mono"
                 placeholder="qwen3.5:9b"
-              />
-            </Field>
-            <Field label="System Prompt" description="Prepended to every AI conversation">
-              <textarea
-                rows={4}
-                value={systemPromptDraft}
-                onChange={(e) => setSystemPromptDraft(e.target.value)}
-                onBlur={() => commitTextSetting('systemPrompt', systemPromptDraft)}
-                className="settings-input font-mono resize-none"
-                placeholder="You are a helpful coding assistant..."
-              />
-            </Field>
-            <Field label="Temperature" description="Creativity vs. determinism (0.0 - 2.0)">
-              <Slider
-                min={0}
-                max={2}
-                step={0.1}
-                value={settings.temperature ?? 0.7}
-                onChange={(v) => updateSetting('temperature', Math.round(v * 10) / 10)}
-              />
-            </Field>
-            <Field label="Max Tokens" description="Maximum response length">
-              <Slider
-                min={256}
-                max={32768}
-                step={256}
-                value={settings.maxTokens ?? 4096}
-                onChange={(v) => updateSetting('maxTokens', Math.round(v))}
-              />
-            </Field>
-            <Field label="Show Thinking" description="Display model reasoning tokens when supported">
-              <Toggle
-                checked={settings.showThinking ?? false}
-                onChange={(v) => updateSetting('showThinking', v)}
-                label="Show thinking output"
               />
             </Field>
             <Field label="Claude Code Binary" description="Leave empty for auto-detection">
@@ -488,27 +438,6 @@ export default function Settings() {
                 label="Blink cursor"
               />
             </Field>
-            <Field label="Bell Sound">
-              <Toggle
-                checked={settings.bellSound ?? false}
-                onChange={(v) => updateSetting('bellSound', v)}
-                label="Play bell sound"
-              />
-            </Field>
-            <Field label="Copy on Select">
-              <Toggle
-                checked={settings.copyOnSelect ?? false}
-                onChange={(v) => updateSetting('copyOnSelect', v)}
-                label="Copy text to clipboard on selection"
-              />
-            </Field>
-            <Field label="Right-Click Paste">
-              <Toggle
-                checked={settings.rightClickPaste ?? true}
-                onChange={(v) => updateSetting('rightClickPaste', v)}
-                label="Paste from clipboard on right-click"
-              />
-            </Field>
           </SettingsSection>
         );
 
@@ -556,20 +485,6 @@ export default function Settings() {
       case 'filetree':
         return (
           <SettingsSection title="File Tree" description="Sidebar file explorer behavior">
-            <Field label="Default State">
-              <Toggle
-                checked={settings.fileTreeOpen ?? true}
-                onChange={(v) => updateSetting('fileTreeOpen', v)}
-                label="Open file tree by default"
-              />
-            </Field>
-            <Field label="Dotfiles">
-              <Toggle
-                checked={settings.showDotfiles ?? false}
-                onChange={(v) => updateSetting('showDotfiles', v)}
-                label="Show dotfiles in file tree"
-              />
-            </Field>
             <Field label="Dev Root Directories" description="One path per line. Git repos in these folders auto-appear on the dashboard.">
               <textarea
                 rows={3}
@@ -588,57 +503,6 @@ export default function Settings() {
                 onBlur={() => commitListSetting('projectSkipList', skipListDraft)}
                 className="settings-input font-mono resize-none"
                 placeholder="Gym-App"
-              />
-            </Field>
-          </SettingsSection>
-        );
-
-      case 'notifications':
-        return (
-          <SettingsSection title="Notifications" description="Desktop notification preferences">
-            <Field label="Desktop Notifications">
-              <Toggle
-                checked={settings.desktopNotifications ?? true}
-                onChange={(v) => updateSetting('desktopNotifications', v)}
-                label="Enable desktop notifications"
-              />
-            </Field>
-            <Field label="Notification Sound">
-              <Toggle
-                checked={settings.notificationSound ?? false}
-                onChange={(v) => updateSetting('notificationSound', v)}
-                label="Play sound on notification"
-              />
-            </Field>
-            <Field label="Events" description="Choose which events trigger a notification">
-              <div className="space-y-3 mt-1">
-                <Toggle
-                  checked={settings.notifyPrMerged ?? true}
-                  onChange={(v) => updateSetting('notifyPrMerged', v)}
-                  label="PR merged"
-                />
-                <Toggle
-                  checked={settings.notifyBuildComplete ?? true}
-                  onChange={(v) => updateSetting('notifyBuildComplete', v)}
-                  label="Build complete"
-                />
-                <Toggle
-                  checked={settings.notifySessionEnded ?? true}
-                  onChange={(v) => updateSetting('notifySessionEnded', v)}
-                  label="Session ended"
-                />
-                <Toggle
-                  checked={settings.notifyFenceEvent ?? false}
-                  onChange={(v) => updateSetting('notifyFenceEvent', v)}
-                  label="Fence event"
-                />
-              </div>
-            </Field>
-            <Field label="Auto-Capture Sessions">
-              <Toggle
-                checked={settings.autoCaptureSessions ?? false}
-                onChange={(v) => updateSetting('autoCaptureSessions', v)}
-                label="Automatically capture session data"
               />
             </Field>
           </SettingsSection>
@@ -758,7 +622,14 @@ export default function Settings() {
 
       case 'data':
         return (
-          <SettingsSection title="Data Management" description="Export, import, or reset your configuration">
+          <SettingsSection title="Data Management" description="Session capture, export, import, or reset">
+            <Field label="Session History Capture">
+              <Toggle
+                checked={settings.autoCaptureSessions ?? false}
+                onChange={(v) => updateSetting('autoCaptureSessions', v)}
+                label="Automatically capture session data"
+              />
+            </Field>
             <Field label="Export Settings" description="Download current settings as JSON">
               <button onClick={exportSettings} className="settings-button flex items-center gap-2">
                 <Download size={14} />

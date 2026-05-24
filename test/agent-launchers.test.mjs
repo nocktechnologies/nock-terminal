@@ -124,6 +124,14 @@ test('builds launcher targets from session and profile search fields', () => {
   assert.equal(dispatchTargets[0].session.name, 'Ash');
 });
 
+test('does not search removed no-op profile model fields', () => {
+  const targets = buildLauncherTargets([project], {
+    [project.path]: { preferredModel: 'future-model' },
+  }, 'future-model');
+
+  assert.equal(targets.length, 0);
+});
+
 test('searches dispatch agents by name and runtime', () => {
   const smithRepo = {
     ...project,

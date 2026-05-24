@@ -75,6 +75,7 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     get: (key) => ipcRenderer.invoke('settings:get', key),
     getAll: () => ipcRenderer.invoke('settings:getAll'),
     getSecure: (key) => ipcRenderer.invoke('settings:getSecure', key),
+    reset: (options) => ipcRenderer.invoke('settings:reset', options),
     set: (key, value) => ipcRenderer.send('settings:set', { key, value }),
   },
 
