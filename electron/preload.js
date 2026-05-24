@@ -55,9 +55,6 @@ contextBridge.exposeInMainWorld('nockTerminal', {
       models: () => ipcRenderer.invoke('ai:ollama:models'),
       status: () => ipcRenderer.invoke('ai:ollama:status'),
     },
-    claude: {
-      chat: (message, mode, cwd) => ipcRenderer.invoke('ai:claude:chat', { message, mode, cwd }),
-    },
     onStream: (callback) => {
       const handler = (_, payload) => callback(payload.chunk);
       ipcRenderer.on('ai:stream', handler);
@@ -76,6 +73,7 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     getAll: () => ipcRenderer.invoke('settings:getAll'),
     getExport: () => ipcRenderer.invoke('settings:export'),
     getSecure: (key) => ipcRenderer.invoke('settings:getSecure', key),
+    getSecureStatus: (key) => ipcRenderer.invoke('settings:getSecureStatus', key),
     reset: (options) => ipcRenderer.invoke('settings:reset', options),
     set: (key, value) => ipcRenderer.invoke('settings:set', { key, value }),
   },

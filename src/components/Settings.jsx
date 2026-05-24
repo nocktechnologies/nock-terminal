@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Settings2, Cpu, TerminalSquare, Code2, FolderTree,
   Send, Keyboard, Database, Info,
-  ChevronDown, RotateCcw, Download, Upload, ExternalLink,
+  RotateCcw, Download, Upload, ExternalLink,
+  Eye, EyeOff, Trash2,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -137,6 +138,8 @@ export default function Settings() {
   const [activeSection, setActiveSection] = useState('general');
   const [settings, setSettings] = useState({});
   const [saved, setSaved] = useState(false);
+  const [secureStatus, setSecureStatus] = useState({});
+  const [revealedSecureKeys, setRevealedSecureKeys] = useState({});
   const savedTimer = useRef(null);
 
   // About-section data
@@ -159,10 +162,12 @@ export default function Settings() {
       setDevRootsDraft((all.devRoots || []).join('\n'));
       setSkipListDraft((all.projectSkipList || []).join('\n'));
       setShellArgsDraft(all.shellArgs || '');
-      // Load real bot token (getAll returns redacted placeholder)
-      if (window.nockTerminal.settings.getSecure) {
-        window.nockTerminal.settings.getSecure('telegramBotToken').then((token) => {
-          if (token) setSettings(prev => ({ ...prev, telegramBotToken: token }));
+      if (window.nockTerminal.settings.getSecureStatus) {
+        window.nockTerminal.settings.getSecureStatus('telegramBotToken').then((status) => {
+          setSecureStatus(prev => ({
+            ...prev,
+            telegramBotToken: status?.configured === true,
+          }));
         });
       }
     });
@@ -201,6 +206,32 @@ export default function Settings() {
 
   const commitTextSetting = useCallback((key, draft) => {
     updateSetting(key, draft);
+  }, [updateSetting]);
+
+  const revealSecureSetting = useCallback(async (key) => {
+    if (!window.nockTerminal.settings.getSecure) return;
+    const value = await window.nockTerminal.settings.getSecure(key);
+    setSettings(prev => ({ ...prev, [key]: value || '' }));
+    setSecureStatus(prev => ({ ...prev, [key]: Boolean(value) }));
+    setRevealedSecureKeys(prev => ({ ...prev, [key]: true }));
+  }, []);
+
+  const hideSecureSetting = useCallback((key) => {
+    setSettings(prev => ({ ...prev, [key]: '' }));
+    setRevealedSecureKeys(prev => ({ ...prev, [key]: false }));
+  }, []);
+
+  const updateSecureSetting = useCallback((key, value) => {
+    updateSetting(key, value);
+    setSecureStatus(prev => ({ ...prev, [key]: Boolean(value) }));
+    setRevealedSecureKeys(prev => ({ ...prev, [key]: true }));
+  }, [updateSetting]);
+
+  const clearSecureSetting = useCallback((key) => {
+    updateSetting(key, '');
+    setSettings(prev => ({ ...prev, [key]: '' }));
+    setSecureStatus(prev => ({ ...prev, [key]: false }));
+    setRevealedSecureKeys(prev => ({ ...prev, [key]: true }));
   }, [updateSetting]);
 
   // -----------------------------------------------------------------------
@@ -251,6 +282,8 @@ export default function Settings() {
     setDevRootsDraft((reset.devRoots || []).join('\n'));
     setSkipListDraft((reset.projectSkipList || []).join('\n'));
     setShellArgsDraft(reset.shellArgs || '');
+    setSecureStatus(prev => ({ ...prev, telegramBotToken: false }));
+    setRevealedSecureKeys(prev => ({ ...prev, telegramBotToken: false }));
     setSaved(true);
     if (savedTimer.current) clearTimeout(savedTimer.current);
     savedTimer.current = setTimeout(() => setSaved(false), 1500);
@@ -331,24 +364,6 @@ export default function Settings() {
                 onChange={(e) => updateSetting('defaultModel', e.target.value)}
                 className="settings-input font-mono"
                 placeholder="qwen3.5:9b"
-              />
-            </Field>
-            <Field label="Claude Code Binary" description="Leave empty for auto-detection">
-              <input
-                type="text"
-                value={settings.claudeCodePath || ''}
-                onChange={(e) => updateSetting('claudeCodePath', e.target.value)}
-                className="settings-input font-mono"
-                placeholder="Auto-detect"
-              />
-            </Field>
-            <Field label="Mara Brief File" description="Prepended to messages in Mara mode">
-              <input
-                type="text"
-                value={settings.maraBriefPath || ''}
-                onChange={(e) => updateSetting('maraBriefPath', e.target.value)}
-                className="settings-input font-mono"
-                placeholder="~/.claude/mara-brief.md"
               />
             </Field>
           </SettingsSection>
@@ -510,6 +525,8 @@ export default function Settings() {
         );
 
       case 'telegram':
+        const telegramTokenConfigured = secureStatus.telegramBotToken === true;
+        const telegramTokenRevealed = revealedSecureKeys.telegramBotToken === true || !telegramTokenConfigured;
         return (
           <SettingsSection title="Telegram" description="Receive push notifications via Telegram bot">
             <Field label="Enable Telegram">
@@ -520,14 +537,46 @@ export default function Settings() {
               />
             </Field>
             <Field label="Bot Token" description="From @BotFather">
-              <input
-                type="password"
-                value={settings.telegramBotToken || ''}
-                onChange={(e) => updateSetting('telegramBotToken', e.target.value)}
-                className="settings-input font-mono"
-                placeholder="123456:ABC-DEF..."
-                autoComplete="off"
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type={telegramTokenRevealed ? 'text' : 'password'}
+                  value={telegramTokenRevealed ? (settings.telegramBotToken || '') : ''}
+                  onChange={(e) => updateSecureSetting('telegramBotToken', e.target.value)}
+                  className="settings-input font-mono min-w-[260px] flex-1"
+                  placeholder={telegramTokenConfigured && !telegramTokenRevealed ? 'Saved token hidden' : '123456:ABC-DEF...'}
+                  autoComplete="off"
+                />
+                {telegramTokenConfigured && !telegramTokenRevealed && (
+                  <button
+                    type="button"
+                    onClick={() => revealSecureSetting('telegramBotToken')}
+                    className="settings-button flex items-center gap-2"
+                  >
+                    <Eye size={14} />
+                    Reveal
+                  </button>
+                )}
+                {telegramTokenConfigured && telegramTokenRevealed && (
+                  <button
+                    type="button"
+                    onClick={() => hideSecureSetting('telegramBotToken')}
+                    className="settings-button flex items-center gap-2"
+                  >
+                    <EyeOff size={14} />
+                    Hide
+                  </button>
+                )}
+                {telegramTokenConfigured && (
+                  <button
+                    type="button"
+                    onClick={() => clearSecureSetting('telegramBotToken')}
+                    className="settings-button-danger flex items-center gap-2"
+                  >
+                    <Trash2 size={14} />
+                    Clear
+                  </button>
+                )}
+              </div>
             </Field>
             <Field label="Chat ID" description="Your user or group chat ID">
               <input

@@ -4,7 +4,6 @@ const Store = require('electron-store');
 const TerminalManager = require('./terminal-manager');
 const SessionDiscovery = require('./session-discovery');
 const OllamaClient = require('./ollama-client');
-const ClaudeCodeClient = require('./claude-code-client');
 const PortScanner = require('./port-scanner');
 const FileService = require('./file-service');
 const FileWatcher = require('./file-watcher');
@@ -17,6 +16,7 @@ const { listAvailableShells } = require('./system-shells');
 const {
   DEFAULT_SETTINGS,
   createSettingsResetSnapshot,
+  getSecureSettingStatus,
   getSettingForRenderer,
   normalizeSettingValue,
   sanitizeSettingsForExport,
@@ -26,6 +26,7 @@ const {
 const {
   errorPayload,
   validateDispatchCreatePayload,
+  validateDispatchBrokeredPayload,
   validateFilesPayload,
   validateProfileSavePayload,
   validatePromptSavePayload,
@@ -82,9 +83,6 @@ function applySettingsRuntimeEffects(key, currentValue) {
   if (key === 'ollamaUrl') {
     ollamaClient?.setUrl(currentValue);
   }
-  if (key === 'claudeCodePath') {
-    claudeCodeClient?.setBinaryPath(currentValue);
-  }
   if (key === 'devRoots' || key === 'projectSkipList') {
     sessionDiscovery?.setConfig({
       devRoots: getSettingsSnapshot().devRoots,
@@ -108,7 +106,6 @@ function applySettingsRuntimeEffects(key, currentValue) {
 
 function applyResetRuntimeEffects(settings) {
   applySettingsRuntimeEffects('ollamaUrl', settings.ollamaUrl);
-  applySettingsRuntimeEffects('claudeCodePath', settings.claudeCodePath);
   applySettingsRuntimeEffects('devRoots', settings.devRoots);
   applySettingsRuntimeEffects('alwaysOnTop', settings.alwaysOnTop);
   applySettingsRuntimeEffects('windowOpacity', settings.windowOpacity);
@@ -120,7 +117,6 @@ let tray = null;
 let terminalManager = null;
 let sessionDiscovery = null;
 let ollamaClient = null;
-let claudeCodeClient = null;
 let portScanner = null;
 let fileService = null;
 let fileWatcher = null;
@@ -394,7 +390,6 @@ function initServices() {
     skipList: settings.projectSkipList,
   });
   ollamaClient = new OllamaClient(settings.ollamaUrl);
-  claudeCodeClient = new ClaudeCodeClient(settings.claudeCodePath);
   portScanner = new PortScanner();
   fileService = new FileService(store);
   fileWatcher = new FileWatcher(fileService);
@@ -460,7 +455,13 @@ function registerIPC() {
 
   // Dispatch-and-die agent requests (Codex / DeepSeek via Mira or direct script)
   ipcMain.handle('dispatch:brokered', async (_, payload) => {
-    return agentDispatchService.sendBrokered(payload);
+    const validated = validateDispatchBrokeredPayload(payload);
+    if (!validated.ok) return errorPayload(validated);
+    try {
+      return await agentDispatchService.sendBrokered(validated.value);
+    } catch (err) {
+      return { success: false, error: err.message || 'Failed to send brokered dispatch request' };
+    }
   });
   ipcMain.handle('dispatch:createPayload', async (_, payload) => {
     const validated = validateDispatchCreatePayload(payload);
@@ -484,15 +485,6 @@ function registerIPC() {
   });
   ipcMain.handle('ai:ollama:status', async () => {
     return ollamaClient.checkStatus();
-  });
-
-  // Claude Code chat (Kit/Mara)
-  ipcMain.handle('ai:claude:chat', async (event, { message, mode, cwd }) => {
-    const maraBriefPath = store.get('maraBriefPath');
-    const response = await claudeCodeClient.chat(message, mode, cwd, maraBriefPath, (chunk) => {
-      mainWindow?.webContents.send('ai:stream', { chunk });
-    });
-    return response;
   });
 
   // Port scanning
@@ -601,6 +593,9 @@ function registerIPC() {
     const allowed = ['telegramBotToken', 'nockccApiKey'];
     if (!allowed.includes(key)) return null;
     return getSettingsSnapshot()[key];
+  });
+  ipcMain.handle('settings:getSecureStatus', (_, key) => {
+    return getSecureSettingStatus(store.store, key);
   });
   ipcMain.handle('settings:reset', (_, options = {}) => {
     const resetSnapshot = createSettingsResetSnapshot(store.store, {
