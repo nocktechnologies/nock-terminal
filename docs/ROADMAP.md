@@ -39,7 +39,7 @@ Current execution posture:
 - Nock `7533` is done via PR #38 as the post-A/B/C integration audit and next-wave planning checkpoint.
 - Nock `7551` / Phase E is done via PR #39: misleading global Claude/Mara settings and unused Claude chat IPC/client path are gone, Telegram token access is explicit reveal/status UI, and `dispatch:brokered` uses the shared validator/error pattern.
 - Nock `7552` / Phase G is done via PR #40: settings, project profiles, prompt markdown, and session history now have schema-versioned local migrations.
-- Phase F is now unblocked, but should start from `origin/main` at or after `ed5751b` and stay focused on module decomposition.
+- Nock `7576` / Phase F is now active: start with small, behavior-preserving Electron main-process extractions rather than a broad rewrite. The first slice targets settings IPC registration so the renderer settings contract is covered by a dedicated module test before larger decomposition work.
 - Nock `123` should be rewritten before execution because icon/signing config has partially moved on; the remaining work is signed installer smoke, real credential setup, update distribution, crash/error reporting, and support path.
 
 ### May 16 Agent-Agnostic Cockpit Slice
