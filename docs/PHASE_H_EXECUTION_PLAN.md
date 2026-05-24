@@ -110,18 +110,15 @@ Phase H is successful when:
 
 **Verification:**
 - Contract doc review.
-- Tests for any parser or state reducer introduced in this slice.
+- No runtime code changes in this slice.
 
 **Dependencies:** H0.
 
 **Files likely touched:**
 - `docs/AGENT_DISPATCH.md`
-- `src/App.jsx`
-- `src/components/Dashboard.jsx`
-- `electron/agent-dispatch.js`
-- tests for dispatch telemetry.
+- `docs/PHASE_H_EXECUTION_PLAN.md`
 
-**Estimated scope:** Medium if docs only, large if implementing live tracking.
+**Estimated scope:** Small to medium, documentation and interface design only.
 
 ### H4: Dispatch Completion Tracking Implementation
 
