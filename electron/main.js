@@ -23,7 +23,6 @@ const {
   errorPayload,
   validateDispatchCreatePayload,
   validateDispatchBrokeredPayload,
-  validateFilesPayload,
   validateProfileSavePayload,
   validatePromptSavePayload,
   validateTerminalCreatePayload,
@@ -31,6 +30,7 @@ const {
 const { getAgentAdapters } = require('./agent-adapters');
 const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
+const { registerFileIPC } = require('./file-ipc');
 const { registerSettingsIPC } = require('./settings-ipc');
 
 const APP_NAME = 'Nock Terminal';
@@ -576,47 +576,10 @@ function registerIPC() {
     applyResetRuntimeEffects,
   });
 
-  // File operations
-  const validateFilePayload = (operation, payload) => validateFilesPayload(operation, payload, {
-    isAllowedPath: candidate => fileService.isAllowedPath(candidate),
-  });
-  ipcMain.handle('files:tree', (_, payload) => {
-    const validated = validateFilePayload('tree', payload);
-    if (!validated.ok) return { error: validated.error.message, code: validated.error.code };
-    return fileService.tree(validated.value);
-  });
-  ipcMain.handle('files:read', (_, payload) => {
-    const validated = validateFilePayload('read', payload);
-    if (!validated.ok) return { error: validated.error.message, code: validated.error.code };
-    return fileService.read(validated.value);
-  });
-  ipcMain.handle('files:write', (_, payload) => {
-    const validated = validateFilePayload('write', payload);
-    if (!validated.ok) return errorPayload(validated);
-    return fileService.write(validated.value.filePath, validated.value.content);
-  });
-  ipcMain.handle('files:stat', (_, payload) => {
-    const validated = validateFilePayload('stat', payload);
-    if (!validated.ok) return { exists: false, size: 0, mtime: 0, error: validated.error.message, code: validated.error.code };
-    return fileService.stat(validated.value);
-  });
-  ipcMain.handle('files:gitStatus', (_, payload) => {
-    const validated = validateFilePayload('gitStatus', payload);
-    if (!validated.ok) return { error: validated.error.message, code: validated.error.code };
-    return fileService.gitStatus(validated.value);
-  });
-  ipcMain.handle('files:gitOp', (_, payload) => {
-    const validated = validateFilePayload('gitOp', payload);
-    if (!validated.ok) return errorPayload(validated);
-    return fileService.gitOp(validated.value.dirPath, validated.value.operation);
-  });
-  ipcMain.on('files:watch', (_, payload) => {
-    const validated = validateFilePayload('watch', payload);
-    if (!validated.ok) return;
-    fileWatcher.watch(validated.value);
-  });
-  ipcMain.on('files:stopWatch', () => {
-    fileWatcher.stop();
+  registerFileIPC({
+    ipcMain,
+    fileService,
+    fileWatcher,
   });
 
   // Shell / external — restrict to http/https URLs
