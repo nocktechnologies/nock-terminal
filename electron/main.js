@@ -22,9 +22,11 @@ const { AgentDispatchService } = require('./agent-dispatch');
 const { registerDispatchIPC } = require('./dispatch-ipc');
 const { registerFileIPC } = require('./file-ipc');
 const { registerLocalDataIPC } = require('./local-data-ipc');
+const { createNockCCActivityIPC } = require('./nockcc-activity-ipc');
 const { registerSettingsIPC } = require('./settings-ipc');
 const { registerSystemWindowIPC } = require('./system-window-ipc');
 const { registerTerminalIPC } = require('./terminal-ipc');
+const { version: appVersion } = require('../package.json');
 
 const APP_NAME = 'Nock Terminal';
 const IS_PACKAGED_SMOKE = process.env.NOCK_TERMINAL_PACKAGED_SMOKE === '1';
@@ -109,12 +111,7 @@ let sessionHistory = null;
 let promptStore = null;
 let nockccClient = null;
 let agentDispatchService = null;
-let nockccHeartbeatInterval = null;
-let nockccActivity = {
-  activeProjectCount: 0,
-  activeClaudeSessionIds: [],
-  activeAgentSessionIds: [],
-};
+let nockccActivityController = null;
 
 const isDev = !app.isPackaged;
 
@@ -455,22 +452,11 @@ function registerIPC() {
     return telegramNotifier.notify(eventType, details);
   });
 
-  ipcMain.on('nockcc:updateActivity', (_, activity = {}) => {
-    if (!activity || typeof activity !== 'object') activity = {};
-    const activeProjectCount = Number.isFinite(activity.activeProjectCount)
-      ? Math.max(0, Math.round(activity.activeProjectCount))
-      : 0;
-    const sanitizeList = (value) => (
-      Array.isArray(value)
-        ? value.filter(item => typeof item === 'string' && item.length <= 200).slice(0, 100)
-        : []
-    );
-
-    nockccActivity = {
-      activeProjectCount,
-      activeClaudeSessionIds: sanitizeList(activity.activeClaudeSessionIds),
-      activeAgentSessionIds: sanitizeList(activity.activeAgentSessionIds),
-    };
+  nockccActivityController = createNockCCActivityIPC({
+    ipcMain,
+    nockccClient,
+    machine: process.platform,
+    appVersion,
   });
 
   registerLocalDataIPC({
@@ -523,12 +509,7 @@ app.whenReady().then(() => {
   wireFileEvents();
   processDetector.start();
 
-  // NockCC session tracking
-  const { version: appVersion } = require('../package.json');
-  nockccClient.startSession({ machine: process.platform, appVersion });
-  nockccHeartbeatInterval = setInterval(() => {
-    nockccClient.heartbeat(nockccActivity);
-  }, 60_000);
+  nockccActivityController?.start();
 
   // Global shortcut: try candidates in order, take the first one that registers.
   // register() returns false if the shortcut is already claimed by another app —
@@ -568,8 +549,7 @@ app.on('will-quit', () => {
   terminalManager?.destroyAll();
   fileWatcher?.stop();
   processDetector?.stop();
-  if (nockccHeartbeatInterval) clearInterval(nockccHeartbeatInterval);
-  nockccClient?.endSession();
+  nockccActivityController?.stop();
 });
 
 app.on('before-quit', () => {

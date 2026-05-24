@@ -87,14 +87,14 @@ This document describes the current codebase, not aspirational product copy. Tod
 
 ## NockCC Connection
 
-`electron/main.js` creates `NockCCClient` during service initialization. The client reads `nockccApiKey` and `nockccUrl` from electron-store; without an API key it silently does nothing.
+`electron/main.js` creates `NockCCClient` during service initialization, then delegates renderer activity updates and heartbeat lifecycle wiring to `electron/nockcc-activity-ipc.js`. The client reads `nockccApiKey` and `nockccUrl` from electron-store; without an API key it silently does nothing.
 
 When configured:
 
 - On app ready, `startSession()` sends `POST /api/terminal/sessions/` with `machine` and `app_version`.
 - The returned session id is stored in memory.
 - Every 60 seconds, `heartbeat()` sends `PATCH /api/terminal/sessions/{id}/`.
-- The renderer reports active project count plus Claude and generic agent session ids through `nockcc:updateActivity`; `NockCCClient` forwards those values in the heartbeat.
+- The renderer reports active project count plus Claude and generic agent session ids through `nockcc:updateActivity`; `nockcc-activity-ipc` sanitizes the renderer payload and `NockCCClient` forwards those values in the heartbeat.
 - On app quit, `endSession()` sends `POST /api/terminal/sessions/{id}/end/`.
 - Brokered dispatch uses the same configured NockCC URL/API key, with a fallback to `~/.nockcc/config.json`, and sends `POST /api/teams/messages/` to `mira-nockos`.
 - Calls are fire-and-forget with short timeouts so NockCC outages do not crash or block the desktop app.
