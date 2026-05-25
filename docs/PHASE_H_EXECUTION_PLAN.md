@@ -1,6 +1,6 @@
 # Phase H Execution Plan
 
-Updated: 2026-05-24
+Updated: 2026-05-25
 
 Phase F closed the `electron/main.js` IPC decomposition in PR #50. Phase H should not keep carving files just because the knife is warm. The next work is product and release truth: prove the app can be distributed, make agent state more useful, and turn dispatch/session events into operator-visible outcomes.
 
@@ -53,6 +53,8 @@ Phase H is successful when:
 
 **Description:** Turn Nock #123 into a release proof pass. Generate or collect signed macOS, Windows, Linux AppImage, and Linux deb artifacts, then record target-OS smoke results.
 
+**Execution note:** Nock `123` is active on `codex/phase-h-release-truth`. The first slice records the decision log and signed artifact evidence ledger. It does not close H1 because real signing credentials and clean target OS machines/VMs are still required.
+
 **Acceptance criteria:**
 - macOS DMG is signed and notarized, and `spctl --assess --type execute --verbose /Applications/Nock\ Terminal.app` passes on a clean machine.
 - Windows installer uses the expected publisher certificate and has a recorded SmartScreen result on a clean Windows machine or VM.
@@ -78,6 +80,8 @@ Phase H is successful when:
 ### H2: Update, Crash, Support, And Beta Feedback Decisions
 
 **Description:** Record product and operations decisions for update distribution, crash/error reporting, support path, and beta feedback before public beta.
+
+**Execution note:** The release-truth slice documents a conservative private-alpha posture: manual GitHub Releases/direct artifact sharing, no silent crash/error telemetry, direct support through Kevin/Mira/NockCC, and public beta blocked until public support and feedback routes exist.
 
 **Acceptance criteria:**
 - Update-channel decision is documented: none/manual/GitHub Releases/auto-update, with rationale and rollback impact.
@@ -245,7 +249,7 @@ Must be sequential:
 ### Checkpoint 1: Execution Ready
 
 - H0 merged.
-- Nock #123 rewritten and attached to the Terminal roadmap lane.
+- Nock #123 rewritten and attached to the Terminal project, moving from roadmap to active work when release-truth execution begins.
 - Follow-up Nocks exist for H1, H2, H3/H4, and H5/H6.
 
 ### Checkpoint 2: Release Proof
@@ -261,6 +265,6 @@ Must be sequential:
 
 ## Open Questions
 
-- What update distribution posture does Kevin want for public beta: manual GitHub Releases first, or auto-update from day one?
-- Should crash/error reporting be fully opt-in for private alpha, or disabled until public beta?
-- Which runtime is the first attach/resume implementation target after Claude Code baseline behavior?
+- Who will provide macOS and Windows signing credentials for the first tagged proof run?
+- Which clean macOS, Windows, and Linux machines or VMs will be used for signed artifact smoke?
+- Should public beta use GitHub Issues, a support mailbox, or a dedicated feedback form as the published support/feedback route?
