@@ -108,6 +108,30 @@ test('preserves discovered attach action labels for agent folders', () => {
   assert.equal(launch.capability, 'live-attach');
 });
 
+test('preserves disabled discovered attach launches even when a command is present', () => {
+  const attachAgent = {
+    ...agent,
+    launch: {
+      command: 'tmux attach -t crm-default-mira',
+      cwd: agent.path,
+      action: 'attach',
+      actionLabel: 'Attach',
+      capability: 'live-attach',
+      canLaunch: false,
+      disabledReason: 'No live CRM session found',
+    },
+  };
+
+  const launch = resolveSessionLaunch(attachAgent, {});
+
+  assert.equal(launch.action, 'attach');
+  assert.equal(launch.actionLabel, 'Attach');
+  assert.equal(launch.capability, 'live-attach');
+  assert.equal(launch.command, 'tmux attach -t crm-default-mira');
+  assert.equal(launch.canLaunch, false);
+  assert.equal(launch.disabledReason, 'No live CRM session found');
+});
+
 test('resolves brokered dispatch agent launches without treating them as terminal commands', () => {
   const launch = resolveSessionLaunch(dispatchAgent, {});
 

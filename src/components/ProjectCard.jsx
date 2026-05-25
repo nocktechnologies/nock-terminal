@@ -19,19 +19,42 @@ const AGENT_LIFECYCLE_LABELS = {
 export default function ProjectCard({ session, profile, index, onClick }) {
   const cfg = STATUS_CONFIG[session.status] || STATUS_CONFIG.inactive;
   const isAgent = session.kind === 'agent';
+  const isDispatchAgent = session.launch?.mode === 'dispatch';
   const lifecycle = AGENT_LIFECYCLE_LABELS[session.agent?.lifecycle] || null;
   const primaryLabel = lifecycle?.label || cfg.label;
   const primaryText = lifecycle?.text || cfg.text;
   const launchActionLabel = session.launch?.actionLabel
     ? session.launch.actionLabel.toUpperCase()
     : 'LAUNCH';
-  const actionLabel = isAgent
+  const canAgentLaunch = isDispatchAgent
+    ? session.launch?.canLaunch === true
+    : (
+      typeof session.launch?.canLaunch === 'boolean'
+        ? session.launch.canLaunch === true
+        : Boolean(session.launch?.command)
+    );
+  const activeAgentCanOpen = ['running', 'idle'].includes(session.agent?.lifecycle);
+  let actionLabel = 'OPEN';
+  if (isAgent) {
+    if (isDispatchAgent) {
+      actionLabel = 'DISPATCH';
+    } else if (!canAgentLaunch) {
+      actionLabel = 'DISABLED';
+    } else if (session.launch?.action === 'attach' || !activeAgentCanOpen) {
+      actionLabel = launchActionLabel;
+    }
+  }
+  const agentLaunchSummary = isDispatchAgent
     ? (
-      session.launch?.mode === 'dispatch'
-        ? 'DISPATCH'
-        : (session.launch?.action === 'attach' ? launchActionLabel : (['running', 'idle'].includes(session.agent?.lifecycle) ? 'OPEN' : launchActionLabel))
+      session.launch?.canLaunch
+        ? `alias: ${session.launch.aliasCommand || session.launch.commandTemplate || session.launch.broker || 'dispatch'}`
+        : (session.launch?.disabledReason || 'dispatch unavailable')
     )
-    : 'OPEN';
+    : (
+      canAgentLaunch
+        ? `${session.launch?.action === 'attach' ? 'attach' : 'cmd'}: ${session.launch.command}`
+        : (session.launch?.disabledReason || 'launch disabled')
+    );
   const agentSignalCount = (session.agent?.unreadCount || 0) + (session.agent?.inflightCount || 0);
   const defaultLauncher = !isAgent ? getAgentLauncher(resolveDefaultAgentId(profile || {})) : null;
 
@@ -93,9 +116,7 @@ export default function ProjectCard({ session, profile, index, onClick }) {
       {isAgent ? (
         <div className="relative flex items-center gap-2 mb-2 min-h-4">
           <span className="font-mono text-[10px] text-nock-accent-blue truncate tracking-tight">
-            {session.launch?.mode === 'dispatch'
-              ? (session.launch?.canLaunch ? `alias: ${session.launch.aliasCommand || session.launch.commandTemplate || session.launch.broker || 'dispatch'}` : (session.launch?.disabledReason || 'dispatch unavailable'))
-              : (session.launch?.command ? `${session.launch?.action === 'attach' ? 'attach' : 'cmd'}: ${session.launch.command}` : 'launch disabled')}
+            {agentLaunchSummary}
           </span>
           {agentSignalCount > 0 && (
             <span className="font-mono text-[9px] text-nock-accent-amber tracking-widest ml-auto">

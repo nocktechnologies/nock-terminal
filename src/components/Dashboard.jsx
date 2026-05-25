@@ -75,6 +75,9 @@ export default function Dashboard({
       const isDispatchAgent = session.launch?.mode === 'dispatch';
       const actionLabel = session.launch?.actionLabel || 'Launch';
       const launchLabel = actionLabel === 'Attach' ? 'Attach Session' : `${actionLabel} Fresh`;
+      const nonDispatchCanLaunch = typeof session.launch?.canLaunch === 'boolean'
+        ? session.launch.canLaunch === true
+        : Boolean(session.agent?.enabled && session.launch?.command);
       items.push({
         label: isDispatchAgent ? 'Stage Dispatch Task' : launchLabel,
         icon: (
@@ -82,7 +85,7 @@ export default function Dashboard({
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
           </svg>
         ),
-        disabled: isDispatchAgent ? !session.launch?.canLaunch : (!session.agent?.enabled || !session.launch?.command),
+        disabled: isDispatchAgent ? !session.launch?.canLaunch : !nonDispatchCanLaunch,
         onClick: () => {
           if (isDispatchAgent) {
             onOpenCommandPalette?.({

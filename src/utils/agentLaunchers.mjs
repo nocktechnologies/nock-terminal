@@ -104,6 +104,14 @@ export function resolveSessionLaunch(session, profile = {}, agentId) {
     }
 
     const command = trimString(session?.launch?.command);
+    const hasExplicitCanLaunch = typeof session?.launch?.canLaunch === 'boolean';
+    const canLaunch = hasExplicitCanLaunch ? session.launch.canLaunch === true : Boolean(command);
+    const disabledReason = canLaunch
+      ? ''
+      : (
+        trimString(session?.launch?.disabledReason)
+        || (command ? 'Agent launch is currently unavailable' : 'Agent launch command is missing')
+      );
     return {
       agentId: AGENT_FOLDER_ID,
       label: session?.name || 'Agent',
@@ -115,8 +123,8 @@ export function resolveSessionLaunch(session, profile = {}, agentId) {
       action: trimString(session?.launch?.action) || 'launch',
       actionLabel: trimString(session?.launch?.actionLabel) || 'Launch',
       capability: trimString(session?.launch?.capability) || 'folder-launch',
-      canLaunch: Boolean(command),
-      disabledReason: command ? '' : 'Agent launch command is missing',
+      canLaunch,
+      disabledReason,
     };
   }
 
