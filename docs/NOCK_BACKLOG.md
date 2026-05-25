@@ -6,7 +6,7 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 
 ## Current Baseline
 
-- Repo baseline: `origin/main` at merge commit `596e6d8` after PRs #31, #32, #37, #38, #39, #40, #42, #43, #44, #46, #47, #48, #49, #50, #51, and #52. PR #53 carries the H4a reducer foundation.
+- Repo baseline: `origin/main` at merge commit `6fee7d6` after PRs #31, #32, #37, #38, #39, #40, #42, #43, #44, #46, #47, #48, #49, #50, #51, #52, and #53.
 - NockCC live update: message `#1443` sent to `mira-nockos` when Phase E/G PRs opened; later closeout messages should reference PRs #39 and #40.
 - Project board: Nocks `7530`, `7531`, `7532`, `7533`, `7551`, and `7552` are attached to the Terminal project.
 - Primary local checkout note: `/Users/kevin/Dev/nock-terminal` had unrelated dirty work and was behind `origin/main` during this pass, so implementation and audit work used clean worktrees.
@@ -32,7 +32,7 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 | `7620` | Done | `10 Active Foundation` | PR #50 merged: `f059b2f` | Phase F final slice: session discovery, Ollama, and Telegram IPC extraction. |
 | `7621` | Done | `30 Roadmap` | PR #51 merged: `891e8a8` | Phase H Task 0: execution plan and release Nock rewrite. |
 | `7627` | Done | `30 Roadmap` | PR #52 merged: `596e6d8` | Phase H H3: dispatch completion tracking contract. |
-| `7628` | In progress | `10 Active Foundation` | PR #53 | Phase H H4a: local dispatch status reducer and history normalization foundation. |
+| `7628` | Done | `10 Active Foundation` | PR #53 merged: `6fee7d6` | Phase H H4a: local dispatch status reducer and history normalization foundation. |
 | `886` | Backlog | `30 Roadmap` | Still valid | Marketing/GTM positioning is useful, but should use this ledger and current release docs. |
 | `123` | Backlog | `30 Roadmap` | Rewritten for Phase H | Distribution readiness now tracks signed artifact smoke, credentials, update channel, crash/error reporting, support path, and beta feedback. |
 | `7451` | Done | None | Historical assessment | Keep as archived historical launch-readiness report. |
