@@ -155,3 +155,26 @@ test('collectDispatchStatusUpdates sorts same-time non-numeric message ids deter
 
   assert.deepEqual(updates.map(update => update.messageId), ['status-a', 'status-b']);
 });
+
+test('collectDispatchStatusUpdates falls back to string order for numerically equal ids', () => {
+  const updates = collectDispatchStatusUpdates([
+    {
+      id: '123',
+      from_agent: 'mira-nockos',
+      message_type: 'status_update',
+      body: 'running',
+      context: { request_id: 'req-b' },
+      created_at: '2026-05-24T16:00:00Z',
+    },
+    {
+      id: '0123',
+      from_agent: 'mira-nockos',
+      message_type: 'status_update',
+      body: 'accepted',
+      context: { request_id: 'req-a' },
+      created_at: '2026-05-24T16:00:00Z',
+    },
+  ], ['req-a', 'req-b']);
+
+  assert.deepEqual(updates.map(update => update.messageId), ['0123', '123']);
+});

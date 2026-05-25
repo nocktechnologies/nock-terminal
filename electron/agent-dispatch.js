@@ -206,9 +206,12 @@ function compareMessageOrder(a, b) {
   const aNumber = Number(aId);
   const bNumber = Number(bId);
   if (aId && bId && Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
-    return aNumber - bNumber;
+    const diff = aNumber - bNumber;
+    if (diff !== 0) return diff;
   }
-  return aId.localeCompare(bId);
+  if (aId < bId) return -1;
+  if (aId > bId) return 1;
+  return 0;
 }
 
 function collectDispatchStatusUpdates(messages, requestIds) {
