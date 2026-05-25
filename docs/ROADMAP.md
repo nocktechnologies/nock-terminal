@@ -52,6 +52,7 @@ Current execution posture:
 - Nock `7627` / Phase H H3 closed the dispatch completion tracking contract in PR #52.
 - Nock `7628` / Phase H H4a closed in PR #53 with the local dispatch status reducer and history normalization foundation.
 - Nock `7680` / Phase H H4 proper is done via PR #55 and PR #56: Mira message #1513 confirmed the live inbox read contract, brokered dispatch runs now poll NockCC `status_update` AgentMessages by `context.request_id`, and post-merge review feedback stabilized message/request ordering.
+- Nock `7681` / Phase H H5/H6 is in progress on `codex/phase-h-agent-session-contract`: adapter session contracts now separate transcript discovery, live attach, resume command, and folder launch, with CRM tmux attach as the first supported attach/resume metadata path.
 - Nock `123` has been rewritten around the real release gap: signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback.
 
 ### May 24 Phase H Execution Plan
@@ -142,9 +143,9 @@ Extend the adapter contract for:
 Current adapter posture:
 
 - Claude Code: current transcript discovery and launch behavior remain preserved.
-- Local agent folders: discovered from config and file-bus state; terminal launch is supported; true reconnect/attach remains future work.
+- Local agent folders: discovered from config and file-bus state; terminal launch is supported; CRM persistent agents expose attach/resume metadata when Nock derives the deterministic `tmux attach -t crm-<instance>-<agent>` target; arbitrary folder reconnect remains future work.
 - Codex CLI: context/process detection and profile-driven terminal launch are implemented; transcript discovery and resume/attach remain future work.
-- Codex dispatch agents: CRM brokered/direct dispatch is implemented for allowlisted agents; local dispatch-run history now has a shared status normalizer, while completion-thread tracking remains future work until a live NockCC read/subscription API is confirmed.
+- Codex dispatch agents: CRM brokered/direct dispatch is implemented for allowlisted agents; local dispatch-run history has a shared status normalizer, and brokered runs poll live NockCC `status_update` messages by `context.request_id`. Full completion-thread/transcript rendering remains future work.
 - DeepSeek dispatch agents: API-backed CRM brokered/direct dispatch is implemented for allowlisted agents; there is no standalone DeepSeek CLI launcher.
 - Gemini CLI: process detection, `GEMINI.md` context checks, and profile-driven terminal launch are implemented; transcript discovery is not claimed.
 

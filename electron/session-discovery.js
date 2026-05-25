@@ -3,6 +3,7 @@ const path = require('path');
 const os = require('os');
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const { getAgentSessionContract } = require('./agent-adapters');
 
 const execAsync = promisify(exec);
 
@@ -332,9 +333,28 @@ class SessionDiscovery {
       const agentRuntime = this._agentRuntimeFromConfig(config);
       const dispatchLaunch = await this._resolveDispatchLaunch(agentPath, config, agentName, agentRuntime);
       const launchCwd = dispatchLaunch?.cwd || this._resolveAgentLaunchCwd(config, agentPath);
+      const crmAttachCommand = dispatchLaunch ? '' : this._resolveCrmAgentAttachCommand(agentPath, agentName);
       const launchCommand = dispatchLaunch
         ? ''
-        : (enabled ? this._resolveAgentLaunchCommand(config, agentName, agentPath) : '');
+        : (enabled ? this._resolveAgentLaunchCommand(config, agentName, agentPath, crmAttachCommand) : '');
+      const sessionContract = this._resolveAgentSessionContract({
+        agentName,
+        agentRuntime,
+        agentPath,
+        enabled,
+        dispatchLaunch,
+        launchCommand,
+        launchCwd,
+        crmAttachCommand,
+      });
+      const terminalLaunch = this._terminalLaunchDescriptor({
+        agentName,
+        agentPath,
+        enabled,
+        launchCommand,
+        launchCwd,
+        crmAttachCommand,
+      });
       const runtime = await this._getAgentRuntimeState(agentName, dirName, config, enabled, Boolean(dispatchLaunch));
       const gitInfo = await this._getGitInfo(agentPath);
       const lastActivity = runtime.lastActivity || 0;
@@ -369,7 +389,11 @@ class SessionDiscovery {
           cwd: launchCwd,
           canLaunch: Boolean(launchCommand),
           disabledReason: launchCommand ? '' : 'Agent launch command is missing',
+          action: terminalLaunch.action,
+          actionLabel: terminalLaunch.actionLabel,
+          capability: terminalLaunch.capability,
         },
+        sessionContract,
       };
     } catch {
       return null;
@@ -405,7 +429,7 @@ class SessionDiscovery {
       .join(' ');
   }
 
-  _resolveAgentLaunchCommand(config, agentName, agentPath = '') {
+  _resolveAgentLaunchCommand(config, agentName, agentPath = '', crmAttachCommand = '') {
     const candidates = [
       config.launch_command,
       config.launchCommand,
@@ -418,9 +442,83 @@ class SessionDiscovery {
       const command = this._safeString(candidate, 500);
       if (command) return command;
     }
-    const crmAttachCommand = this._resolveCrmAgentAttachCommand(agentPath, agentName);
     if (crmAttachCommand) return crmAttachCommand;
     return this._safeAgentName(agentName) || this._formatAgentName(agentName).replace(/\s+/g, '');
+  }
+
+  _terminalLaunchDescriptor({ agentName, agentPath, enabled, launchCommand, crmAttachCommand }) {
+    if (!enabled || !launchCommand) {
+      return {
+        action: 'unavailable',
+        actionLabel: 'Unavailable',
+        capability: 'none',
+      };
+    }
+    const attachCommand = crmAttachCommand || this._resolveCrmAgentAttachCommand(agentPath, agentName);
+    if (attachCommand && launchCommand === attachCommand) {
+      return {
+        action: 'attach',
+        actionLabel: 'Attach',
+        capability: 'live-attach',
+      };
+    }
+    return {
+      action: 'launch',
+      actionLabel: 'Launch',
+      capability: 'folder-launch',
+    };
+  }
+
+  _resolveAgentSessionContract({
+    agentName,
+    agentRuntime,
+    agentPath,
+    enabled,
+    dispatchLaunch,
+    launchCommand,
+    launchCwd,
+    crmAttachCommand,
+  }) {
+    if (dispatchLaunch) {
+      const contract = getAgentSessionContract('dispatch-agent');
+      contract.adapterId = `${agentRuntime || 'dispatch'}-dispatch`;
+      contract.dispatchRequest = {
+        ...(contract.dispatchRequest || {}),
+        state: dispatchLaunch.canLaunch ? 'supported' : 'unsupported',
+        broker: dispatchLaunch.broker,
+        dispatcher: dispatchLaunch.dispatcher,
+        scriptPath: dispatchLaunch.scriptPath,
+        aliasPath: dispatchLaunch.aliasPath,
+        disabledReason: dispatchLaunch.disabledReason,
+      };
+      return contract;
+    }
+
+    const contract = getAgentSessionContract('local-agent-folder');
+    contract.adapterId = 'local-agent-folder';
+    const attachCommand = crmAttachCommand || this._resolveCrmAgentAttachCommand(agentPath, agentName);
+    const canAttach = Boolean(enabled && launchCommand && attachCommand && launchCommand === attachCommand);
+    contract.liveAttach = {
+      ...(contract.liveAttach || {}),
+      state: canAttach ? 'supported' : 'unsupported',
+      command: canAttach ? launchCommand : '',
+      evidence: canAttach ? 'crm-tmux-session-name' : '',
+      disabledReason: canAttach ? '' : 'No deterministic live attach target was resolved for this agent folder.',
+    };
+    contract.resumeCommand = {
+      ...(contract.resumeCommand || {}),
+      state: canAttach ? 'supported' : 'unsupported',
+      command: canAttach ? launchCommand : '',
+      evidence: canAttach ? 'crm-tmux-session-name' : '',
+      disabledReason: canAttach ? '' : 'No deterministic resume command was resolved for this agent folder.',
+    };
+    contract.folderLaunch = {
+      ...(contract.folderLaunch || {}),
+      state: enabled && launchCommand ? 'supported' : 'unsupported',
+      command: launchCommand || '',
+      cwd: launchCwd || agentPath,
+    };
+    return contract;
   }
 
   _resolveCrmAgentAttachCommand(agentPath, agentName) {
@@ -470,6 +568,9 @@ class SessionDiscovery {
       cwd: dispatchRoot || this._resolveAgentLaunchCwd(config, agentPath),
       canLaunch: allowed,
       disabledReason,
+      action: 'dispatch',
+      actionLabel: 'Dispatch',
+      capability: 'dispatch-request',
       broker: this._safeAgentName(config.broker_agent || config.brokerAgent) || 'mira-nockos',
       dispatcher: agentRuntime,
       runtime: agentRuntime,
@@ -774,6 +875,12 @@ class SessionDiscovery {
         (await this._cwdFromTranscripts(projectPath, jsonlFiles)) ||
         this._decodeDirName(dirName);
       const projectName = path.basename(decodedPath);
+      const sessionContract = getAgentSessionContract('claude');
+      sessionContract.adapterId = 'claude';
+      sessionContract.transcriptDiscovery = {
+        ...(sessionContract.transcriptDiscovery || {}),
+        projectPath,
+      };
 
       // Get git info (branch + dirty) — cached and async
       const gitInfo = await this._getGitInfo(decodedPath);
@@ -797,6 +904,7 @@ class SessionDiscovery {
         lastActivity,
         lastActivityFormatted: this._formatTime(lastActivity),
         dirty: gitInfo.dirty,
+        sessionContract,
       };
     } catch {
       return null;

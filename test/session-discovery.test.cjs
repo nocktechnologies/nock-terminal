@@ -60,6 +60,13 @@ test('discovers agent folders from existing config.json files', async () => {
   assert.equal(mira.agent.unreadCount, 1);
   assert.equal(mira.launch.command, 'tmux attach -t crm-default-mira');
   assert.equal(mira.launch.cwd, agentPath);
+  assert.equal(mira.launch.action, 'attach');
+  assert.equal(mira.launch.actionLabel, 'Attach');
+  assert.equal(mira.launch.capability, 'live-attach');
+  assert.equal(mira.sessionContract.adapterId, 'local-agent-folder');
+  assert.equal(mira.sessionContract.liveAttach.state, 'supported');
+  assert.equal(mira.sessionContract.liveAttach.command, 'tmux attach -t crm-default-mira');
+  assert.equal(mira.sessionContract.resumeCommand.state, 'supported');
 });
 
 test('upgrades Claude transcript paths to agent folders even without dev roots', async () => {
@@ -97,6 +104,33 @@ test('upgrades Claude transcript paths to agent folders even without dev roots',
   assert.equal(mira.launch.cwd, agentPath);
 });
 
+test('adds Claude session contract metadata to transcript-only project rows', async () => {
+  const root = makeTempDir();
+  const claudeDir = path.join(root, '.claude');
+  const projectPath = path.join(root, 'Dev', 'nock-terminal');
+  const claudeProjectPath = path.join(claudeDir, 'projects', 'transcript-for-project');
+
+  writeFile(
+    path.join(claudeProjectPath, 'session.jsonl'),
+    `${JSON.stringify({ type: 'user', cwd: projectPath, message: { role: 'user', content: [] } })}\n`
+  );
+
+  const discovery = new SessionDiscovery({
+    claudeDir,
+    devRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const project = sessions.find(session => session.path === projectPath);
+
+  assert.ok(project);
+  assert.equal(project.sessionContract.adapterId, 'claude');
+  assert.equal(project.sessionContract.transcriptDiscovery.state, 'supported');
+  assert.equal(project.sessionContract.transcriptDiscovery.projectPath, claudeProjectPath);
+  assert.equal(project.sessionContract.liveAttach.state, 'unsupported');
+});
+
 test('uses CRM tmux attach fallback for enabled persistent agents without shell aliases', async () => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');
@@ -113,6 +147,12 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
     devRoots: [devRoot],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
   });
+  let attachCommandCalls = 0;
+  const originalAttachCommand = discovery._resolveCrmAgentAttachCommand.bind(discovery);
+  discovery._resolveCrmAgentAttachCommand = (...args) => {
+    attachCommandCalls += 1;
+    return originalAttachCommand(...args);
+  };
 
   const sessions = await discovery.discover();
   const cooper = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'cooper');
@@ -120,6 +160,38 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
   assert.ok(cooper);
   assert.equal(cooper.launch.command, 'tmux attach -t crm-default-cooper');
   assert.equal(cooper.launch.canLaunch, true);
+  assert.equal(cooper.launch.action, 'attach');
+  assert.equal(cooper.sessionContract.liveAttach.evidence, 'crm-tmux-session-name');
+  assert.equal(attachCommandCalls, 1);
+});
+
+test('keeps explicit agent launch commands as folder launches rather than attach claims', async () => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const agentPath = path.join(devRoot, 'claude-remote-manager', 'agents', 'mira');
+
+  writeJson(path.join(agentPath, 'config.json'), {
+    agent_name: 'mira',
+    enabled: true,
+    model: 'claude-opus-4-6',
+    launch_command: 'mira --watch',
+  });
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [devRoot],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const mira = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'mira');
+
+  assert.ok(mira);
+  assert.equal(mira.launch.command, 'mira --watch');
+  assert.equal(mira.launch.action, 'launch');
+  assert.equal(mira.launch.capability, 'folder-launch');
+  assert.equal(mira.sessionContract.liveAttach.state, 'unsupported');
+  assert.equal(mira.sessionContract.folderLaunch.state, 'supported');
 });
 
 test('marks disabled agent folders as inactive without launch defaults', async () => {
@@ -199,6 +271,9 @@ test('discovers disabled Codex and DeepSeek folders as dispatch-ready agents', a
   assert.equal(ash.agent.lifecycle, 'dispatch');
   assert.equal(ash.status, 'inactive');
   assert.equal(ash.launch.mode, 'dispatch');
+  assert.equal(ash.launch.action, 'dispatch');
+  assert.equal(ash.launch.actionLabel, 'Dispatch');
+  assert.equal(ash.launch.capability, 'dispatch-request');
   assert.equal(ash.launch.canLaunch, true);
   assert.equal(ash.launch.broker, 'mira-nockos');
   assert.equal(ash.launch.scriptPath, path.join(crmRoot, 'core', 'scripts', 'dispatch-codex.sh'));
@@ -214,6 +289,9 @@ test('discovers disabled Codex and DeepSeek folders as dispatch-ready agents', a
   assert.equal(smith.agent.runtime, 'deepseek');
   assert.equal(smith.agent.lifecycle, 'dispatch');
   assert.equal(smith.launch.mode, 'dispatch');
+  assert.equal(smith.sessionContract.adapterId, 'deepseek-dispatch');
+  assert.equal(smith.sessionContract.liveAttach.state, 'unsupported');
+  assert.equal(smith.sessionContract.dispatchRequest.state, 'supported');
   assert.equal(smith.launch.canLaunch, true);
   assert.equal(smith.launch.aliasCommand, 'dispatch-deepseek.sh --agent smith');
   assert.equal(smith.launch.directScriptPath, path.join(crmRoot, 'core', 'scripts', 'dispatch-deepseek.sh'));
