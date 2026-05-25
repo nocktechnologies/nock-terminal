@@ -106,9 +106,10 @@ Agent cards show:
 
 Click behavior is conservative:
 
-- Running or idle agents open a terminal in the agent folder without auto-launching a duplicate process.
-- Offline or stale enabled agents launch the derived or configured command.
-- Persistent CRM agents do not require shell aliases such as `cooper` or `rook`; Nock falls back to `tmux attach -t crm-<instance>-<agent>`.
+- Running or idle plain launch agents open a terminal in the agent folder without auto-launching a duplicate process.
+- Offline or stale enabled plain launch agents launch the derived or configured command.
+- Persistent CRM agents do not require shell aliases such as `cooper` or `rook`; Nock falls back to `tmux attach -t crm-<instance>-<agent>` and executes that command only for attach/launch actions.
+- `Open Agent Folder` is a literal folder terminal action for agent rows. It suppresses launch and attach commands even when the row has a supported command.
 - The context menu provides `Attach Session` for CRM tmux-backed persistent agents, `Launch Fresh` for plain folder launches, and `Stage Dispatch Task` for dispatch agents.
 - `Ctrl+K` includes agent folders in the command launcher, ranks exact agent-name matches above similarly named repos, and can launch a fresh agent terminal.
 - Task staging can place a user-written task into a freshly launched agent terminal without submitting it.

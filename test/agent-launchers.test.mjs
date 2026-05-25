@@ -5,10 +5,12 @@ import {
   AGENT_FOLDER_ID,
   DISPATCH_AGENT_ID,
   buildLauncherTargets,
+  canRunResolvedLaunch,
   getProfileCommand,
   resolveDefaultAgentId,
   resolveSessionLaunch,
   sanitizeStagedTerminalInput,
+  shouldRunSessionLaunch,
 } from '../src/utils/agentLaunchers.mjs';
 
 const project = {
@@ -130,6 +132,53 @@ test('preserves disabled discovered attach launches even when a command is prese
   assert.equal(launch.command, 'tmux attach -t crm-default-mira');
   assert.equal(launch.canLaunch, false);
   assert.equal(launch.disabledReason, 'No live CRM session found');
+});
+
+test('runs attach actions by default but lets folder-open suppress command execution', () => {
+  const attachAgent = {
+    ...agent,
+    launch: {
+      command: 'tmux attach -t crm-default-mira',
+      cwd: agent.path,
+      action: 'attach',
+      actionLabel: 'Attach',
+      capability: 'live-attach',
+      canLaunch: true,
+    },
+  };
+
+  assert.equal(shouldRunSessionLaunch(attachAgent), true);
+  assert.equal(shouldRunSessionLaunch(attachAgent, { openFolderOnly: true }), false);
+});
+
+test('does not auto-run plain running agents unless launch is explicit', () => {
+  assert.equal(shouldRunSessionLaunch(agent), false);
+  assert.equal(shouldRunSessionLaunch(agent, { launchFresh: true }), true);
+});
+
+test('never runs disabled launch metadata even when a command is present', () => {
+  const disabledAttach = {
+    ...agent,
+    launch: {
+      command: 'tmux attach -t crm-default-mira',
+      cwd: agent.path,
+      action: 'attach',
+      actionLabel: 'Attach',
+      capability: 'live-attach',
+      canLaunch: false,
+      disabledReason: 'No live CRM session found',
+    },
+  };
+
+  assert.equal(shouldRunSessionLaunch(disabledAttach), false);
+  assert.equal(shouldRunSessionLaunch(disabledAttach, { launchFresh: true }), false);
+  assert.equal(canRunResolvedLaunch(resolveSessionLaunch(disabledAttach, {})), false);
+});
+
+test('only runs resolved launches when command and launchability both agree', () => {
+  assert.equal(canRunResolvedLaunch({ command: 'claude', canLaunch: true }), true);
+  assert.equal(canRunResolvedLaunch({ command: 'claude', canLaunch: false }), false);
+  assert.equal(canRunResolvedLaunch({ command: '', canLaunch: true }), false);
 });
 
 test('resolves brokered dispatch agent launches without treating them as terminal commands', () => {

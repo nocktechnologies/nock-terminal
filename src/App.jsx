@@ -22,7 +22,12 @@ import {
   writeDispatchRunsToStorage,
 } from './utils/dispatchRuns.mjs';
 import { buildUnsavedFilesMessage, normalizeUnsavedFiles } from './utils/unsavedFiles.mjs';
-import { resolveSessionLaunch, sanitizeStagedTerminalInput } from './utils/agentLaunchers.mjs';
+import {
+  canRunResolvedLaunch,
+  resolveSessionLaunch,
+  sanitizeStagedTerminalInput,
+  shouldRunSessionLaunch,
+} from './utils/agentLaunchers.mjs';
 
 function createTabId(prefix = 'tab') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -196,12 +201,6 @@ export default function App() {
     });
   }, [tabs, processStatus]);
 
-  const shouldLaunchAgent = (session) =>
-    session?.kind === 'agent'
-    && session.launch?.mode !== 'dispatch'
-    && session.agent?.enabled
-    && Boolean(session.launch?.command);
-
   const recordDispatchRun = useCallback((run) => {
     setDispatchRuns(prev => [
       createDispatchRun(run, { id: createTabId('dispatch') }),
@@ -279,7 +278,7 @@ export default function App() {
 
     const tabId = createTabId();
     const isAgent = session.kind === 'agent';
-    const launchCommand = shouldLaunchAgent(session) ? session.launch.command : undefined;
+    const launchCommand = shouldRunSessionLaunch(session, options) ? session.launch.command : undefined;
     const initialInput = sanitizeStagedTerminalInput(options?.initialInput || '');
     const cwd = isAgent ? (session.launch?.cwd || session.path) : session.path;
     const newTab = {
@@ -421,10 +420,11 @@ export default function App() {
       return;
     }
 
-    if (!launch.command) {
+    if (!canRunResolvedLaunch(launch)) {
       openTerminalTab(session, {
         launchFresh: options.launchFresh === true,
         initialInput,
+        openFolderOnly: true,
       });
       return;
     }
