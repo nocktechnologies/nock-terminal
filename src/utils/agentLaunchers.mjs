@@ -148,6 +148,25 @@ export function resolveSessionLaunch(session, profile = {}, agentId) {
   };
 }
 
+function sessionCanLaunch(session) {
+  if (session?.kind !== 'agent') return false;
+  if (session?.launch?.mode === 'dispatch') return false;
+  if (session?.agent?.enabled === false) return false;
+  if (typeof session?.launch?.canLaunch === 'boolean') {
+    return session.launch.canLaunch === true;
+  }
+  return Boolean(trimString(session?.launch?.command));
+}
+
+export function shouldRunSessionLaunch(session, options = {}) {
+  if (options?.openFolderOnly === true) return false;
+  if (!sessionCanLaunch(session)) return false;
+  if (!trimString(session?.launch?.command)) return false;
+  if (options?.launchFresh === true) return true;
+  if (trimString(session?.launch?.action) === 'attach') return true;
+  return !['running', 'idle'].includes(session?.agent?.lifecycle);
+}
+
 function buildSessionSearchText(session, profile = {}) {
   const defaultAgentId = resolveDefaultAgentId(profile);
   const defaultLauncher = getAgentLauncher(defaultAgentId);

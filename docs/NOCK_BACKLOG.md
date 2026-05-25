@@ -6,9 +6,9 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 
 ## Current Baseline
 
-- Repo baseline: `origin/main` at merge commit `643241d` after PRs #31, #32, #37, #38, #39, #40, #42, #43, #44, #46, #47, #48, #49, #50, #51, #52, #53, #54, #55, #56, and #57.
+- Repo baseline: `origin/main` at merge commit `7e75a0a` after PRs #31, #32, #37, #38, #39, #40, #42, #43, #44, #46, #47, #48, #49, #50, #51, #52, #53, #54, #55, #56, #57, and #58.
 - NockCC live update: message `#1443` sent to `mira-nockos` when Phase E/G PRs opened; later closeout messages should reference PRs #39 and #40.
-- Project board: Nocks `7530`, `7531`, `7532`, `7533`, `7551`, `7552`, `7680`, and `7681` are attached to the Terminal project.
+- Project board: Nocks `7530`, `7531`, `7532`, `7533`, `7551`, `7552`, `7680`, `7681`, and `7682` are attached to the Terminal project.
 - Primary local checkout note: `/Users/kevin/Dev/nock-terminal` had unrelated dirty work and was behind `origin/main` during this pass, so implementation and audit work used clean worktrees.
 
 ## Reconciled Nocks
@@ -34,7 +34,8 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 | `7627` | Done | `30 Roadmap` | PR #52 merged: `596e6d8` | Phase H H3: dispatch completion tracking contract. |
 | `7628` | Done | `10 Active Foundation` | PR #53 merged: `6fee7d6` | Phase H H4a: local dispatch status reducer and history normalization foundation. |
 | `7680` | Done | `10 Active Foundation` | PR #55 merged: `e81f3e6`; PR #56 merged: `cc2c517` | Phase H H4 proper: live NockCC inbox polling for brokered dispatch completion updates after Mira message #1513 confirmed the read API contract; PR #56 handled post-merge review stabilization. |
-| `7681` | In Progress | `10 Active Foundation` | Branch `codex/phase-h-agent-session-contract` | Phase H H5/H6: typed adapter/session contract plus first proven CRM tmux attach/resume metadata slice. |
+| `7681` | Done | `10 Active Foundation` | PR #58 merged: `7e75a0a` | Phase H H5/H6: typed adapter/session contract plus first proven CRM tmux attach/resume metadata slice. |
+| `7682` | In Progress | `10 Active Foundation` | Branch `codex/phase-h-attach-execution` | Phase H H6b: execute the proven CRM tmux attach action while keeping literal folder-open actions and disabled launch metadata safe. |
 | `886` | Backlog | `30 Roadmap` | Still valid | Marketing/GTM positioning is useful, but should use this ledger and current release docs. |
 | `123` | Backlog | `30 Roadmap` | Rewritten for Phase H | Distribution readiness now tracks signed artifact smoke, credentials, update channel, crash/error reporting, support path, and beta feedback. |
 | `7451` | Done | None | Historical assessment | Keep as archived historical launch-readiness report. |
@@ -59,7 +60,7 @@ Those acceptance criteria were not implemented by PR #33. The stale-contract cle
    Phase F moved settings, file, dispatch, local-data, terminal, system/window, NockCC activity, session discovery, Ollama, and Telegram IPC out of `electron/main.js`. Further work in this area should be framed as adapter/product behavior, not generic main-process decomposition.
 
 2. **Execute Phase H from `docs/PHASE_H_EXECUTION_PLAN.md`.**
-   H5/H6 is underway as Nock `7681`. The remaining parallel track is signed artifact smoke evidence for Nock `123`, assuming release-machine access is available.
+   H6b is underway as Nock `7682` after PR #58 closed the H5/H6 metadata slice. The remaining parallel track is signed artifact smoke evidence for Nock `123`, assuming release-machine access is available.
 
 3. **Keep Nock `886` as product/GTM work.**
    It should be informed by current truth: Claude transcript discovery is real, Codex/Gemini launch profiles exist, Codex/DeepSeek dispatch exists, Linux unpacked packaged smoke exists, and full Codex/Gemini transcript discovery, attach/reconnect, signed installer smoke, update distribution, crash reporting, worktree lanes, and replay remain roadmap.

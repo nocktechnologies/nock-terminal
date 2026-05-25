@@ -202,10 +202,14 @@ Phase H is successful when:
 
 **Execution note:** The first implementation target is CRM persistent agent folders. Nock can derive the deterministic `tmux attach -t crm-<instance>-<agent>` target for canonical CRM agents, so those rows can expose `Attach` metadata. Explicit custom agent commands remain normal launches, and dispatch agents remain request-level workers.
 
+**H6b execution bridge:** Nock `7682` follows PR #58 by wiring the metadata into the terminal launch decision. Attach-capable CRM rows may run the tmux attach command when the user chooses the attach/launch action, but `Open Agent Folder` must suppress command execution. Explicit `canLaunch: false` remains authoritative even when a command string is present.
+
 **Acceptance criteria:**
 - A discovered session exposes a safe attach/resume action only when the adapter can prove the command target.
 - The command launcher and dashboard do not imply attach support for runtimes that only support folder launch.
 - Tests cover adapter capability detection and launch command resolution.
+- Folder-open actions do not accidentally execute attach or launch commands.
+- Disabled launch metadata cannot be bypassed by paths that open a terminal directly.
 
 **Verification:**
 - Focused adapter tests.

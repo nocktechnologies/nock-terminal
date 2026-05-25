@@ -52,7 +52,8 @@ Current execution posture:
 - Nock `7627` / Phase H H3 closed the dispatch completion tracking contract in PR #52.
 - Nock `7628` / Phase H H4a closed in PR #53 with the local dispatch status reducer and history normalization foundation.
 - Nock `7680` / Phase H H4 proper is done via PR #55 and PR #56: Mira message #1513 confirmed the live inbox read contract, brokered dispatch runs now poll NockCC `status_update` AgentMessages by `context.request_id`, and post-merge review feedback stabilized message/request ordering.
-- Nock `7681` / Phase H H5/H6 is in progress on `codex/phase-h-agent-session-contract`: adapter session contracts now separate transcript discovery, live attach, resume command, and folder launch, with CRM tmux attach as the first supported attach/resume metadata path.
+- Nock `7681` / Phase H H5/H6 is done via PR #58: adapter session contracts now separate transcript discovery, live attach, resume command, and folder launch, with CRM tmux attach as the first supported attach/resume metadata path.
+- Nock `7682` / Phase H H6b is in progress on `codex/phase-h-attach-execution`: attach-capable CRM agent actions should execute the proven tmux attach command, while explicit folder-open actions suppress command execution and unsupported resume/attach states remain disabled.
 - Nock `123` has been rewritten around the real release gap: signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback.
 
 ### May 24 Phase H Execution Plan
