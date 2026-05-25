@@ -218,7 +218,7 @@ export default function App() {
       seen.add(run.requestId);
       requestIds.push(run.requestId);
     }
-    return requestIds.join('|');
+    return requestIds.sort().join('|');
   }, [dispatchRuns]);
 
   useEffect(() => {

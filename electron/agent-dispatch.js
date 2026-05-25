@@ -201,7 +201,14 @@ function compareMessageOrder(a, b) {
   const aTime = Date.parse(a.createdAt || '') || 0;
   const bTime = Date.parse(b.createdAt || '') || 0;
   if (aTime !== bTime) return aTime - bTime;
-  return Number(a.messageId || 0) - Number(b.messageId || 0);
+  const aId = a.messageId || '';
+  const bId = b.messageId || '';
+  const aNumber = Number(aId);
+  const bNumber = Number(bId);
+  if (aId && bId && Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
+    return aNumber - bNumber;
+  }
+  return aId.localeCompare(bId);
 }
 
 function collectDispatchStatusUpdates(messages, requestIds) {
