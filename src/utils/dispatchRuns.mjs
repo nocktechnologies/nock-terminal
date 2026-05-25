@@ -146,3 +146,11 @@ export function writeDispatchRunsToStorage(storage, runs) {
     // Local storage may be unavailable in hardened renderer contexts.
   }
 }
+
+export function getDispatchRunStorage(globalObject = globalThis) {
+  try {
+    return globalObject?.localStorage || null;
+  } catch {
+    return null;
+  }
+}

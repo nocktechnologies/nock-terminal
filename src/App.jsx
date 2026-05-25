@@ -15,6 +15,7 @@ import CommandPalette from './components/CommandPalette';
 import {
   MAX_DISPATCH_RUNS,
   createDispatchRun,
+  getDispatchRunStorage,
   readDispatchRunsFromStorage,
   writeDispatchRunsToStorage,
 } from './utils/dispatchRuns.mjs';
@@ -45,7 +46,7 @@ export default function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [commandPalettePreset, setCommandPalettePreset] = useState(null);
   const [profilesByPath, setProfilesByPath] = useState({});
-  const [dispatchRuns, setDispatchRuns] = useState(() => readDispatchRunsFromStorage(window.localStorage));
+  const [dispatchRuns, setDispatchRuns] = useState(() => readDispatchRunsFromStorage(getDispatchRunStorage(window)));
   const [notice, setNotice] = useState(null);
   const queuedPromptIdRef = useRef(0);
 
@@ -105,7 +106,10 @@ export default function App() {
   }, [sessions]);
 
   useEffect(() => {
-    writeDispatchRunsToStorage(window.localStorage, dispatchRuns);
+    const storage = getDispatchRunStorage(window);
+    if (storage) {
+      writeDispatchRunsToStorage(storage, dispatchRuns);
+    }
   }, [dispatchRuns]);
 
   useEffect(() => {

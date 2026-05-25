@@ -6,6 +6,7 @@ import {
   MAX_DISPATCH_RUNS,
   canTransitionDispatchStatus,
   createDispatchRun,
+  getDispatchRunStorage,
   isTerminalDispatchStatus,
   normalizeDispatchRun,
   normalizeDispatchRunList,
@@ -126,6 +127,16 @@ test('reads and writes dispatch runs from storage defensively', () => {
     { id: 'keep', createdAt: 100, status: 'failed', error: 'Nope' },
   ]);
   assert.deepEqual(readDispatchRunsFromStorage(createStorage('{bad json')), []);
+});
+
+test('getDispatchRunStorage tolerates restricted localStorage getters', () => {
+  const storage = createStorage();
+  assert.equal(getDispatchRunStorage({ localStorage: storage }), storage);
+  assert.equal(getDispatchRunStorage({
+    get localStorage() {
+      throw new Error('blocked');
+    },
+  }), null);
 });
 
 test('serializeDispatchRuns returns normalized JSON only', () => {
