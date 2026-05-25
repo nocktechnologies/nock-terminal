@@ -1,6 +1,6 @@
 # Product Roadmap
 
-Updated: 2026-05-24
+Updated: 2026-05-25
 
 This roadmap follows the audit in `docs/PRODUCT_AUDIT_GTM_READINESS.md`. It assumes Nock Terminal should become a local-first cockpit for supervising coding agents, not a generic AI IDE.
 
@@ -27,9 +27,9 @@ Do not lead with "Codex app" or "Claude app." Lead with the workflow:
 
 ## Near-Term Roadmap
 
-### May 24 NockCC Backlog Reconciliation, Post-A/B/C Audit, And E/G Closeout
+### May 24-25 NockCC Backlog Reconciliation, Phase H Closeout, And Release Truth
 
-The live NockCC backlog has been reconciled against `origin/main` after PRs #31, #32, #37, #38, #39, and #40. See `docs/NOCK_BACKLOG.md` for the source-of-truth queue state and `docs/POST_ABC_INTEGRATION_AUDIT.md` for the current post-A/B/C checkpoint.
+The live NockCC backlog has been reconciled against `origin/main` after PRs #31, #32, #37, #38, #39, #40, #42, #43, #44, #46, #47, #48, #49, #50, #51, #52, #53, #54, #55, #56, #57, #58, and #59. See `docs/NOCK_BACKLOG.md` for the source-of-truth queue state and `docs/POST_ABC_INTEGRATION_AUDIT.md` for the post-A/B/C checkpoint.
 
 Current execution posture:
 
@@ -47,14 +47,14 @@ Current execution posture:
 - Nock `7608` / Phase F slice 6 is done via PR #48: system/window IPC extraction for window controls, ports, shell/clipboard, and system discovery handlers.
 - Nock `7614` / Phase F slice 7 is done via PR #49: NockCC activity IPC extraction for `nockcc:updateActivity` sanitization plus session start, heartbeat, and shutdown lifecycle wiring.
 - Nock `7620` / Phase F final slice is done via PR #50: session discovery, Ollama chat/status, and Telegram notifications now register through focused main-process modules with handler-level tests.
-- Phase F's `electron/main.js` IPC extraction is complete. Remaining work in this area should be framed as product adapter work, not IPC cleanup: Codex/Gemini transcript discovery, resume/attach support, and dispatch completion-thread tracking.
+- Phase F's `electron/main.js` IPC extraction is complete. Remaining work in this area should be framed as product adapter work, not IPC cleanup: Codex/Gemini transcript discovery, broader resume/attach support, and full dispatch completion-thread/transcript rendering.
 - Nock `7621` / Phase H Task 0 captures the Phase H execution plan and Nock #123 rewrite.
 - Nock `7627` / Phase H H3 closed the dispatch completion tracking contract in PR #52.
 - Nock `7628` / Phase H H4a closed in PR #53 with the local dispatch status reducer and history normalization foundation.
 - Nock `7680` / Phase H H4 proper is done via PR #55 and PR #56: Mira message #1513 confirmed the live inbox read contract, brokered dispatch runs now poll NockCC `status_update` AgentMessages by `context.request_id`, and post-merge review feedback stabilized message/request ordering.
 - Nock `7681` / Phase H H5/H6 is done via PR #58: adapter session contracts now separate transcript discovery, live attach, resume command, and folder launch, with CRM tmux attach as the first supported attach/resume metadata path.
-- Nock `7682` / Phase H H6b is in progress on `codex/phase-h-attach-execution`: attach-capable CRM agent actions should execute the proven tmux attach command, while explicit folder-open actions suppress command execution and unsupported resume/attach states remain disabled.
-- Nock `123` has been rewritten around the real release gap: signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback.
+- Nock `7682` / Phase H H6b is done via PR #59: attach-capable CRM agent actions execute the proven tmux attach command, while explicit folder-open actions suppress command execution and unsupported resume/attach states remain disabled.
+- Nock `123` is active on `codex/phase-h-release-truth`: release readiness now has an explicit decision log and evidence ledger for signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback. The Nock remains open until signed target-OS smoke evidence exists.
 
 ### May 24 Phase H Execution Plan
 
@@ -107,7 +107,9 @@ Completed in the May 15 remediation pass:
 Still required before public beta:
 
 - Extend packaged app smoke automation from Linux unpacked CI coverage to signed macOS, Windows, and Linux release artifacts.
-- Decide update distribution, crash/error reporting, support path, and beta feedback channel.
+- Keep update distribution manual until a signed and tested auto-update channel exists.
+- Choose or deliberately defer crash/error reporting with a privacy posture.
+- Publish a public support path and beta feedback channel.
 
 ### 2. Agent Adapter Layer
 

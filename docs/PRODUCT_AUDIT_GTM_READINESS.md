@@ -1,7 +1,7 @@
 # Product Audit And GTM Readiness
 
 Audit date: 2026-05-15
-Latest product update: 2026-05-16
+Latest product update: 2026-05-25
 
 Scope: repository documentation, Electron/React implementation, local verification commands, browser smoke checks with the mocked preload bridge, and a current market read of agentic development tools.
 
@@ -11,7 +11,7 @@ Nock Terminal is not ready for public GTM or paid launch.
 
 After the May 15 remediation pass, it is ready for renewed internal dogfood and a controlled private alpha. The previous launch blockers around dependency audit, terminal settings, unsaved editor protection, NockCC placeholder activity, first-run onboarding, and release gates have been fixed or materially reduced.
 
-The remaining public-GTM blockers are product depth and distribution proof: true reconnect/attach for live agents, Codex transcript/launch adapters, worktree lanes, session replay, signed installer smoke coverage on every target OS, update distribution, crash/error reporting, and a crisp public demo/support path.
+The remaining public-GTM blockers are product depth and distribution proof: broader reconnect/attach for live agents beyond the proven CRM tmux path, Codex transcript/resume adapters, worktree lanes, session replay, signed installer smoke coverage on every target OS, a public support/feedback route, crash/error reporting privacy posture, and a crisp public demo path.
 
 The product has useful bones: a real PTY-backed terminal, Claude transcript discovery, agent-folder discovery, project cards, file tree, Monaco editing, local model chat, prompt/session history, git controls, port awareness, and notifications. The main problem is not lack of product surface. The problem is that the surface is not yet formed into a sharp promise people can immediately understand and trust.
 
@@ -29,7 +29,18 @@ The approved agent-agnostic cockpit phases now have a working private-alpha slic
 - Brokered dispatch requests through Mira via NockCC AgentMessage and an operator direct-dispatch route through CRM scripts.
 - Dispatch-run telemetry in the dashboard and deduping for copied dispatch/worktree agent configs.
 
-Readiness impact: this improves private-alpha usefulness and product clarity, especially for agent-agnostic orchestration. It does not remove the public-GTM blockers around real transcript discovery beyond Claude, attach/reconnect semantics, dispatch completion-thread tracking, worktree lanes, session replay, signed installer smoke coverage, update distribution, crash/error reporting, and public support/demo material.
+Readiness impact: this improves private-alpha usefulness and product clarity, especially for agent-agnostic orchestration. It does not remove the public-GTM blockers around real transcript discovery beyond Claude, attach/reconnect semantics beyond the proven CRM tmux path, full completion-thread/transcript rendering, worktree lanes, session replay, signed installer smoke coverage, update distribution, crash/error reporting, and public support/demo material.
+
+## May 25 Phase H Progress
+
+Phase H closed several truth gaps after the May 16 product slice:
+
+- Brokered dispatch runs can now poll NockCC live `status_update` AgentMessages by `context.request_id` and move beyond local `sent` telemetry.
+- Adapter/session contracts now separate transcript discovery, live attach, resume command, folder launch, and dispatch request semantics.
+- CRM persistent agent folders have the first proven attach/resume metadata and execution path through deterministic `tmux attach -t crm-<instance>-<agent>` targets.
+- `docs/RELEASE_READINESS.md` now records the release decision log and signed artifact evidence ledger for Nock #123.
+
+Readiness impact: this reduces the product-truth risk around dispatch and CRM attach, but it does not make Codex/Gemini transcript discovery, generic live reconnect, worktree lanes, session replay, signed artifact smoke, auto-update, crash reporting, or public support ready.
 
 ## Verification Summary
 
@@ -60,7 +71,7 @@ Readiness impact: this improves private-alpha usefulness and product clarity, es
 | Product clarity | 3/5 | Docs now lead with local agent observability; Claude-first transcript discovery remains the honest current state. |
 | Differentiation | 2/5 | "Agent cockpit" is promising, but OpenAI, Cursor, Warp, Claude, Windsurf, GitHub, and JetBrains now all tell multi-agent stories. |
 | Onboarding | 3/5 | First-run checklist now covers dev roots, agent binaries, context files, sessions, and Ollama status. |
-| Reliability | 3/5 | Unit/build/smoke/release checks pass; Linux unpacked packaged smoke is automated; no auto-update validation. |
+| Reliability | 3/5 | Unit/build/smoke/release checks pass; Linux unpacked packaged smoke is automated; no signed artifact or auto-update validation. |
 | Security | 3/5 | Good Electron boundaries and zero moderate+ audit findings; public launch still needs signed installer smoke on each target OS and support process. |
 | Packaging/distribution | 3/5 | Release workflow enforces signing/notarization secrets, Linux artifacts, checksums, and Linux unpacked packaged smoke; signed installer smoke coverage is still manual. |
 | Feedback/analytics | 3/5 | NockCC heartbeat now receives active project and agent session data from renderer state. |
@@ -160,7 +171,7 @@ Status: Materially improved, not complete.
 
 macOS notarization is enabled in package config. The release workflow now has a preflight release gate, macOS signing/notarization secret checks, Windows signing secret checks, Linux AppImage/deb artifacts, and platform checksum files. `docs/RELEASE_READINESS.md` documents the packaged smoke checklist and rollback path.
 
-Remaining work: extend packaged smoke to signed macOS/Windows/Linux release artifacts and decide update distribution, crash/error reporting, and support flow.
+Remaining work: extend packaged smoke to signed macOS/Windows/Linux release artifacts, configure real signing credentials, and publish support/feedback/crash-reporting decisions before public beta.
 
 ### P2 - Accessibility And Hit Targets Need A Polish Pass
 
@@ -244,7 +255,7 @@ Launch path:
 
 1. Private dogfood: continue exercising the remediated shell settings, unsaved editor protection, onboarding, context checks, and NockCC heartbeat.
 2. Private alpha: position as "local cockpit for terminal coding agents" while staying honest that Claude Code is the only transcript-discovery source today.
-3. Public beta: add Codex transcript/launch adapters, worktree lanes, session replay, crash/error reporting, signed artifact smoke coverage, update distribution, and a clear support path.
+3. Public beta: add Codex transcript/resume adapters, worktree lanes, session replay, crash/error reporting, signed artifact smoke coverage, update distribution, and a clear support path.
 
 ## What Would Make People Want It
 
@@ -267,10 +278,10 @@ That is more compelling than "a terminal with AI chat."
 
 ## Remaining Fixes
 
-1. Implement true reconnect/attach for live local agents.
+1. Implement broader reconnect/attach for live local agents beyond the proven CRM tmux path.
 2. Implement real Codex transcript discovery and resume/attach semantics; launch/profile settings now exist.
 3. Add worktree lanes for parallel agent attempts.
 4. Add session replay and handoff export from terminal output, diff, commands, and test results.
 5. Extend packaged-app smoke coverage to signed macOS, Windows, and Linux release artifacts.
-6. Decide update distribution, crash/error reporting, support path, and beta feedback channel.
+6. Publish the public support path, beta feedback channel, and crash/error reporting privacy posture.
 7. Build the public demo around agent observability, worktree safety, and recoverable sessions.
