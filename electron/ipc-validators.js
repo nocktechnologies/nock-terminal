@@ -345,6 +345,40 @@ function validateDispatchBrokeredPayload(payload) {
   });
 }
 
+function validateDispatchStatusUpdatesPayload(payload) {
+  if (!isPlainObject(payload)) return invalid('dispatch:statusUpdates payload must be an object');
+
+  const seen = new Set();
+  const requestIds = [];
+  for (const value of Array.isArray(payload.requestIds) ? payload.requestIds : []) {
+    const requestId = normalizeString(value, { maxLength: 120, allowEmpty: false });
+    if (!requestId || !/^[A-Za-z0-9_-]+$/.test(requestId) || seen.has(requestId)) continue;
+    seen.add(requestId);
+    requestIds.push(requestId);
+    if (requestIds.length >= 50) break;
+  }
+  if (requestIds.length === 0) {
+    return invalid('dispatch:statusUpdates requires at least one valid requestId');
+  }
+
+  const agentName = payload.agentName === undefined
+    ? 'nock-terminal'
+    : safeAgentName(payload.agentName);
+  if (!agentName) return invalid('dispatch:statusUpdates requires a valid agentName');
+
+  const rawLimit = Number(payload.limit);
+  const limit = Number.isFinite(rawLimit)
+    ? Math.min(100, Math.max(1, Math.floor(rawLimit)))
+    : 20;
+
+  return ok({
+    requestIds,
+    agentName,
+    limit,
+    unreadOnly: payload.unreadOnly === true,
+  });
+}
+
 function validateFilesPayload(operation, payload, context = {}) {
   switch (operation) {
     case 'tree':
@@ -404,6 +438,7 @@ module.exports = {
   errorPayload,
   validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
+  validateDispatchStatusUpdatesPayload,
   validateFilesPayload,
   validateProfileSavePayload,
   validatePromptSavePayload,

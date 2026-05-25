@@ -33,6 +33,10 @@ function registerHarness(serviceOverrides = {}) {
       calls.push(['createPayload', payload]);
       return { success: true, route: 'direct', payload };
     },
+    async pollStatusUpdates(payload) {
+      calls.push(['pollStatusUpdates', payload]);
+      return { success: true, route: 'statusUpdates', payload };
+    },
     ...serviceOverrides,
   };
   const ipc = createIpcHarness();
@@ -51,6 +55,7 @@ test('registerDispatchIPC registers the renderer dispatch contract', () => {
   assert.deepEqual(ipc.registeredChannels(), [
     'dispatch:brokered',
     'dispatch:createPayload',
+    'dispatch:statusUpdates',
   ]);
 });
 
@@ -128,12 +133,47 @@ test('dispatch handlers pass normalized payloads to the dispatch service', async
   assert.equal(ipc.calls.length, 2);
 });
 
+test('dispatch status update handler validates and normalizes polling payloads', async () => {
+  const ipc = registerHarness();
+
+  assert.deepEqual(await ipc.invoke('dispatch:statusUpdates', {
+    requestIds: ['req-1', 'bad/id', 'req-2'],
+    agentName: 'Nock-Terminal',
+    limit: 500,
+    unreadOnly: true,
+  }), {
+    success: true,
+    route: 'statusUpdates',
+    payload: {
+      requestIds: ['req-1', 'req-2'],
+      agentName: 'nock-terminal',
+      limit: 100,
+      unreadOnly: true,
+    },
+  });
+});
+
+test('dispatch status update handler rejects empty request id lists', async () => {
+  const ipc = registerHarness();
+
+  assert.deepEqual(await ipc.invoke('dispatch:statusUpdates', {
+    requestIds: ['../escape'],
+  }), {
+    success: false,
+    error: 'dispatch:statusUpdates requires at least one valid requestId',
+    code: 'IPC_VALIDATION_ERROR',
+  });
+});
+
 test('dispatch handlers return stable failure messages for service errors', async () => {
   const ipc = registerHarness({
     async sendBrokered() {
       throw new Error('NockCC unavailable');
     },
     async createPayload() {
+      throw new Error('');
+    },
+    async pollStatusUpdates() {
       throw new Error('');
     },
   });
@@ -154,5 +194,12 @@ test('dispatch handlers return stable failure messages for service errors', asyn
   }), {
     success: false,
     error: 'Failed to create dispatch payload',
+  });
+
+  assert.deepEqual(await ipc.invoke('dispatch:statusUpdates', {
+    requestIds: ['request-1'],
+  }), {
+    success: false,
+    error: 'Failed to poll dispatch status updates',
   });
 });
