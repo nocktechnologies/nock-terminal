@@ -82,6 +82,8 @@ Current behavior is request-level telemetry. The renderer stores the most recent
 
 Phase H completion tracking should preserve that privacy posture and add a live status source rather than inventing a second local file bus.
 
+H4a starts with the local reducer foundation only. Dispatch-run history is now normalized through `src/utils/dispatchRuns.mjs`, which owns the status vocabulary, allowed transitions, retention cap, storage serialization, and compatibility cleanup for historical `sent`, `launched`, and `failed` records. It intentionally does not fake live polling: the current `POST /api/teams/messages/` write endpoint works, but attempted read calls against `/api/teams/messages/` return `405 Method Not Allowed`, so Nock Terminal still needs a confirmed live-message read or subscription API before it can claim completion-thread tracking.
+
 ### Correlation Fields
 
 Every dispatch route must carry a stable `request_id`.
@@ -127,7 +129,7 @@ Allowed transitions:
 
 The reducer should tolerate leapfrog transitions because live messages can arrive out of order or skip intermediate acknowledgements. Once a run reaches `running`, policy or credential failures should be represented as `failed` with a specific reason instead of `blocked`, because `blocked` means work did not begin.
 
-H4 should implement this as a reducer with tests before wiring it into polling or UI rendering.
+H4a implements this as a reducer with tests before wiring it into polling. Future H4 work should reuse the reducer instead of adding a second status parser in the main process or dashboard.
 
 ### Source Of Truth
 
@@ -153,11 +155,11 @@ If NockCC exposes both polling and push/live-subscription APIs, H4 should start 
 
 The implementation slice should add:
 
-- a pure dispatch status reducer with tests
-- a NockCC live-message polling or subscription service with request-id correlation
-- a compatibility migration for current `sent`, `launched`, and `failed` local history
-- dashboard rendering for `accepted`, `running`, `blocked`, `completed`, `failed`, and `expired`
-- soft failure when NockCC is unconfigured or unavailable
+- a pure dispatch status reducer with tests: H4a
+- a compatibility migration for current `sent`, `launched`, and `failed` local history: H4a
+- a NockCC live-message polling or subscription service with request-id correlation: pending confirmed read API
+- dashboard rendering for `accepted`, `running`, `blocked`, `completed`, `failed`, and `expired`: pending live status source
+- soft failure when NockCC is unconfigured or unavailable: pending polling/subscription service
 
 It should not change dispatch-agent discovery, direct payload creation, or dispatcher script invocation unless the correlation contract cannot be satisfied without a minimal request-id propagation fix.
 
@@ -172,6 +174,6 @@ It should not change dispatch-agent discovery, direct payload creation, or dispa
 
 ## Current Limits
 
-- Completion tracking is request-level only. Nock records that the request was sent or direct script was launched, but it does not yet subscribe to the resulting NockCC AgentMessage reply thread.
+- Completion tracking is still request-level only. Nock records and normalizes that the request was sent, launched, or failed locally, but it does not yet subscribe to the resulting NockCC AgentMessage reply thread.
 - Codex transcript discovery, Codex session resume, and attach semantics remain future adapter work.
 - DeepSeek support is API-backed through the CRM dispatcher; there is no standalone DeepSeek CLI profile launcher.

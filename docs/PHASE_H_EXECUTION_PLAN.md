@@ -124,17 +124,31 @@ Phase H is successful when:
 
 **Description:** Implement the smallest end-to-end completion signal path chosen in H3.
 
+**H4a local foundation:** Land the pure renderer-side dispatch run reducer, storage normalizer, retention cap, and compatibility cleanup first. This lets Nock safely read historical local dispatch telemetry and gives the future live polling/subscription work one tested status contract. H4a does not claim completion-thread tracking until NockCC exposes a confirmed live-message read or subscription API; attempted GET reads against `/api/teams/messages/` currently return `405 Method Not Allowed`.
+
 **Acceptance criteria:**
 - Brokered dispatch runs move beyond `sent` when the chosen NockCC/Mira response source emits a correlated status.
 - Failed or blocked completion states are visible in the dashboard operations panel.
 - Existing local-storage dispatch run history migrates or remains compatible.
 - Missing NockCC config fails softly and does not block direct dispatch.
 
+**H4a acceptance criteria:**
+- Dispatch-run status values and allowed transitions from H3 are implemented in one shared renderer utility.
+- Local history reads defensively from `nock-terminal.dispatchRuns.v1`, normalizes old records, drops task bodies, and caps to 12 visible runs.
+- App dispatch recording uses the shared normalizer instead of hand-rolled local-storage JSON.
+- Existing dashboard dispatch chips render normalized non-success states without implying every non-failed run is complete.
+- Focused reducer/storage tests cover transition rules, privacy, retention, and malformed storage.
+
 **Verification:**
 - Focused reducer/parser tests.
 - IPC or service tests if the main process polls/subscribes to NockCC.
 - `npm test`
 - Manual brokered dispatch smoke with a known test agent when credentials are available.
+
+**H4a verification:**
+- `node --test test/dispatch-runs.test.mjs`
+- `npm test`
+- `npx vite build`
 
 **Dependencies:** H3.
 
