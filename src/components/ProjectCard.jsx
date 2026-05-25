@@ -22,11 +22,14 @@ export default function ProjectCard({ session, profile, index, onClick }) {
   const lifecycle = AGENT_LIFECYCLE_LABELS[session.agent?.lifecycle] || null;
   const primaryLabel = lifecycle?.label || cfg.label;
   const primaryText = lifecycle?.text || cfg.text;
+  const launchActionLabel = session.launch?.actionLabel
+    ? session.launch.actionLabel.toUpperCase()
+    : 'LAUNCH';
   const actionLabel = isAgent
     ? (
       session.launch?.mode === 'dispatch'
         ? 'DISPATCH'
-        : (session.launch?.action === 'attach' ? 'ATTACH' : (['running', 'idle'].includes(session.agent?.lifecycle) ? 'OPEN' : 'LAUNCH'))
+        : (session.launch?.action === 'attach' ? launchActionLabel : (['running', 'idle'].includes(session.agent?.lifecycle) ? 'OPEN' : launchActionLabel))
     )
     : 'OPEN';
   const agentSignalCount = (session.agent?.unreadCount || 0) + (session.agent?.inflightCount || 0);

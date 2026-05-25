@@ -333,9 +333,10 @@ class SessionDiscovery {
       const agentRuntime = this._agentRuntimeFromConfig(config);
       const dispatchLaunch = await this._resolveDispatchLaunch(agentPath, config, agentName, agentRuntime);
       const launchCwd = dispatchLaunch?.cwd || this._resolveAgentLaunchCwd(config, agentPath);
+      const crmAttachCommand = dispatchLaunch ? '' : this._resolveCrmAgentAttachCommand(agentPath, agentName);
       const launchCommand = dispatchLaunch
         ? ''
-        : (enabled ? this._resolveAgentLaunchCommand(config, agentName, agentPath) : '');
+        : (enabled ? this._resolveAgentLaunchCommand(config, agentName, agentPath, crmAttachCommand) : '');
       const sessionContract = this._resolveAgentSessionContract({
         agentName,
         agentRuntime,
@@ -344,6 +345,7 @@ class SessionDiscovery {
         dispatchLaunch,
         launchCommand,
         launchCwd,
+        crmAttachCommand,
       });
       const terminalLaunch = this._terminalLaunchDescriptor({
         agentName,
@@ -351,6 +353,7 @@ class SessionDiscovery {
         enabled,
         launchCommand,
         launchCwd,
+        crmAttachCommand,
       });
       const runtime = await this._getAgentRuntimeState(agentName, dirName, config, enabled, Boolean(dispatchLaunch));
       const gitInfo = await this._getGitInfo(agentPath);
@@ -426,7 +429,7 @@ class SessionDiscovery {
       .join(' ');
   }
 
-  _resolveAgentLaunchCommand(config, agentName, agentPath = '') {
+  _resolveAgentLaunchCommand(config, agentName, agentPath = '', crmAttachCommand = '') {
     const candidates = [
       config.launch_command,
       config.launchCommand,
@@ -439,12 +442,11 @@ class SessionDiscovery {
       const command = this._safeString(candidate, 500);
       if (command) return command;
     }
-    const crmAttachCommand = this._resolveCrmAgentAttachCommand(agentPath, agentName);
     if (crmAttachCommand) return crmAttachCommand;
     return this._safeAgentName(agentName) || this._formatAgentName(agentName).replace(/\s+/g, '');
   }
 
-  _terminalLaunchDescriptor({ agentName, agentPath, enabled, launchCommand }) {
+  _terminalLaunchDescriptor({ agentName, agentPath, enabled, launchCommand, crmAttachCommand }) {
     if (!enabled || !launchCommand) {
       return {
         action: 'unavailable',
@@ -452,7 +454,7 @@ class SessionDiscovery {
         capability: 'none',
       };
     }
-    const attachCommand = this._resolveCrmAgentAttachCommand(agentPath, agentName);
+    const attachCommand = crmAttachCommand || this._resolveCrmAgentAttachCommand(agentPath, agentName);
     if (attachCommand && launchCommand === attachCommand) {
       return {
         action: 'attach',
@@ -475,6 +477,7 @@ class SessionDiscovery {
     dispatchLaunch,
     launchCommand,
     launchCwd,
+    crmAttachCommand,
   }) {
     if (dispatchLaunch) {
       const contract = getAgentSessionContract('dispatch-agent');
@@ -493,7 +496,7 @@ class SessionDiscovery {
 
     const contract = getAgentSessionContract('local-agent-folder');
     contract.adapterId = 'local-agent-folder';
-    const attachCommand = this._resolveCrmAgentAttachCommand(agentPath, agentName);
+    const attachCommand = crmAttachCommand || this._resolveCrmAgentAttachCommand(agentPath, agentName);
     const canAttach = Boolean(enabled && launchCommand && attachCommand && launchCommand === attachCommand);
     contract.liveAttach = {
       ...(contract.liveAttach || {}),
@@ -872,6 +875,12 @@ class SessionDiscovery {
         (await this._cwdFromTranscripts(projectPath, jsonlFiles)) ||
         this._decodeDirName(dirName);
       const projectName = path.basename(decodedPath);
+      const sessionContract = getAgentSessionContract('claude');
+      sessionContract.adapterId = 'claude';
+      sessionContract.transcriptDiscovery = {
+        ...(sessionContract.transcriptDiscovery || {}),
+        projectPath,
+      };
 
       // Get git info (branch + dirty) — cached and async
       const gitInfo = await this._getGitInfo(decodedPath);
@@ -895,6 +904,7 @@ class SessionDiscovery {
         lastActivity,
         lastActivityFormatted: this._formatTime(lastActivity),
         dirty: gitInfo.dirty,
+        sessionContract,
       };
     } catch {
       return null;

@@ -104,6 +104,33 @@ test('upgrades Claude transcript paths to agent folders even without dev roots',
   assert.equal(mira.launch.cwd, agentPath);
 });
 
+test('adds Claude session contract metadata to transcript-only project rows', async () => {
+  const root = makeTempDir();
+  const claudeDir = path.join(root, '.claude');
+  const projectPath = path.join(root, 'Dev', 'nock-terminal');
+  const claudeProjectPath = path.join(claudeDir, 'projects', 'transcript-for-project');
+
+  writeFile(
+    path.join(claudeProjectPath, 'session.jsonl'),
+    `${JSON.stringify({ type: 'user', cwd: projectPath, message: { role: 'user', content: [] } })}\n`
+  );
+
+  const discovery = new SessionDiscovery({
+    claudeDir,
+    devRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const project = sessions.find(session => session.path === projectPath);
+
+  assert.ok(project);
+  assert.equal(project.sessionContract.adapterId, 'claude');
+  assert.equal(project.sessionContract.transcriptDiscovery.state, 'supported');
+  assert.equal(project.sessionContract.transcriptDiscovery.projectPath, claudeProjectPath);
+  assert.equal(project.sessionContract.liveAttach.state, 'unsupported');
+});
+
 test('uses CRM tmux attach fallback for enabled persistent agents without shell aliases', async () => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');
@@ -120,6 +147,12 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
     devRoots: [devRoot],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
   });
+  let attachCommandCalls = 0;
+  const originalAttachCommand = discovery._resolveCrmAgentAttachCommand.bind(discovery);
+  discovery._resolveCrmAgentAttachCommand = (...args) => {
+    attachCommandCalls += 1;
+    return originalAttachCommand(...args);
+  };
 
   const sessions = await discovery.discover();
   const cooper = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'cooper');
@@ -129,6 +162,7 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
   assert.equal(cooper.launch.canLaunch, true);
   assert.equal(cooper.launch.action, 'attach');
   assert.equal(cooper.sessionContract.liveAttach.evidence, 'crm-tmux-session-name');
+  assert.equal(attachCommandCalls, 1);
 });
 
 test('keeps explicit agent launch commands as folder launches rather than attach claims', async () => {

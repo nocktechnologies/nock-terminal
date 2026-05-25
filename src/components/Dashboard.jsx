@@ -73,7 +73,8 @@ export default function Dashboard({
 
     if (session.kind === 'agent') {
       const isDispatchAgent = session.launch?.mode === 'dispatch';
-      const launchLabel = session.launch?.action === 'attach' ? 'Attach Session' : 'Launch Fresh';
+      const actionLabel = session.launch?.actionLabel || 'Launch';
+      const launchLabel = actionLabel === 'Attach' ? 'Attach Session' : `${actionLabel} Fresh`;
       items.push({
         label: isDispatchAgent ? 'Stage Dispatch Task' : launchLabel,
         icon: (
