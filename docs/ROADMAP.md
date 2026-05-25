@@ -51,7 +51,7 @@ Current execution posture:
 - Nock `7621` / Phase H Task 0 captures the Phase H execution plan and Nock #123 rewrite.
 - Nock `7627` / Phase H H3 closed the dispatch completion tracking contract in PR #52.
 - Nock `7628` / Phase H H4a closed in PR #53 with the local dispatch status reducer and history normalization foundation.
-- Nock `7680` / Phase H H4 proper is in progress on `codex/phase-h-dispatch-completion-polling`: Mira message #1513 confirmed the live inbox read contract, so brokered dispatch runs can now poll NockCC `status_update` AgentMessages by `context.request_id`.
+- Nock `7680` / Phase H H4 proper is done via PR #55 and PR #56: Mira message #1513 confirmed the live inbox read contract, brokered dispatch runs now poll NockCC `status_update` AgentMessages by `context.request_id`, and post-merge review feedback stabilized message/request ordering.
 - Nock `123` has been rewritten around the real release gap: signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback.
 
 ### May 24 Phase H Execution Plan
