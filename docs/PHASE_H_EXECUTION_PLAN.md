@@ -124,7 +124,9 @@ Phase H is successful when:
 
 **Description:** Implement the smallest end-to-end completion signal path chosen in H3.
 
-**H4a local foundation:** Land the pure renderer-side dispatch run reducer, storage normalizer, retention cap, and compatibility cleanup first. This lets Nock safely read historical local dispatch telemetry and gives the future live polling/subscription work one tested status contract. H4a does not claim completion-thread tracking until NockCC exposes a confirmed live-message read or subscription API; attempted GET reads against `/api/teams/messages/` currently return `405 Method Not Allowed`.
+**H4a local foundation:** Land the pure renderer-side dispatch run reducer, storage normalizer, retention cap, and compatibility cleanup first. This lets Nock safely read historical local dispatch telemetry and gives the live polling/subscription work one tested status contract.
+
+**H4 live polling:** Mira unblocked the read contract in live message `#1513`: `GET /api/teams/messages/inbox/{agent_name}/`, optional `?unread=true`, bounded `?limit=N`, and `message_type=status_update` AgentMessages carrying `context.request_id` plus `accepted`, `running`, `blocked`, `completed`, or `failed`. The implementation should poll the `nock-terminal` inbox conservatively, merge only correlated updates, and leave local file-bus/local DB reads out of scope.
 
 **Acceptance criteria:**
 - Brokered dispatch runs move beyond `sent` when the chosen NockCC/Mira response source emits a correlated status.
@@ -150,6 +152,11 @@ Phase H is successful when:
 - `npm test`
 - `npx vite build`
 
+**H4 live polling verification:**
+- `node --test test/nockcc-dispatch-status.test.cjs test/dispatch-ipc.test.cjs test/dispatch-runs.test.mjs`
+- `npm test`
+- `npx vite build`
+
 **Dependencies:** H3.
 
 **Files likely touched:**
@@ -159,6 +166,7 @@ Phase H is successful when:
 - `src/components/Dashboard.jsx`
 - `test/agent-dispatch.test.cjs`
 - `test/dispatch-ipc.test.cjs`
+- `test/nockcc-dispatch-status.test.cjs`
 
 **Estimated scope:** Medium to large.
 
@@ -247,5 +255,4 @@ Must be sequential:
 
 - What update distribution posture does Kevin want for public beta: manual GitHub Releases first, or auto-update from day one?
 - Should crash/error reporting be fully opt-in for private alpha, or disabled until public beta?
-- Which NockCC API surface should Nock Terminal use for dispatch completion tracking?
 - Which runtime is the first attach/resume implementation target after Claude Code baseline behavior?

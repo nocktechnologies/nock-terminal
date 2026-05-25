@@ -2,6 +2,7 @@ const {
   errorPayload,
   validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
+  validateDispatchStatusUpdatesPayload,
 } = require('./ipc-validators');
 
 function dispatchServiceError(error, fallbackMessage) {
@@ -32,6 +33,16 @@ function registerDispatchIPC({
       return await agentDispatchService.createPayload(validated.value);
     } catch (err) {
       return dispatchServiceError(err, 'Failed to create dispatch payload');
+    }
+  });
+
+  ipcMain.handle('dispatch:statusUpdates', async (_, payload) => {
+    const validated = validateDispatchStatusUpdatesPayload(payload);
+    if (!validated.ok) return errorPayload(validated);
+    try {
+      return await agentDispatchService.pollStatusUpdates(validated.value);
+    } catch (err) {
+      return dispatchServiceError(err, 'Failed to poll dispatch status updates');
     }
   });
 }

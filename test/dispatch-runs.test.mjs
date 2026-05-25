@@ -5,6 +5,7 @@ import {
   DISPATCH_RUN_STORAGE_KEY,
   MAX_DISPATCH_RUNS,
   canTransitionDispatchStatus,
+  applyDispatchRunUpdates,
   createDispatchRun,
   getDispatchRunStorage,
   isTerminalDispatchStatus,
@@ -143,4 +144,68 @@ test('serializeDispatchRuns returns normalized JSON only', () => {
   assert.equal(serializeDispatchRuns([
     { id: 'one', createdAt: 1, status: 'completed', taskDescription: 'drop' },
   ]), '[{"id":"one","createdAt":1,"status":"completed"}]');
+});
+
+test('applyDispatchRunUpdates merges correlated live status updates', () => {
+  const runs = [
+    { id: 'run-1', createdAt: 1, status: 'sent', requestId: 'req-1', agentName: 'ash' },
+    { id: 'run-2', createdAt: 2, status: 'running', requestId: 'req-2', agentName: 'vale' },
+  ];
+
+  assert.deepEqual(applyDispatchRunUpdates(runs, [
+    {
+      requestId: 'req-1',
+      status: 'accepted',
+      statusMessage: 'Accepted by Mira.',
+      messageId: '1510',
+      source: 'nockcc-live',
+    },
+    {
+      requestId: 'req-2',
+      status: 'blocked',
+      statusMessage: 'Too late to become blocked after running.',
+      messageId: '1511',
+      source: 'nockcc-live',
+    },
+  ], { now: 500 }), [
+    {
+      id: 'run-1',
+      createdAt: 1,
+      status: 'accepted',
+      updatedAt: 500,
+      agentName: 'ash',
+      requestId: 'req-1',
+      statusMessage: 'Accepted by Mira.',
+      statusMessageId: '1510',
+      statusSource: 'nockcc-live',
+    },
+    { id: 'run-2', createdAt: 2, status: 'running', agentName: 'vale', requestId: 'req-2' },
+  ]);
+});
+
+test('applyDispatchRunUpdates returns the same list when duplicate updates change nothing', () => {
+  const runs = [
+    {
+      id: 'run-1',
+      createdAt: 1,
+      status: 'running',
+      updatedAt: 100,
+      requestId: 'req-1',
+      statusMessage: 'Running',
+      statusMessageId: '1510',
+      statusSource: 'nockcc-live',
+    },
+  ];
+
+  const result = applyDispatchRunUpdates(runs, [
+    {
+      requestId: 'req-1',
+      status: 'running',
+      statusMessage: 'Running',
+      messageId: '1510',
+      source: 'nockcc-live',
+    },
+  ], { now: 500 });
+
+  assert.equal(result, runs);
 });

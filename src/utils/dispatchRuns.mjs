@@ -45,6 +45,8 @@ const STRING_FIELDS = {
   command: 2000,
   error: 500,
   statusMessage: 500,
+  statusMessageId: 200,
+  statusSource: 100,
 };
 
 function isPlainObject(value) {
@@ -61,6 +63,15 @@ function cleanString(value, maxLength) {
 
 function cleanTimestamp(value, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function cleanTimestampLike(value, fallback = 0) {
+  if (Number.isFinite(value) && value > 0) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return fallback;
 }
 
 function fallbackRunId(run, index, createdAt) {
@@ -122,6 +133,71 @@ export function normalizeDispatchRunList(value, options = {}) {
     .map((run, index) => normalizeDispatchRun(run, { ...options, index }))
     .filter(Boolean)
     .slice(0, MAX_DISPATCH_RUNS);
+}
+
+function normalizeDispatchRunUpdate(update) {
+  if (!isPlainObject(update)) return null;
+  const requestId = cleanString(update.requestId, STRING_FIELDS.requestId);
+  if (!requestId) return null;
+  return {
+    requestId,
+    status: normalizeDispatchStatus(update.status),
+    statusMessage: cleanString(update.statusMessage, STRING_FIELDS.statusMessage),
+    statusMessageId: cleanString(update.messageId || update.statusMessageId, STRING_FIELDS.statusMessageId),
+    statusSource: cleanString(update.source || update.statusSource, STRING_FIELDS.statusSource),
+    updatedAt: cleanTimestampLike(update.updatedAt || update.createdAt, 0),
+  };
+}
+
+export function applyDispatchRunUpdates(runs, updates, { now = Date.now() } = {}) {
+  if (!Array.isArray(runs) || !Array.isArray(updates) || updates.length === 0) return runs;
+
+  let changed = false;
+  let nextRuns = runs;
+
+  for (const rawUpdate of updates) {
+    const update = normalizeDispatchRunUpdate(rawUpdate);
+    if (!update) continue;
+
+    nextRuns = nextRuns.map((run) => {
+      if (run?.requestId !== update.requestId) return run;
+      if (!canTransitionDispatchStatus(run.status, update.status)) return run;
+
+      const next = { ...run };
+      let runChanged = false;
+      if (next.status !== update.status) {
+        next.status = update.status;
+        runChanged = true;
+      }
+      if (update.statusMessage && next.statusMessage !== update.statusMessage) {
+        next.statusMessage = update.statusMessage;
+        runChanged = true;
+      }
+      if (update.statusMessageId && next.statusMessageId !== update.statusMessageId) {
+        next.statusMessageId = update.statusMessageId;
+        runChanged = true;
+      }
+      if (update.statusSource && next.statusSource !== update.statusSource) {
+        next.statusSource = update.statusSource;
+        runChanged = true;
+      }
+      if (update.status === 'failed' && update.statusMessage && !next.error) {
+        next.error = update.statusMessage;
+        runChanged = true;
+      }
+      if (!runChanged) return run;
+
+      const normalizedNext = normalizeDispatchRun({
+        ...next,
+        updatedAt: update.updatedAt || now,
+      });
+      if (JSON.stringify(normalizedNext) === JSON.stringify(run)) return run;
+      changed = true;
+      return normalizedNext;
+    });
+  }
+
+  return changed ? normalizeDispatchRunList(nextRuns) : runs;
 }
 
 export function readDispatchRunsFromStorage(storage, options = {}) {

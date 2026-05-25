@@ -9,10 +9,16 @@ const os = require('os');
 const path = require('path');
 
 const DEFAULT_BROKER_AGENT = 'mira-nockos';
+const DEFAULT_STATUS_POLL_AGENT = 'nock-terminal';
 const MAX_TASK_LENGTH = 12000;
 const DEFAULT_PAYLOAD_CLEANUP_MS = 24 * 60 * 60 * 1000;
+const DISPATCH_LIVE_STATUSES = new Set(['accepted', 'running', 'blocked', 'completed', 'failed']);
 const pendingPayloadDirs = new Set();
 let payloadCleanupHandlersInstalled = false;
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
 function safeAgentName(value) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -32,6 +38,26 @@ function safeString(value, maxLength = 1000) {
 function safeRequestId(value) {
   const normalized = String(value || '').trim();
   return /^[A-Za-z0-9_-]{1,120}$/.test(normalized) ? normalized : '';
+}
+
+function safeLimit(value, fallback = 20) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(100, Math.max(1, Math.floor(number)));
+}
+
+function normalizeRequestIds(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const requestIds = [];
+  for (const item of value) {
+    const requestId = safeRequestId(item);
+    if (!requestId || seen.has(requestId)) continue;
+    seen.add(requestId);
+    requestIds.push(requestId);
+    if (requestIds.length >= 50) break;
+  }
+  return requestIds;
 }
 
 function sanitizeDispatchText(value, maxLength = MAX_TASK_LENGTH) {
@@ -111,6 +137,103 @@ function buildBrokeredDispatchMessage(input = {}) {
     priority: safeString(input.priority, 40) || 'normal',
     context: request.context,
   };
+}
+
+function normalizeMessageContext(context) {
+  if (isPlainObject(context)) return context;
+  if (typeof context !== 'string' || !context.trim()) return {};
+  try {
+    const parsed = JSON.parse(context);
+    return isPlainObject(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeLiveDispatchStatus(value) {
+  const normalized = safeString(value, 40).toLowerCase();
+  return DISPATCH_LIVE_STATUSES.has(normalized) ? normalized : '';
+}
+
+function statusFromBody(body) {
+  const match = safeString(body, 5000).match(/\b(accepted|running|blocked|completed|failed)\b/i);
+  return normalizeLiveDispatchStatus(match?.[1]);
+}
+
+function statusFromMessage(message, context) {
+  for (const key of ['status', 'dispatch_status', 'dispatchStatus', 'state']) {
+    const status = normalizeLiveDispatchStatus(context[key]);
+    if (status) return status;
+  }
+  return statusFromBody(message?.body);
+}
+
+function requestIdFromMessage(message, context) {
+  return safeRequestId(
+    context.request_id
+    || context.requestId
+    || safeString(message?.body, 5000).match(/\brequest_id:\s*([A-Za-z0-9_-]{1,120})\b/i)?.[1]
+  );
+}
+
+function statusMessageFromMessage(message, context) {
+  return safeString(
+    context.status_message
+    || context.statusMessage
+    || context.message
+    || message?.subject
+    || message?.body,
+    500
+  );
+}
+
+function normalizeMessagesResponse(response) {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data?.messages)) return response.data.messages;
+  if (Array.isArray(response?.data?.results)) return response.data.results;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.messages)) return response.messages;
+  if (Array.isArray(response?.results)) return response.results;
+  return [];
+}
+
+function compareMessageOrder(a, b) {
+  const aTime = Date.parse(a.createdAt || '') || 0;
+  const bTime = Date.parse(b.createdAt || '') || 0;
+  if (aTime !== bTime) return aTime - bTime;
+  return Number(a.messageId || 0) - Number(b.messageId || 0);
+}
+
+function collectDispatchStatusUpdates(messages, requestIds) {
+  const wantedRequestIds = new Set(normalizeRequestIds(requestIds));
+  if (!Array.isArray(messages) || wantedRequestIds.size === 0) return [];
+
+  return messages
+    .map((message) => {
+      if (safeString(message?.message_type || message?.messageType, 40).toLowerCase() !== 'status_update') {
+        return null;
+      }
+      const context = normalizeMessageContext(message.context);
+      const requestId = requestIdFromMessage(message, context);
+      if (!wantedRequestIds.has(requestId)) return null;
+
+      const status = statusFromMessage(message, context);
+      if (!status) return null;
+
+      return {
+        messageId: safeString(String(message.id || message.message_id || ''), 200),
+        requestId,
+        status,
+        statusMessage: statusMessageFromMessage(message, context),
+        senderAgent: safeAgentName(message.from_agent || message.sender_agent),
+        subject: safeString(message.subject, 200),
+        createdAt: safeString(message.created_at || message.createdAt, 80),
+        readAt: safeString(message.read_at || message.readAt, 80),
+        source: 'nockcc-live',
+      };
+    })
+    .filter(Boolean)
+    .sort(compareMessageOrder);
 }
 
 function buildDirectDispatchCommand({ scriptPath, agentName, payloadFile, agentBound = false } = {}) {
@@ -213,7 +336,7 @@ async function readNockCCConfig(store) {
   };
 }
 
-function postJson({ baseUrl, apiKey }, apiPath, body) {
+function requestJson({ baseUrl, apiKey }, method, apiPath, body) {
   if (!apiKey) {
     return Promise.reject(new Error('NockCC API key is not configured'));
   }
@@ -225,19 +348,21 @@ function postJson({ baseUrl, apiKey }, apiPath, body) {
     return Promise.reject(new Error('NockCC URL is invalid'));
   }
 
-  const payload = JSON.stringify(body);
+  const payload = body === undefined ? '' : JSON.stringify(body);
   const options = {
-    method: 'POST',
+    method,
     hostname: parsed.hostname,
     port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
     path: parsed.pathname + (parsed.search || ''),
     headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(payload),
       'X-API-Key': apiKey,
     },
     timeout: 8000,
   };
+  if (payload) {
+    options.headers['Content-Type'] = 'application/json';
+    options.headers['Content-Length'] = Buffer.byteLength(payload);
+  }
 
   return new Promise((resolve, reject) => {
     const transport = parsed.protocol === 'https:' ? https : http;
@@ -263,9 +388,13 @@ function postJson({ baseUrl, apiKey }, apiPath, body) {
     req.on('timeout', () => {
       req.destroy(new Error('NockCC request timed out'));
     });
-    req.write(payload);
+    if (payload) req.write(payload);
     req.end();
   });
+}
+
+function postJson(config, apiPath, body) {
+  return requestJson(config, 'POST', apiPath, body);
 }
 
 class AgentDispatchService {
@@ -289,12 +418,44 @@ class AgentDispatchService {
       broker: message.to_agent,
     };
   }
+
+  async pollStatusUpdates(input = {}) {
+    const requestIds = normalizeRequestIds(input.requestIds);
+    if (requestIds.length === 0) {
+      return {
+        success: true,
+        agentName: DEFAULT_STATUS_POLL_AGENT,
+        checkedMessageCount: 0,
+        updates: [],
+      };
+    }
+
+    const agentName = safeAgentName(input.agentName) || DEFAULT_STATUS_POLL_AGENT;
+    const limit = safeLimit(input.limit, 20);
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (input.unreadOnly === true) params.set('unread', 'true');
+
+    const config = await readNockCCConfig(this._store);
+    const response = await requestJson(
+      config,
+      'GET',
+      `/api/teams/messages/inbox/${encodeURIComponent(agentName)}/?${params.toString()}`
+    );
+    const messages = normalizeMessagesResponse(response);
+    return {
+      success: true,
+      agentName,
+      checkedMessageCount: messages.length,
+      updates: collectDispatchStatusUpdates(messages, requestIds),
+    };
+  }
 }
 
 module.exports = {
   AgentDispatchService,
   buildBrokeredDispatchMessage,
   buildDirectDispatchCommand,
+  collectDispatchStatusUpdates,
   createDispatchPayloadFile,
   sanitizeDispatchText,
 };
