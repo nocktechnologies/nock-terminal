@@ -201,7 +201,17 @@ function compareMessageOrder(a, b) {
   const aTime = Date.parse(a.createdAt || '') || 0;
   const bTime = Date.parse(b.createdAt || '') || 0;
   if (aTime !== bTime) return aTime - bTime;
-  return Number(a.messageId || 0) - Number(b.messageId || 0);
+  const aId = a.messageId || '';
+  const bId = b.messageId || '';
+  const aNumber = Number(aId);
+  const bNumber = Number(bId);
+  if (aId && bId && Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
+    const diff = aNumber - bNumber;
+    if (diff !== 0) return diff;
+  }
+  if (aId < bId) return -1;
+  if (aId > bId) return 1;
+  return 0;
 }
 
 function collectDispatchStatusUpdates(messages, requestIds) {
