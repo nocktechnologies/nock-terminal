@@ -167,6 +167,10 @@ export function shouldRunSessionLaunch(session, options = {}) {
   return !['running', 'idle'].includes(session?.agent?.lifecycle);
 }
 
+export function canRunResolvedLaunch(launch) {
+  return Boolean(trimString(launch?.command) && launch?.canLaunch === true);
+}
+
 function buildSessionSearchText(session, profile = {}) {
   const defaultAgentId = resolveDefaultAgentId(profile);
   const defaultLauncher = getAgentLauncher(defaultAgentId);

@@ -5,6 +5,7 @@ import {
   AGENT_FOLDER_ID,
   DISPATCH_AGENT_ID,
   buildLauncherTargets,
+  canRunResolvedLaunch,
   getProfileCommand,
   resolveDefaultAgentId,
   resolveSessionLaunch,
@@ -171,6 +172,13 @@ test('never runs disabled launch metadata even when a command is present', () =>
 
   assert.equal(shouldRunSessionLaunch(disabledAttach), false);
   assert.equal(shouldRunSessionLaunch(disabledAttach, { launchFresh: true }), false);
+  assert.equal(canRunResolvedLaunch(resolveSessionLaunch(disabledAttach, {})), false);
+});
+
+test('only runs resolved launches when command and launchability both agree', () => {
+  assert.equal(canRunResolvedLaunch({ command: 'claude', canLaunch: true }), true);
+  assert.equal(canRunResolvedLaunch({ command: 'claude', canLaunch: false }), false);
+  assert.equal(canRunResolvedLaunch({ command: '', canLaunch: true }), false);
 });
 
 test('resolves brokered dispatch agent launches without treating them as terminal commands', () => {

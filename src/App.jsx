@@ -22,7 +22,12 @@ import {
   writeDispatchRunsToStorage,
 } from './utils/dispatchRuns.mjs';
 import { buildUnsavedFilesMessage, normalizeUnsavedFiles } from './utils/unsavedFiles.mjs';
-import { resolveSessionLaunch, sanitizeStagedTerminalInput, shouldRunSessionLaunch } from './utils/agentLaunchers.mjs';
+import {
+  canRunResolvedLaunch,
+  resolveSessionLaunch,
+  sanitizeStagedTerminalInput,
+  shouldRunSessionLaunch,
+} from './utils/agentLaunchers.mjs';
 
 function createTabId(prefix = 'tab') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -415,10 +420,11 @@ export default function App() {
       return;
     }
 
-    if (!launch.command) {
+    if (!canRunResolvedLaunch(launch)) {
       openTerminalTab(session, {
         launchFresh: options.launchFresh === true,
         initialInput,
+        openFolderOnly: true,
       });
       return;
     }
