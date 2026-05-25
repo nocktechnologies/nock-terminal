@@ -70,6 +70,9 @@ test('resolves project and agent-folder launches', () => {
       cwd: '/Users/kevin/Dev/nock-terminal',
       title: 'nock-terminal (Gemini)',
       mode: 'terminal',
+      action: 'launch',
+      actionLabel: 'Launch',
+      capability: 'folder-launch',
       canLaunch: true,
       disabledReason: '',
     }
@@ -80,7 +83,29 @@ test('resolves project and agent-folder launches', () => {
   assert.equal(agentLaunch.command, 'mira');
   assert.equal(agentLaunch.cwd, agent.launch.cwd);
   assert.equal(agentLaunch.mode, 'terminal');
+  assert.equal(agentLaunch.action, 'launch');
+  assert.equal(agentLaunch.actionLabel, 'Launch');
   assert.equal(agentLaunch.canLaunch, true);
+});
+
+test('preserves discovered attach action labels for agent folders', () => {
+  const attachAgent = {
+    ...agent,
+    launch: {
+      command: 'tmux attach -t crm-default-mira',
+      cwd: agent.path,
+      action: 'attach',
+      actionLabel: 'Attach',
+      capability: 'live-attach',
+      canLaunch: true,
+    },
+  };
+
+  const launch = resolveSessionLaunch(attachAgent, {});
+
+  assert.equal(launch.action, 'attach');
+  assert.equal(launch.actionLabel, 'Attach');
+  assert.equal(launch.capability, 'live-attach');
 });
 
 test('resolves brokered dispatch agent launches without treating them as terminal commands', () => {
@@ -88,6 +113,9 @@ test('resolves brokered dispatch agent launches without treating them as termina
 
   assert.equal(launch.agentId, DISPATCH_AGENT_ID);
   assert.equal(launch.mode, 'dispatch');
+  assert.equal(launch.action, 'dispatch');
+  assert.equal(launch.actionLabel, 'Dispatch');
+  assert.equal(launch.capability, 'dispatch-request');
   assert.equal(launch.canLaunch, true);
   assert.equal(launch.command, '');
   assert.equal(launch.runtime, 'codex');

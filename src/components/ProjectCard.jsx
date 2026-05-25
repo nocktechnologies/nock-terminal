@@ -23,7 +23,11 @@ export default function ProjectCard({ session, profile, index, onClick }) {
   const primaryLabel = lifecycle?.label || cfg.label;
   const primaryText = lifecycle?.text || cfg.text;
   const actionLabel = isAgent
-    ? (session.launch?.mode === 'dispatch' ? 'DISPATCH' : (['running', 'idle'].includes(session.agent?.lifecycle) ? 'OPEN' : 'LAUNCH'))
+    ? (
+      session.launch?.mode === 'dispatch'
+        ? 'DISPATCH'
+        : (session.launch?.action === 'attach' ? 'ATTACH' : (['running', 'idle'].includes(session.agent?.lifecycle) ? 'OPEN' : 'LAUNCH'))
+    )
     : 'OPEN';
   const agentSignalCount = (session.agent?.unreadCount || 0) + (session.agent?.inflightCount || 0);
   const defaultLauncher = !isAgent ? getAgentLauncher(resolveDefaultAgentId(profile || {})) : null;
@@ -88,7 +92,7 @@ export default function ProjectCard({ session, profile, index, onClick }) {
           <span className="font-mono text-[10px] text-nock-accent-blue truncate tracking-tight">
             {session.launch?.mode === 'dispatch'
               ? (session.launch?.canLaunch ? `alias: ${session.launch.aliasCommand || session.launch.commandTemplate || session.launch.broker || 'dispatch'}` : (session.launch?.disabledReason || 'dispatch unavailable'))
-              : (session.launch?.command ? `cmd: ${session.launch.command}` : 'launch disabled')}
+              : (session.launch?.command ? `${session.launch?.action === 'attach' ? 'attach' : 'cmd'}: ${session.launch.command}` : 'launch disabled')}
           </span>
           {agentSignalCount > 0 && (
             <span className="font-mono text-[9px] text-nock-accent-amber tracking-widest ml-auto">

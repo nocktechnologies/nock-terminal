@@ -2,7 +2,7 @@
 
 Nock Terminal is an Electron desktop app with a React 18 renderer. The renderer owns the cockpit UI; the Electron main process owns privileged work: PTYs, filesystem access, settings, process discovery, network clients, notifications, and OS integrations.
 
-This document describes the current codebase, not aspirational product copy. Today, the implementation is strongest around Claude Code transcript discovery and Ollama chat, plus first-class local agent-folder discovery for existing `agents/*/config.json` folders. The renderer now has profile-driven launch support for Claude Code, Codex CLI, Gemini CLI, and custom terminal agents, plus brokered/direct dispatch support for Codex and DeepSeek agents managed by Mira. The next architecture step is real non-Claude transcript discovery and resume/attach support behind the same adapter model.
+This document describes the current codebase, not aspirational product copy. Today, the implementation is strongest around Claude Code transcript discovery and Ollama chat, plus first-class local agent-folder discovery for existing `agents/*/config.json` folders. The renderer now has profile-driven launch support for Claude Code, Codex CLI, Gemini CLI, and custom terminal agents, brokered/direct dispatch support for Codex and DeepSeek agents managed by Mira, and explicit session capability metadata for transcript discovery, live attach, resume commands, and folder launch. The only implemented attach/resume path today is CRM persistent agents through deterministic tmux attach commands; non-Claude transcript discovery and arbitrary runtime resume remain future adapter work.
 
 ## Process Model
 
@@ -22,13 +22,13 @@ This document describes the current codebase, not aspirational product copy. Tod
 ## Main-Process Services
 
 - `TerminalManager` wraps `node-pty`, chooses a platform shell, applies global/project shell overrides, parses shell arguments and environment variables, relays terminal data, resizes PTYs, chunks large writes on Windows, and destroys processes.
-- `SessionDiscovery` reads Claude Code transcripts from `~/.claude/projects`, scans configured dev roots for git repos and `agents/*/config.json` folders, merges them by path, and annotates branch, dirty state, activity metadata, agent runtime state, terminal launch defaults, and dispatch descriptors.
+- `SessionDiscovery` reads Claude Code transcripts from `~/.claude/projects`, scans configured dev roots for git repos and `agents/*/config.json` folders, merges them by path, and annotates branch, dirty state, activity metadata, agent runtime state, terminal launch defaults, dispatch descriptors, launch action metadata, and adapter session contracts.
 - `AgentDispatchService` builds sanitized dispatch payloads, writes direct-dispatch payload files, and sends brokered NockCC AgentMessages to Mira.
 - `PortScanner` finds local development servers for the sidebar.
 - `FileService` reads/writes files, builds trees, reads git status, and runs `pull`, `push`, and `fetch` only inside allowed roots.
 - `FileWatcher` emits file and git status changes for the active project tree.
 - `ProcessDetector` observes terminal processes and reports active agent identities under each PTY through the adapter registry.
-- `agent-adapters.js` defines known terminal agents for main-process detection and context checks. The current registry covers Claude Code, Codex CLI, and Gemini CLI.
+- `agent-adapters.js` defines known terminal agents for main-process detection, context checks, and session capability contracts. The current registry covers Claude Code, Codex CLI, Gemini CLI, local agent folders, and dispatch-agent semantics.
 - `OllamaClient` streams local model chat through `/api/chat` and lists models through `/api/tags`; `electron/ollama-ipc.js` owns the renderer IPC bridge and stream forwarding.
 - `ClaudeCodeClient` can spawn `claude -p --output-format stream-json` for Claude Code chat-style calls.
 - `TelegramNotifier` sends configured notification events; `electron/telegram-ipc.js` owns the renderer IPC bridge.
@@ -40,7 +40,7 @@ This document describes the current codebase, not aspirational product copy. Tod
 ### Session Discovery
 
 1. `App` calls `window.nockTerminal.sessions.discover()` on mount and every 30 seconds.
-2. `SessionDiscovery` reads Claude transcripts, scans configured dev roots, reads agent `config.json` files, checks local NockCC file-bus state, resolves dispatch runtimes/allowlists, dedupes copied worktree configs, and returns normalized sessions/projects/agents.
+2. `SessionDiscovery` reads Claude transcripts, scans configured dev roots, reads agent `config.json` files, checks local NockCC file-bus state, resolves dispatch runtimes/allowlists, dedupes copied worktree configs, and returns normalized sessions/projects/agents with explicit launch action and session contract metadata.
 3. `electron/session-ipc.js` grants discovered project paths to `FileService` and revalidates `FileWatcher`.
 4. Dashboard and sidebar render sessions, project status, file trees, context checks, and cards from the returned data.
 
@@ -73,7 +73,7 @@ This document describes the current codebase, not aspirational product copy. Tod
 
 1. `CommandPalette` searches discovered sessions with `buildLauncherTargets()`.
 2. For repos, `resolveSessionLaunch()` chooses the project profile's default agent and command override. Supported built-ins are Claude Code, Codex CLI, Gemini CLI, and custom agent command.
-3. For local agent folders, `resolveSessionLaunch()` uses the discovered `config.json` launch command and cwd.
+3. For local agent folders, `resolveSessionLaunch()` uses the discovered launch command, cwd, and launch action. CRM tmux-backed agents surface `Attach`; explicit custom commands remain `Launch`.
 4. `App` creates a terminal tab with the resolved cwd, launch command, and optional staged task text.
 5. The task text is sanitized to remove terminal control characters and shell-submitting newlines before it is written to the PTY.
 
@@ -114,8 +114,8 @@ When configured:
 ## Known Architectural Gaps
 
 - Claude Code transcript discovery is still hard-coded around `~/.claude/projects`; Codex and Gemini need first-class transcript/session discovery and resume/attach adapters.
-- Dispatch completion is request-level only. The app records that a brokered request was sent or a direct dispatcher launched; it does not yet subscribe to the resulting NockCC reply thread.
-- Agent folder state is read-only and local-file-bus based. True reconnect/attach still needs a runtime adapter that can choose tmux attach, transcript resume, or another agent-specific reconnect path.
+- Dispatch completion is request-level only. Brokered dispatch can poll NockCC live `status_update` messages by `context.request_id`, but the app does not yet render the full resulting NockCC reply thread or dispatched-agent transcript.
+- Agent folder state is read-only and local-file-bus based. CRM tmux attach is the first supported attach/resume metadata path, but arbitrary reconnect, transcript resume, and file-bus handoff still need runtime-specific adapters.
 - Monaco is lazy-loaded and now budgeted in CI, but targeted worker/language loading is still worth tightening if startup or update size becomes a problem.
 - The app has CI for tests, dependency audit, renderer builds, and bundle budgets, but no automated packaged Electron smoke test, crash reporting, or update channel validation.
 

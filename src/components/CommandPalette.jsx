@@ -377,10 +377,10 @@ function LaunchRow({ target, onOpen, onLaunch }) {
             type="button"
             onClick={() => onLaunch(target.defaultAgentId)}
             disabled={!defaultLaunch.canLaunch}
-            title={defaultLaunch.disabledReason || `Launch ${defaultLaunch.label}`}
+            title={defaultLaunch.disabledReason || `${defaultLaunch.actionLabel || 'Launch'} ${defaultLaunch.label}`}
             className="h-8 rounded border border-nock-accent-blue/40 px-2.5 font-mono text-[9px] uppercase tracking-wider text-nock-accent-blue transition-colors hover:bg-nock-accent-blue/10 disabled:cursor-not-allowed disabled:border-nock-border disabled:text-nock-text-muted"
           >
-            Launch
+            {defaultLaunch.actionLabel || 'Launch'}
           </button>
         )}
       </div>

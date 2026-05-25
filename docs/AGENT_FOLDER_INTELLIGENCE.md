@@ -1,6 +1,6 @@
 # Agent Folder Intelligence
 
-Updated: 2026-05-16
+Updated: 2026-05-25
 
 Nock Terminal now treats local agent folders as first-class cockpit entries instead of pretending every discovered path is a repo.
 
@@ -28,7 +28,23 @@ Nock reads existing fields only. It does not introduce a parallel metadata forma
 - `launch_command`, `launchCommand`, `command`, `start_command`, `startCommand`, or `launch.command` - optional explicit launch command.
 - `passive_frozen_threshold` or `stale_threshold_seconds` - heartbeat freshness threshold.
 
-When no explicit launch command exists, enabled CRM persistent agents launch through the canonical tmux attach path, such as `tmux attach -t crm-default-cooper`. Other enabled agent folders still derive a command from the raw agent name.
+When no explicit launch command exists, enabled CRM persistent agents launch through the canonical tmux attach path, such as `tmux attach -t crm-default-cooper`. That path is now tagged as a live attach/resume capability because Nock can derive the exact tmux target. Other enabled agent folders still derive a command from the raw agent name and are treated as plain folder launches, not attach support.
+
+## Adapter Session Contract
+
+`electron/agent-adapters.js` defines a session contract that separates four different ideas that should not be blended in UI copy:
+
+- Transcript discovery
+- Live attach
+- Resume command
+- Folder launch
+
+Current contract posture:
+
+- Claude Code has supported transcript discovery through `~/.claude/projects/*/*.jsonl`, but no proven live attach command yet.
+- Codex CLI and Gemini CLI have process/context detection and profile-driven folder launch, while transcript discovery, live attach, and resume remain future work until backed by runtime evidence.
+- Local agent folders have config and file-bus discovery. CRM persistent agents get supported live attach/resume only when discovery derives a deterministic `tmux attach -t crm-<instance>-<agent>` command. Explicit custom commands remain folder launches.
+- Dispatch agents are request-level workers. They support dispatch requests when allowlisted, but do not expose local transcript, attach, or resume capabilities.
 
 ## Runtime State
 
@@ -93,13 +109,13 @@ Click behavior is conservative:
 - Running or idle agents open a terminal in the agent folder without auto-launching a duplicate process.
 - Offline or stale enabled agents launch the derived or configured command.
 - Persistent CRM agents do not require shell aliases such as `cooper` or `rook`; Nock falls back to `tmux attach -t crm-<instance>-<agent>`.
-- The context menu provides `Launch Fresh` when the agent is enabled and has a launch command.
+- The context menu provides `Attach Session` for CRM tmux-backed persistent agents, `Launch Fresh` for plain folder launches, and `Stage Dispatch Task` for dispatch agents.
 - `Ctrl+K` includes agent folders in the command launcher, ranks exact agent-name matches above similarly named repos, and can launch a fresh agent terminal.
 - Task staging can place a user-written task into a freshly launched agent terminal without submitting it.
 - Dispatch agent clicks open task staging with that agent selected; task staging sends a brokered NockCC request to Mira by default, or opens the resolved direct dispatch alias/script when the direct route is selected.
 
 ## Current Limits
 
-This is not true session attach/reconnect yet. Nock can show that an agent appears alive and can open the correct folder, but a future adapter must confirm whether reconnect means tmux attach, transcript resume, file-bus handoff, or another runtime-specific action.
+Attach/resume support is intentionally narrow. Today it means CRM persistent agent tmux attach, and only when the command target is deterministic. Nock still does not claim Claude Code resume, Codex resume, Gemini resume, arbitrary agent reconnect, transcript replay, or file-bus handoff.
 
-Dispatch completion tracking is also not full reply-thread tracking yet. The dashboard records sent/launched/failed request state, while final completion still comes back through NockCC AgentMessage from the dispatched agent/Mira.
+Dispatch completion tracking is request-level, not full reply-thread tracking. Brokered runs can advance from NockCC live `status_update` AgentMessages correlated by `context.request_id`, but Nock does not yet render the full dispatched agent transcript or AgentMessage thread.

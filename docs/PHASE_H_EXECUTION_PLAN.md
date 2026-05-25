@@ -174,6 +174,8 @@ Phase H is successful when:
 
 **Description:** Write the adapter contract for transcript discovery, resume, and attach across Claude Code, Codex CLI, Gemini CLI, and local agent folders.
 
+**Execution note:** Nock `7681` is the active H5/H6 slice. It adds typed contract metadata in `electron/agent-adapters.js` and keeps the semantics explicit: transcript discovery, live attach, resume command, and folder launch are separate capabilities.
+
 **Acceptance criteria:**
 - Contract separates transcript discovery, live attach, resume command, and folder launch.
 - Claude Code current behavior is documented as the baseline.
@@ -197,6 +199,8 @@ Phase H is successful when:
 ### H6: First Resume/Attach Implementation Slice
 
 **Description:** Implement one proven attach/resume path end to end, ideally the one with the most reliable local evidence.
+
+**Execution note:** The first implementation target is CRM persistent agent folders. Nock can derive the deterministic `tmux attach -t crm-<instance>-<agent>` target for canonical CRM agents, so those rows can expose `Attach` metadata. Explicit custom agent commands remain normal launches, and dispatch agents remain request-level workers.
 
 **Acceptance criteria:**
 - A discovered session exposes a safe attach/resume action only when the adapter can prove the command target.

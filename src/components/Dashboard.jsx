@@ -73,8 +73,9 @@ export default function Dashboard({
 
     if (session.kind === 'agent') {
       const isDispatchAgent = session.launch?.mode === 'dispatch';
+      const launchLabel = session.launch?.action === 'attach' ? 'Attach Session' : 'Launch Fresh';
       items.push({
-        label: isDispatchAgent ? 'Stage Dispatch Task' : 'Launch Fresh',
+        label: isDispatchAgent ? 'Stage Dispatch Task' : launchLabel,
         icon: (
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
