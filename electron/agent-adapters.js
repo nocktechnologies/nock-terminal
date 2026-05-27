@@ -39,6 +39,19 @@ const AGENT_ADAPTERS = [
       },
     ],
   },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    command: 'deepseek-chat',
+    aliases: ['ds', 'deepseek'],
+    processNames: ['deepseek-chat', 'deepseek-chat.py', 'deepseek-agent.py'],
+    contextGroups: [
+      {
+        label: 'AGENTS.md',
+        paths: ['AGENTS.md'],
+      },
+    ],
+  },
 ];
 
 const SHARED_CONTEXT_GROUPS = [
