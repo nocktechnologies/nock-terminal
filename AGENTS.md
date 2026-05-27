@@ -58,7 +58,7 @@ Nock Terminal is a cross-platform Electron cockpit for local agentic coding work
 ## What The App Does Today
 
 - Discovers Claude Code sessions, local agent folders, dispatch-agent configs, and git projects, then presents agents separately from repos in dashboard cards and sidebar entries.
-- Opens PTY-backed terminal tabs, applies global/project shell settings, supports splits, keeps terminals mounted across view switches, and launches `claude` from a new tab.
+- Opens PTY-backed terminal tabs, applies global/project shell settings, supports splits, keeps terminals mounted across view switches, reconciles stale/orphaned PTYs, and launches `claude` from a new tab.
 - Sends brokered Codex/DeepSeek dispatch requests to Mira via NockCC AgentMessage, or launches direct CRM dispatch scripts with generated payload files.
 - Provides sidebar file browsing, git status markers, Monaco editing with unsaved-change protection, and project context checks for `CLAUDE.md`, `AGENTS.md`, Codex config, and `.nock/config.toml`.
 - Shows first-run onboarding for dev roots, agent binaries, sessions, context files, and Ollama status.

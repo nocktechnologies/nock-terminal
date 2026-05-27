@@ -511,3 +511,29 @@ test('timestamp parsing does not treat short numeric pid strings as dates', () =
   assert.equal(discovery._timestampFromText('73622'), null);
   assert.equal(discovery._timestampFromText('1778890762'), 1778890762000);
 });
+
+test('_decodeDirName handles posix paths', () => {
+  const discovery = new SessionDiscovery();
+  assert.equal(discovery._decodeDirName('-Users-kevin-Dev-nock-terminal'), '/Users/kevin/Dev/nock/terminal');
+});
+
+test('_decodeDirName handles Windows paths with drive letter and nested folders', { skip: process.platform !== 'win32' }, () => {
+  const discovery = new SessionDiscovery();
+  // Standard encoding: leading dash, drive, `--`, then path with dashes as separators
+  assert.equal(discovery._decodeDirName('-C--Users-kevin-Dev-project'), 'C:\\Users\\kevin\\Dev\\project');
+});
+
+test('_decodeDirName preserves rest-of-path when only one `--` separator is present', { skip: process.platform !== 'win32' }, () => {
+  const discovery = new SessionDiscovery();
+  // Regression: previous impl used String.replace('--', ':\\') which is correct
+  // for the first `--` but then `replace(/-/g, '\\')` would have run over the
+  // remainder. The new impl slices explicitly at the first `--` and only
+  // replaces dashes in the suffix.
+  const decoded = discovery._decodeDirName('-D--repo-name');
+  assert.equal(decoded, 'D:\\repo\\name');
+});
+
+test('_decodeDirName falls back to dash-replacement when no `--` is present', { skip: process.platform !== 'win32' }, () => {
+  const discovery = new SessionDiscovery();
+  assert.equal(discovery._decodeDirName('foo-bar-baz'), 'foo\\bar\\baz');
+});

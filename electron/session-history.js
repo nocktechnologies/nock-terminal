@@ -113,12 +113,18 @@ class SessionHistory {
     }
   }
 
-  endSession(tabId, exitCode) {
+  endSession(tabId, exitCode, details = {}) {
     const session = this.activeSessions.get(tabId);
     if (!session) return;
 
     session.metadata.endTime = Date.now();
     session.metadata.exitCode = exitCode ?? null;
+    if (details?.reason) {
+      session.metadata.exitReason = details.reason;
+    }
+    if (details?.reaped === true) {
+      session.metadata.reaped = true;
+    }
 
     const prefix = this._safeFilename(session.metadata.startTime, tabId);
     const metaPath = path.join(this.dir, `${prefix}.json`);

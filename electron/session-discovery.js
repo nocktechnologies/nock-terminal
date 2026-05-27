@@ -950,13 +950,17 @@ class SessionDiscovery {
 
   _decodeDirName(name) {
     if (process.platform === 'win32') {
-      let decoded = name;
-      if (decoded.startsWith('-')) {
-        decoded = decoded.substring(1);
-      }
-      decoded = decoded.replace('--', ':\\');
-      decoded = decoded.replace(/-/g, '\\');
-      return decoded;
+      // Encoded as `[-]<drive>--<rest>` where dashes in <rest> are path separators.
+      // The previous implementation used String.replace('--', ':\\') which only
+      // replaces the first match — fine — but then `replace(/-/g, '\\')` ran
+      // before splitting and would also clobber dashes in legitimate folder
+      // names. Slice explicitly at the first `--` to keep the rest intact.
+      const stripped = name.replace(/^-/, '');
+      const driveSep = stripped.indexOf('--');
+      if (driveSep < 0) return stripped.replace(/-/g, '\\');
+      const drive = stripped.slice(0, driveSep);
+      const rest = stripped.slice(driveSep + 2).replace(/-/g, '\\');
+      return `${drive}:\\${rest}`;
     }
     return '/' + name.replace(/-/g, '/').replace(/^\/+/, '');
   }

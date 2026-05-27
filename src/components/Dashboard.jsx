@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { Activity, Command, GitBranch, Radio, Search, Terminal, X } from 'lucide-react';
+import { Activity, Command, GitBranch, Radio, Search, Terminal, Trash2, X } from 'lucide-react';
 import ProjectCard from './ProjectCard';
 import ContextMenu from './ContextMenu';
 import ProjectSettingsModal from './ProjectSettingsModal';
@@ -23,6 +23,7 @@ export default function Dashboard({
   dispatchRuns = [],
   onOpenCommandPalette,
   onLaunchSessionWithAgent,
+  onCleanupStaleTerminals,
 }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [settingsProject, setSettingsProject] = useState(null);
@@ -244,6 +245,7 @@ export default function Dashboard({
           lastDataTimestamps={lastDataTimestamps}
           dispatchRuns={dispatchRuns}
           onOpenCommandPalette={onOpenCommandPalette}
+          onCleanupStaleTerminals={onCleanupStaleTerminals}
         />
 
         {sessions.length > 0 && visibleSessions.length > 0 ? (
@@ -323,7 +325,15 @@ function SessionSearch({ value, onChange, resultCount, totalCount }) {
   );
 }
 
-function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, dispatchRuns = [], onOpenCommandPalette }) {
+function OperationsPanel({
+  sessions,
+  tabs,
+  processStatus,
+  lastDataTimestamps,
+  dispatchRuns = [],
+  onOpenCommandPalette,
+  onCleanupStaleTerminals,
+}) {
   const summary = useMemo(
     () => summarizeFleet({ sessions, tabs, processStatus, lastDataTimestamps }),
     [sessions, tabs, processStatus, lastDataTimestamps]
@@ -351,7 +361,16 @@ function OperationsPanel({ sessions, tabs, processStatus, lastDataTimestamps, di
         <OpsCell Icon={Terminal} label="Terminals" value={summary.terminals} detail={`${summary.quietAgentTabs} quiet`} tone="blue" />
         <OpsCell Icon={GitBranch} label="Dirty Repos" value={summary.dirtyRepos} detail={`${summary.repos} repos`} tone="yellow" />
         <OpsCell Icon={Activity} label="Stale" value={summary.staleAgentFolders} detail="needs glance" tone="purple" />
-        <div className="flex items-center justify-end border-t border-nock-border px-4 py-3 md:border-t-0 xl:border-l">
+        <div className="flex items-center justify-end gap-2 border-t border-nock-border px-4 py-3 md:border-t-0 xl:border-l">
+          <button
+            type="button"
+            onClick={onCleanupStaleTerminals}
+            className="inline-flex h-8 items-center gap-2 rounded border border-nock-border px-3 font-mono text-[10px] uppercase tracking-wider text-nock-text-dim transition-colors hover:border-nock-green/40 hover:bg-nock-green/10 hover:text-nock-text"
+            title="Clean stale terminal sessions"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Clean
+          </button>
           <button
             type="button"
             onClick={onOpenCommandPalette}

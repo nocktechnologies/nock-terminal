@@ -23,11 +23,11 @@ export default function TitleBar({ sessionCount = 0, activeCount = 0 }) {
       <div className="flex items-center gap-2.5">
         <span
           aria-hidden="true"
-          className="h-5 w-8 shrink-0 rounded-[4px] border border-nock-border/70 bg-nock-card bg-no-repeat drop-shadow-[0_0_8px_rgba(31,184,128,0.32)]"
+          className="h-5 w-5 shrink-0 rounded-[5px] border border-nock-border/70 bg-nock-card bg-no-repeat drop-shadow-[0_0_8px_rgba(63,88,112,0.35)]"
           style={{
             backgroundImage: 'url("./nock-logo.png")',
-            backgroundSize: '190% 190%',
-            backgroundPosition: '50% 55%',
+            backgroundSize: '100% 100%',
+            backgroundPosition: 'center',
           }}
         />
         <div className="flex items-baseline gap-2">

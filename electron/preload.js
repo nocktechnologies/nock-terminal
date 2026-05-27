@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('nockTerminal', {
   // Terminal
   terminal: {
     create: (opts) => ipcRenderer.invoke('terminal:create', opts),
+    list: () => ipcRenderer.invoke('terminal:list'),
+    reapStale: (opts) => ipcRenderer.invoke('terminal:reapStale', opts),
     write: (id, data) => ipcRenderer.send('terminal:write', { id, data }),
     resize: (id, cols, rows) => ipcRenderer.send('terminal:resize', { id, cols, rows }),
     destroy: (id) => ipcRenderer.send('terminal:destroy', { id }),
@@ -31,7 +33,7 @@ contextBridge.exposeInMainWorld('nockTerminal', {
       return () => ipcRenderer.removeListener('terminal:data', handler);
     },
     onExit: (callback) => {
-      const handler = (_, payload) => callback(payload.id, payload.code);
+      const handler = (_, payload) => callback(payload.id, payload.code, payload.details || {});
       ipcRenderer.on('terminal:exit', handler);
       return () => ipcRenderer.removeListener('terminal:exit', handler);
     },
