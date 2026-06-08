@@ -20,6 +20,9 @@ function createMemoryStore(initial = {}) {
     set(key, value) {
       backing[key] = value;
     },
+    has(key) {
+      return Object.prototype.hasOwnProperty.call(backing, key);
+    },
   };
 }
 
@@ -108,4 +111,5 @@ test('createSecureSettingsFacade exposes decrypted secrets only to main-process 
   assert.equal(facade.get('telegramBotToken'), '123:secret');
   assert.equal(facade.store.telegramBotToken, '123:secret');
   assert.equal(store.store.telegramBotToken, '');
+  assert.equal(facade.has('defaultModel'), true);
 });

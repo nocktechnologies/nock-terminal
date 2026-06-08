@@ -216,17 +216,25 @@ function readStoreValue(store, key, defaultValue) {
 }
 
 function createSecureSettingsFacade(store, secureSettings) {
-  return {
-    get(key, defaultValue) {
-      if (secureSettings?.isSecureKey?.(key)) {
-        return secureSettings.get(key);
+  return new Proxy(store || {}, {
+    get(target, prop) {
+      if (prop === 'get') {
+        return (key, defaultValue) => {
+          if (secureSettings?.isSecureKey?.(key)) {
+            return secureSettings.get(key);
+          }
+          return readStoreValue(target, key, defaultValue);
+        };
       }
-      return readStoreValue(store, key, defaultValue);
+
+      if (prop === 'store') {
+        return secureSettings?.applyToSettings?.(target?.store || {}) || target?.store || {};
+      }
+
+      const value = target?.[prop];
+      return typeof value === 'function' ? value.bind(target) : value;
     },
-    get store() {
-      return secureSettings?.applyToSettings?.(store?.store || {}) || store?.store || {};
-    },
-  };
+  });
 }
 
 module.exports = {

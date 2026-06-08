@@ -526,7 +526,7 @@ export default function Settings() {
             <Field label="Bot Token" description="From @BotFather">
               <div className="flex flex-wrap items-center gap-2">
                 <input
-                  type="text"
+                  type="password"
                   value={telegramTokenEditing ? (settings.telegramBotToken || '') : ''}
                   onChange={(e) => updateSecureSetting('telegramBotToken', e.target.value)}
                   className="settings-input font-mono min-w-[260px] flex-1"
