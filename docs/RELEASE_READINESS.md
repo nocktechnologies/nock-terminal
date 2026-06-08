@@ -93,7 +93,8 @@ Before a public beta announcement, install the generated artifacts on clean mach
 - Monaco can open, edit, save, and protect unsaved changes on close.
 - Context monitor reports `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, Codex config, and `.nock/config.toml` accurately.
 - NockCC heartbeat reports active project and agent session counts when configured.
-- Telegram/notification settings remain opt-in and do not leak local project details without user configuration.
+- Telegram/notification settings remain opt-in, stored credentials stay main-process-only, and the Settings screen exposes only configured/not-configured secret status.
+- NockCC API key configuration remains main-process-only; renderer settings reads, exports, and compatibility secure-read calls must not return raw credentials.
 
 ## Signed Artifact Evidence Ledger
 

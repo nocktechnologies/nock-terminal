@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, shell, clipboard } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, shell, clipboard, safeStorage } = require('electron');
 const path = require('path');
 const Store = require('electron-store');
 const TerminalManager = require('./terminal-manager');
@@ -17,6 +17,10 @@ const {
   migrateSettingsStore,
   sanitizeStoredSettings,
 } = require('./settings-utils');
+const {
+  SecureSettingsStore,
+  createSecureSettingsFacade,
+} = require('./secure-settings-store');
 const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
 const { registerDispatchIPC } = require('./dispatch-ipc');
@@ -49,9 +53,12 @@ if (IS_PACKAGED_SMOKE && process.env.NOCK_TERMINAL_USER_DATA_DIR) {
 const store = new Store({
   defaults: DEFAULT_SETTINGS,
 });
+let secureSettings = null;
+let runtimeSettingsStore = store;
 
 function getSettingsSnapshot() {
-  return sanitizeStoredSettings(store.store);
+  const sanitized = sanitizeStoredSettings(store.store);
+  return secureSettings?.applyToSettings?.(sanitized) || sanitized;
 }
 
 function getAllowedProjectRoots() {
@@ -64,6 +71,7 @@ function getAllowedProjectRoots() {
 
 function repairStoredSettings() {
   migrateSettingsStore(store);
+  secureSettings?.migrateLegacySettings?.();
 }
 
 function applySettingsRuntimeEffects(key, currentValue) {
@@ -366,6 +374,7 @@ async function finishPackagedSmokeCheck() {
 
 function initServices() {
   const settings = getSettingsSnapshot();
+  const serviceSettingsStore = runtimeSettingsStore || store;
   terminalManager = new TerminalManager();
   sessionDiscovery = new SessionDiscovery({
     devRoots: settings.devRoots,
@@ -376,12 +385,12 @@ function initServices() {
   fileService = new FileService(store);
   fileWatcher = new FileWatcher(fileService);
   processDetector = new ProcessDetector(terminalManager);
-  telegramNotifier = new TelegramNotifier(store);
+  telegramNotifier = new TelegramNotifier(serviceSettingsStore);
   projectProfiles = new ProjectProfiles();
   sessionHistory = new SessionHistory(store);
   promptStore = new PromptStore();
-  nockccClient = new NockCCClient(store);
-  agentDispatchService = new AgentDispatchService(store);
+  nockccClient = new NockCCClient(serviceSettingsStore);
+  agentDispatchService = new AgentDispatchService(serviceSettingsStore);
 }
 
 function registerIPC() {
@@ -427,6 +436,7 @@ function registerIPC() {
   registerSettingsIPC({
     ipcMain,
     store,
+    secureSettings,
     getSettingsSnapshot,
     applySettingsRuntimeEffects,
     applyResetRuntimeEffects,
@@ -490,6 +500,8 @@ function wireFileEvents() {
 }
 
 app.whenReady().then(() => {
+  secureSettings = new SecureSettingsStore({ store, safeStorage });
+  runtimeSettingsStore = createSecureSettingsFacade(store, secureSettings);
   repairStoredSettings();
   configureAppBranding();
   initServices();

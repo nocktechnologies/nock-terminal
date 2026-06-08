@@ -17,6 +17,7 @@ As of the May 16, 2026 agent-agnostic cockpit pass, this repo is ready for renew
 - New task staging: the launcher can open a fresh agent terminal and place task text into it without auto-submitting the prompt.
 - New dispatch support: Codex and DeepSeek dispatch agents with `agent_runtime` configs are visible even when intentionally `enabled:false`; allowlisted agents can be sent brokered tasks through Mira or launched through the local dispatch script.
 - New stale-session cleanup: the app reconciles renderer tab state with main-process PTYs on startup and every minute, and the dashboard can manually clean orphaned or dead terminal sessions.
+- Secret posture: Telegram and NockCC credentials are main-process-only, migrated out of plaintext settings into Electron `safeStorage` when available, and exposed to the renderer only as configured/not-configured status.
 - Strategic gap: Claude Code remains the only transcript-discovery source. Codex/Gemini support now has context/process/profile launch foundations, and CRM Codex/DeepSeek dispatch is implemented, but Codex/Gemini transcript discovery and resume/attach behavior are still roadmap work.
 - Launch gap: release workflows now enforce signing/notarization secrets and checksums, but packaged-app smoke tests, update distribution, crash/error reporting, and support flow still need a release pass.
 
@@ -39,6 +40,7 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 - Provides local AI chat through Ollama models.
 - Launches a Claude Code terminal tab from the AI panel.
 - Stores project profiles, default agent choices, trusted profile launch commands, prompt library entries, session history, output capture settings, and app preferences.
+- Stores Telegram/NockCC credentials behind main-process secure storage instead of returning raw tokens through renderer settings APIs.
 - Sends optional Telegram notifications and heartbeat events to NockCC.
 
 ## Product Direction

@@ -119,6 +119,9 @@ test('migrateSettingsStore uses whole-store replacement when available', () => {
   let backing = {
     theme: 'dark',
     defaultModel: 'llama3.2',
+    secureSettings: {
+      telegramBotToken: { value: 'encrypted-token' },
+    },
   };
   let writes = 0;
   class FakeElectronStore {
@@ -146,6 +149,9 @@ test('migrateSettingsStore uses whole-store replacement when available', () => {
   assert.equal(writes, 1);
   assert.equal(backing.theme, undefined);
   assert.equal(backing.defaultModel, 'llama3.2');
+  assert.deepEqual(backing.secureSettings, {
+    telegramBotToken: { value: 'encrypted-token' },
+  });
   assert.equal(backing[SETTINGS_SCHEMA_KEY], SETTINGS_SCHEMA_VERSION);
 });
 
