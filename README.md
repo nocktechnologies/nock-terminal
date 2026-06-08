@@ -13,7 +13,7 @@ As of the May 16, 2026 agent-agnostic cockpit pass, this repo is ready for renew
 - Passing: `npm test`, `npm audit --audit-level=moderate`, `npx vite build`, `npm run check:bundle`, and the Monaco browser smoke test.
 - Fixed in the remediation pass: dependency audit blockers, shell/profile settings application, unsaved editor protection, agent context/process adapters, NockCC heartbeat activity, first-run onboarding, hit-target/accessibility polish, and release gate scripts.
 - New agent-folder intelligence: Nock discovers existing `agents/*/config.json` folders, reads local NockCC file-bus state, and presents agents separately from repos.
-- New agent-agnostic launcher: `Ctrl+K` searches repos/agents and launches Claude Code, Codex CLI, Gemini CLI, local agent folders, or a custom agent command from project profiles.
+- New agent-agnostic launcher: `Ctrl+K` searches repos/agents, launches trusted project-profile commands for Claude Code, Codex CLI, Gemini CLI, and custom agents, attaches proven CRM tmux agents, and opens untrusted local agent folders without auto-running config commands.
 - New task staging: the launcher can open a fresh agent terminal and place task text into it without auto-submitting the prompt.
 - New dispatch support: Codex and DeepSeek dispatch agents with `agent_runtime` configs are visible even when intentionally `enabled:false`; allowlisted agents can be sent brokered tasks through Mira or launched through the local dispatch script.
 - New stale-session cleanup: the app reconciles renderer tab state with main-process PTYs on startup and every minute, and the dashboard can manually clean orphaned or dead terminal sessions.
@@ -29,7 +29,7 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 - Discovers local agent folders from existing `config.json` files and shows enabled/running/stale/offline state from the NockCC file bus.
 - Discovers dispatch-and-die Codex/DeepSeek agents from `agent_runtime` configs, parses dispatcher allowlists, and dedupes copied worktree configs.
 - Searches repos and agent folders from a `Ctrl+K` command launcher.
-- Launches Claude Code, Codex CLI, Gemini CLI, local agent folders, or custom agent aliases from project profiles.
+- Launches Claude Code, Codex CLI, Gemini CLI, or custom agent aliases from project profiles; local agent-folder config commands are shown as metadata but are not auto-run unless discovery marks the path trusted.
 - Stages task text into newly launched agent terminals for human review before submit.
 - Sends brokered dispatch requests to Mira through NockCC AgentMessage, or opens a direct dispatch alias/script terminal with a generated payload file.
 - Opens xterm.js terminal tabs through `node-pty`, including splits.
@@ -38,7 +38,7 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 - Provides a sidebar file tree, git status markers, context checks, and Monaco editing.
 - Provides local AI chat through Ollama models.
 - Launches a Claude Code terminal tab from the AI panel.
-- Stores project profiles, default agent choices, per-agent launch commands, prompt library entries, session history, output capture settings, and app preferences.
+- Stores project profiles, default agent choices, trusted profile launch commands, prompt library entries, session history, output capture settings, and app preferences.
 - Sends optional Telegram notifications and heartbeat events to NockCC.
 
 ## Product Direction

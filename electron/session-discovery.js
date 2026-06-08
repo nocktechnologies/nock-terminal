@@ -6,6 +6,7 @@ const { promisify } = require('util');
 const { getAgentSessionContract } = require('./agent-adapters');
 
 const execAsync = promisify(exec);
+const UNTRUSTED_AGENT_LAUNCH_REASON = 'Agent launch command requires confirmation before it can run.';
 
 class SessionDiscovery {
   constructor(opts = {}) {
@@ -387,8 +388,8 @@ class SessionDiscovery {
           mode: 'terminal',
           command: launchCommand,
           cwd: launchCwd,
-          canLaunch: Boolean(launchCommand),
-          disabledReason: launchCommand ? '' : 'Agent launch command is missing',
+          canLaunch: terminalLaunch.canLaunch,
+          disabledReason: terminalLaunch.disabledReason,
           action: terminalLaunch.action,
           actionLabel: terminalLaunch.actionLabel,
           capability: terminalLaunch.capability,
@@ -452,6 +453,8 @@ class SessionDiscovery {
         action: 'unavailable',
         actionLabel: 'Unavailable',
         capability: 'none',
+        canLaunch: false,
+        disabledReason: enabled ? 'Agent launch command is missing' : 'Agent is disabled',
       };
     }
     const attachCommand = crmAttachCommand || this._resolveCrmAgentAttachCommand(agentPath, agentName);
@@ -460,12 +463,16 @@ class SessionDiscovery {
         action: 'attach',
         actionLabel: 'Attach',
         capability: 'live-attach',
+        canLaunch: true,
+        disabledReason: '',
       };
     }
     return {
       action: 'launch',
       actionLabel: 'Launch',
       capability: 'folder-launch',
+      canLaunch: false,
+      disabledReason: UNTRUSTED_AGENT_LAUNCH_REASON,
     };
   }
 
@@ -514,9 +521,12 @@ class SessionDiscovery {
     };
     contract.folderLaunch = {
       ...(contract.folderLaunch || {}),
-      state: enabled && launchCommand ? 'supported' : 'unsupported',
+      state: enabled && launchCommand && !canAttach ? 'conditional' : 'unsupported',
       command: launchCommand || '',
       cwd: launchCwd || agentPath,
+      disabledReason: enabled && launchCommand && !canAttach
+        ? UNTRUSTED_AGENT_LAUNCH_REASON
+        : 'No trusted folder launch command was resolved for this agent folder.',
     };
     return contract;
   }

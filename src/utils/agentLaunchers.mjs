@@ -4,6 +4,7 @@ export const AGENT_FOLDER_ID = 'agent-folder';
 export const DISPATCH_AGENT_ID = 'dispatch-agent';
 
 const MAX_LAUNCHER_TARGETS = 80; // Keep the palette responsive on large dev roots.
+const UNTRUSTED_AGENT_LAUNCH_REASON = 'Agent launch command requires confirmation before it can run';
 
 export const AGENT_LAUNCHERS = [
   {
@@ -105,12 +106,12 @@ export function resolveSessionLaunch(session, profile = {}, agentId) {
 
     const command = trimString(session?.launch?.command);
     const hasExplicitCanLaunch = typeof session?.launch?.canLaunch === 'boolean';
-    const canLaunch = hasExplicitCanLaunch ? session.launch.canLaunch === true : Boolean(command);
+    const canLaunch = hasExplicitCanLaunch ? session.launch.canLaunch === true : false;
     const disabledReason = canLaunch
       ? ''
       : (
         trimString(session?.launch?.disabledReason)
-        || (command ? 'Agent launch is currently unavailable' : 'Agent launch command is missing')
+        || (command ? UNTRUSTED_AGENT_LAUNCH_REASON : 'Agent launch command is missing')
       );
     return {
       agentId: AGENT_FOLDER_ID,
@@ -155,7 +156,7 @@ function sessionCanLaunch(session) {
   if (typeof session?.launch?.canLaunch === 'boolean') {
     return session.launch.canLaunch === true;
   }
-  return Boolean(trimString(session?.launch?.command));
+  return false;
 }
 
 export function shouldRunSessionLaunch(session, options = {}) {

@@ -1,6 +1,6 @@
 # Product Roadmap
 
-Updated: 2026-05-25
+Updated: 2026-06-08
 
 This roadmap follows the audit in `docs/PRODUCT_AUDIT_GTM_READINESS.md`. It assumes Nock Terminal should become a local-first cockpit for supervising coding agents, not a generic AI IDE.
 
@@ -54,6 +54,7 @@ Current execution posture:
 - Nock `7680` / Phase H H4 proper is done via PR #55 and PR #56: Mira message #1513 confirmed the live inbox read contract, brokered dispatch runs now poll NockCC `status_update` AgentMessages by `context.request_id`, and post-merge review feedback stabilized message/request ordering.
 - Nock `7681` / Phase H H5/H6 is done via PR #58: adapter session contracts now separate transcript discovery, live attach, resume command, and folder launch, with CRM tmux attach as the first supported attach/resume metadata path.
 - Nock `7682` / Phase H H6b is done via PR #59: attach-capable CRM agent actions execute the proven tmux attach command, while explicit folder-open actions suppress command execution and unsupported resume/attach states remain disabled.
+- Nock `7975` / audit hardening blocks arbitrary agent-folder config commands from auto-running. CRM tmux attach, dispatch requests, and trusted project-profile launches remain runnable; untrusted folder commands are metadata until a confirmation/trust UI exists.
 - Nock `123` is active on `codex/phase-h-release-truth`: release readiness now has an explicit decision log and evidence ledger for signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback. The Nock remains open until signed target-OS smoke evidence exists.
 
 ### May 24 Phase H Execution Plan
@@ -122,7 +123,7 @@ Completed in the agent-folder intelligence pass:
 - Detect existing agent folders from configured dev roots.
 - Read `config.json` as the source of truth instead of creating a parallel metadata format.
 - Show agent cards separately from repo cards in the dashboard and sidebar.
-- Resolve conservative launch defaults from config or the agent name.
+- Resolve conservative launch metadata from config or the agent name without auto-running untrusted folder commands.
 - Avoid auto-launching duplicate processes when an agent appears running or idle.
 
 Completed in the May 16 command-center pass:
@@ -146,7 +147,7 @@ Extend the adapter contract for:
 Current adapter posture:
 
 - Claude Code: current transcript discovery and launch behavior remain preserved.
-- Local agent folders: discovered from config and file-bus state; terminal launch is supported; CRM persistent agents expose attach/resume metadata when Nock derives the deterministic `tmux attach -t crm-<instance>-<agent>` target; arbitrary folder reconnect remains future work.
+- Local agent folders: discovered from config and file-bus state; CRM persistent agents expose attach/resume metadata when Nock derives the deterministic `tmux attach -t crm-<instance>-<agent>` target; arbitrary folder launch/reconnect remains future work until a trust/confirmation path exists.
 - Codex CLI: context/process detection and profile-driven terminal launch are implemented; transcript discovery and resume/attach remain future work.
 - Codex dispatch agents: CRM brokered/direct dispatch is implemented for allowlisted agents; local dispatch-run history has a shared status normalizer, and brokered runs poll live NockCC `status_update` messages by `context.request_id`. Full completion-thread/transcript rendering remains future work.
 - DeepSeek dispatch agents: API-backed CRM brokered/direct dispatch is implemented for allowlisted agents; there is no standalone DeepSeek CLI launcher.

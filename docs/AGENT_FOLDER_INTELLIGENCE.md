@@ -1,6 +1,6 @@
 # Agent Folder Intelligence
 
-Updated: 2026-05-25
+Updated: 2026-06-08
 
 Nock Terminal now treats local agent folders as first-class cockpit entries instead of pretending every discovered path is a repo.
 
@@ -25,10 +25,10 @@ Nock reads existing fields only. It does not introduce a parallel metadata forma
 - `crons` - counted for lightweight cockpit metadata.
 - `working_directory` - launch cwd override; relative paths resolve from the agent folder.
 - `broker_agent` or `brokerAgent` - optional broker override for dispatch agents; defaults to `mira-nockos`.
-- `launch_command`, `launchCommand`, `command`, `start_command`, `startCommand`, or `launch.command` - optional explicit launch command.
+- `launch_command`, `launchCommand`, `command`, `start_command`, `startCommand`, or `launch.command` - optional explicit launch command metadata. These commands are discovered and displayed, but they are not auto-run unless a trusted launcher path explicitly marks them launchable.
 - `passive_frozen_threshold` or `stale_threshold_seconds` - heartbeat freshness threshold.
 
-When no explicit launch command exists, enabled CRM persistent agents launch through the canonical tmux attach path, such as `tmux attach -t crm-default-cooper`. That path is now tagged as a live attach/resume capability because Nock can derive the exact tmux target. Other enabled agent folders still derive a command from the raw agent name and are treated as plain folder launches, not attach support.
+When no explicit launch command exists, enabled CRM persistent agents attach through the canonical tmux path, such as `tmux attach -t crm-default-cooper`. That path is tagged as a live attach/resume capability because Nock can derive the exact tmux target. Other enabled agent folders may still expose a configured command or raw agent-name fallback as metadata, but Nock treats those commands as untrusted until a future confirmation/trust UI exists.
 
 ## Adapter Session Contract
 
@@ -43,7 +43,7 @@ Current contract posture:
 
 - Claude Code has supported transcript discovery through `~/.claude/projects/*/*.jsonl`, but no proven live attach command yet.
 - Codex CLI and Gemini CLI have process/context detection and profile-driven folder launch, while transcript discovery, live attach, and resume remain future work until backed by runtime evidence.
-- Local agent folders have config and file-bus discovery. CRM persistent agents get supported live attach/resume only when discovery derives a deterministic `tmux attach -t crm-<instance>-<agent>` command. Explicit custom commands remain folder launches.
+- Local agent folders have config and file-bus discovery. CRM persistent agents get supported live attach/resume only when discovery derives a deterministic `tmux attach -t crm-<instance>-<agent>` command. Explicit custom commands remain conditional folder-launch metadata and are blocked from auto-run until explicitly trusted.
 - Dispatch agents are request-level workers. They support dispatch requests when allowlisted, but do not expose local transcript, attach, or resume capabilities.
 
 ## Runtime State
@@ -107,12 +107,12 @@ Agent cards show:
 Click behavior is conservative:
 
 - Running or idle plain launch agents open a terminal in the agent folder without auto-launching a duplicate process.
-- Offline or stale enabled plain launch agents launch the derived or configured command.
+- Offline or stale enabled plain launch agents also open a terminal in the agent folder. Derived or configured commands remain visible, but Nock does not auto-run them without explicit trust.
 - Persistent CRM agents do not require shell aliases such as `cooper` or `rook`; Nock falls back to `tmux attach -t crm-<instance>-<agent>` and executes that command only for attach/launch actions.
 - `Open Agent Folder` is a literal folder terminal action for agent rows. It suppresses launch and attach commands even when the row has a supported command.
-- The context menu provides `Attach Session` for CRM tmux-backed persistent agents, `Launch Fresh` for plain folder launches, and `Stage Dispatch Task` for dispatch agents.
-- `Ctrl+K` includes agent folders in the command launcher, ranks exact agent-name matches above similarly named repos, and can launch a fresh agent terminal.
-- Task staging can place a user-written task into a freshly launched agent terminal without submitting it.
+- The context menu provides `Attach Session` for CRM tmux-backed persistent agents, disables untrusted plain folder launches, and provides `Stage Dispatch Task` for dispatch agents.
+- `Ctrl+K` includes agent folders in the command launcher, ranks exact agent-name matches above similarly named repos, and opens untrusted folders without auto-running their discovered commands.
+- Task staging can place a user-written task into a freshly opened or launched agent terminal without submitting it.
 - Dispatch agent clicks open task staging with that agent selected; task staging sends a brokered NockCC request to Mira by default, or opens the resolved direct dispatch alias/script when the direct route is selected.
 
 ## Current Limits

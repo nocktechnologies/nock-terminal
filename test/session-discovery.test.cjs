@@ -188,10 +188,14 @@ test('keeps explicit agent launch commands as folder launches rather than attach
 
   assert.ok(mira);
   assert.equal(mira.launch.command, 'mira --watch');
+  assert.equal(mira.launch.canLaunch, false);
+  assert.match(mira.launch.disabledReason, /requires confirmation/i);
   assert.equal(mira.launch.action, 'launch');
   assert.equal(mira.launch.capability, 'folder-launch');
   assert.equal(mira.sessionContract.liveAttach.state, 'unsupported');
-  assert.equal(mira.sessionContract.folderLaunch.state, 'supported');
+  assert.equal(mira.sessionContract.folderLaunch.state, 'conditional');
+  assert.equal(mira.sessionContract.folderLaunch.command, 'mira --watch');
+  assert.match(mira.sessionContract.folderLaunch.disabledReason, /requires confirmation/i);
 });
 
 test('marks disabled agent folders as inactive without launch defaults', async () => {

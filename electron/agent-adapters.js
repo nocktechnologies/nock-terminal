@@ -145,8 +145,8 @@ const AGENT_SESSION_CONTRACTS = [
       notes: 'CRM persistent agents resume by attaching to the named tmux session; arbitrary folder commands remain launches.',
     },
     folderLaunch: {
-      state: 'supported',
-      notes: 'Explicit configured launch commands and agent-name fallbacks open an agent folder terminal.',
+      state: 'conditional',
+      notes: 'Configured launch commands and agent-name fallbacks are discovered as metadata, but require explicit trust before Nock Terminal can auto-run them.',
     },
   },
   {
