@@ -45,18 +45,56 @@ function createStore(initial = {}) {
 function registerHarness(initialSettings = {}) {
   const ipc = createIpcHarness();
   const store = createStore(initialSettings);
+  const secureValues = {
+    telegramBotToken: initialSettings.telegramBotToken || '',
+    nockccApiKey: initialSettings.nockccApiKey || '',
+  };
+  store.set('telegramBotToken', '');
+  store.set('nockccApiKey', '');
+  const secureSettings = {
+    get(key) {
+      return secureValues[key] || '';
+    },
+    set(key, value) {
+      secureValues[key] = value;
+      store.set(key, '');
+      return { key, configured: Boolean(value), storage: 'test' };
+    },
+    clear(key) {
+      secureValues[key] = '';
+      store.set(key, '');
+    },
+    clearAll() {
+      secureValues.telegramBotToken = '';
+      secureValues.nockccApiKey = '';
+      store.set('telegramBotToken', '');
+      store.set('nockccApiKey', '');
+    },
+    getStatus(key) {
+      if (!Object.prototype.hasOwnProperty.call(secureValues, key)) return null;
+      return {
+        key,
+        configured: Boolean(secureValues[key]),
+        storage: secureValues[key] ? 'test' : 'none',
+      };
+    },
+    applyToSettings(settings) {
+      return { ...settings, ...secureValues };
+    },
+  };
   const runtimeEffects = [];
   const resetEffects = [];
 
   registerSettingsIPC({
     ipcMain: ipc.ipcMain,
     store,
-    getSettingsSnapshot: () => ({ ...DEFAULT_SETTINGS, ...store.store }),
+    secureSettings,
+    getSettingsSnapshot: () => secureSettings.applyToSettings({ ...DEFAULT_SETTINGS, ...store.store }),
     applySettingsRuntimeEffects: (key, value) => runtimeEffects.push({ key, value }),
     applyResetRuntimeEffects: (settings) => resetEffects.push(settings),
   });
 
-  return { ...ipc, store, runtimeEffects, resetEffects };
+  return { ...ipc, store, secureValues, runtimeEffects, resetEffects };
 }
 
 test('registerSettingsIPC registers the renderer settings contract', () => {
@@ -73,7 +111,7 @@ test('registerSettingsIPC registers the renderer settings contract', () => {
   ]);
 });
 
-test('settings handlers redact renderer settings but allow explicit secure reads', () => {
+test('settings handlers redact renderer settings and keep secure reads status-only', () => {
   const ipc = registerHarness({
     defaultModel: 'qwen3.5:9b',
     telegramBotToken: '123:secret',
@@ -82,7 +120,7 @@ test('settings handlers redact renderer settings but allow explicit secure reads
 
   assert.equal(ipc.invoke('settings:get', 'defaultModel'), 'qwen3.5:9b');
   assert.equal(ipc.invoke('settings:get', 'telegramBotToken'), undefined);
-  assert.equal(ipc.invoke('settings:getSecure', 'telegramBotToken'), '123:secret');
+  assert.equal(ipc.invoke('settings:getSecure', 'telegramBotToken'), null);
   assert.equal(ipc.invoke('settings:getSecure', 'futureAccessToken'), null);
 
   const all = ipc.invoke('settings:getAll');
@@ -96,6 +134,7 @@ test('settings handlers redact renderer settings but allow explicit secure reads
   assert.deepEqual(ipc.invoke('settings:getSecureStatus', 'telegramBotToken'), {
     key: 'telegramBotToken',
     configured: true,
+    storage: 'test',
   });
 });
 
@@ -117,6 +156,19 @@ test('settings:set validates payloads, stores normalized values, and applies run
   });
 });
 
+test('settings:set writes secure settings without persisting plaintext renderer values', () => {
+  const ipc = registerHarness();
+
+  assert.deepEqual(ipc.invoke('settings:set', { key: 'telegramBotToken', value: '123:secret' }), {
+    success: true,
+    key: 'telegramBotToken',
+    value: '',
+  });
+  assert.equal(ipc.secureValues.telegramBotToken, '123:secret');
+  assert.equal(ipc.store.store.telegramBotToken, '');
+  assert.deepEqual(ipc.runtimeEffects, [{ key: 'telegramBotToken', value: '123:secret' }]);
+});
+
 test('settings:reset rewrites defaults, stamps schema, and applies reset effects', () => {
   const bounds = { width: 1400, height: 900, x: 10, y: 20 };
   const ipc = registerHarness({
@@ -130,6 +182,7 @@ test('settings:reset rewrites defaults, stamps schema, and applies reset effects
   assert.deepEqual(ipc.store.store.windowBounds, bounds);
   assert.equal(ipc.store.store.alwaysOnTop, DEFAULT_SETTINGS.alwaysOnTop);
   assert.equal(ipc.store.store.telegramBotToken, DEFAULT_SETTINGS.telegramBotToken);
+  assert.equal(ipc.secureValues.telegramBotToken, '');
   assert.equal(ipc.store.store[SETTINGS_SCHEMA_KEY], SETTINGS_SCHEMA_VERSION);
   assert.equal(reset.telegramBotToken, '');
   assert.equal(ipc.resetEffects.length, 1);

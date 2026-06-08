@@ -1,6 +1,6 @@
 # Nock Backlog Reconciliation
 
-Updated: 2026-05-25
+Updated: 2026-06-08
 
 This document reconciles the live NockCC queue with the current `origin/main` state for Nock Terminal. It exists because the remediation work moved quickly enough that the labels drifted: some Nocks are truly done, one important Nock was marked done even though the merged PR did different work, and several older roadmap rows now need narrower wording.
 
@@ -10,6 +10,12 @@ This document reconciles the live NockCC queue with the current `origin/main` st
 - NockCC live update: message `#1443` sent to `mira-nockos` when Phase E/G PRs opened; later closeout messages should reference PRs #39 and #40.
 - Project board: Nocks `123`, `7530`, `7531`, `7532`, `7533`, `7551`, `7552`, `7680`, `7681`, and `7682` are attached to the Terminal project.
 - Primary local checkout note: `/Users/kevin/Dev/nock-terminal` had unrelated dirty work and was behind `origin/main` during this pass, so implementation and audit work used clean worktrees.
+
+June 8 audit-hardening addendum:
+
+- Nock `7974` closed the release-gate dependency-audit failure in PR #61.
+- Nock `7975` closed untrusted local agent-folder auto-exec in PR #62.
+- Nock `7976` tracks secret-storage hardening: Telegram/NockCC credentials move out of plaintext renderer settings and `settings:getSecure` becomes status-only/compatibility behavior.
 
 ## Reconciled Nocks
 

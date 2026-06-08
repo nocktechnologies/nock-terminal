@@ -2,6 +2,7 @@ const { sanitizeDevRoots, sanitizeStringList } = require('./security-utils');
 
 const SETTINGS_SCHEMA_KEY = 'schemaVersion';
 const SETTINGS_SCHEMA_VERSION = 1;
+const INTERNAL_SETTINGS_KEYS = new Set(['secureSettings']);
 
 const DEFAULT_SETTINGS = {
   windowBounds: { width: 1400, height: 900 },
@@ -285,9 +286,26 @@ function canReplaceStoreObject(store) {
   return false;
 }
 
+function preserveInternalSettings(settings = {}) {
+  const preserved = {};
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+    return preserved;
+  }
+
+  for (const key of INTERNAL_SETTINGS_KEYS) {
+    const value = settings[key];
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      preserved[key] = value;
+    }
+  }
+  return preserved;
+}
+
 function migrateSettingsObject(settings = {}) {
+  const source = settings && typeof settings === 'object' ? settings : {};
   return {
-    ...sanitizeStoredSettings(settings && typeof settings === 'object' ? settings : {}),
+    ...sanitizeStoredSettings(source),
+    ...preserveInternalSettings(source),
     [SETTINGS_SCHEMA_KEY]: SETTINGS_SCHEMA_VERSION,
   };
 }

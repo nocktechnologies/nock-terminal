@@ -11,12 +11,12 @@ const {
   errorPayload,
   validateSettingsSetPayload,
 } = require('./ipc-validators');
-
-const SECURE_SETTING_READ_KEYS = new Set(['telegramBotToken', 'nockccApiKey']);
+const { SECURE_SETTING_KEYS } = require('./secure-settings-store');
 
 function registerSettingsIPC({
   ipcMain,
   store,
+  secureSettings,
   getSettingsSnapshot,
   applySettingsRuntimeEffects,
   applyResetRuntimeEffects,
@@ -34,11 +34,14 @@ function registerSettingsIPC({
   });
 
   ipcMain.handle('settings:getSecure', (_, key) => {
-    if (!SECURE_SETTING_READ_KEYS.has(key)) return null;
-    return getSettingsSnapshot()[key];
+    if (!SECURE_SETTING_KEYS.has(key)) return null;
+    return null;
   });
 
   ipcMain.handle('settings:getSecureStatus', (_, key) => {
+    if (secureSettings?.getStatus) {
+      return secureSettings.getStatus(key);
+    }
     return getSecureSettingStatus(store.store, key);
   });
 
@@ -47,6 +50,7 @@ function registerSettingsIPC({
       preserveWindowBounds: options?.preserveWindowBounds !== false,
     });
 
+    secureSettings?.clearAll?.();
     store.clear();
     for (const [key, value] of Object.entries(resetSnapshot)) {
       store.set(key, value);
@@ -62,6 +66,17 @@ function registerSettingsIPC({
     if (!validated.ok) return errorPayload(validated);
 
     const { key, value } = validated.value;
+    if (SECURE_SETTING_KEYS.has(key)) {
+      if (secureSettings?.set) {
+        secureSettings.set(key, value);
+      } else {
+        store.set(key, '');
+      }
+      const currentValue = secureSettings?.get?.(key) || '';
+      applySettingsRuntimeEffects(key, currentValue);
+      return { success: true, key, value: '' };
+    }
+
     store.set(key, value);
     const currentValue = getSettingsSnapshot()[key];
     applySettingsRuntimeEffects(key, currentValue);

@@ -1,6 +1,6 @@
 # Post-A/B/C Integration Audit
 
-Updated: 2026-05-24
+Updated: 2026-06-08
 
 This is the Nock `7533` checkpoint after the first remediation wave landed:
 
@@ -48,11 +48,13 @@ Phase C closed the highest-risk file/editor correctness defects. File tree trave
 
 During this checkpoint, one small Phase B leftover was fixed: generic `settings:get(key)` no longer returns sensitive keys such as `telegramBotToken` or `nockccApiKey`. Renderer code that needs those values must use the explicit `settings:getSecure` allowlist.
 
+June 8 audit-hardening update: the remaining `settings:getSecure` exposure is now closed. `settings:getSecure` returns `null`, renderer settings reads stay status-only, and main-process services read Telegram/NockCC credentials through a secure settings facade backed by Electron `safeStorage` when available.
+
 ## Remaining Risks
 
 The repo is private-alpha hardening clean after A/B/C, but not public-launch clean. The remaining risks are structural, not the same concrete defects from the original audit.
 
-1. `settings:getSecure` is still an explicit renderer-accessible secret path. That is acceptable for the current Settings screen, but the long-term posture should move secret use behind action-specific main-process flows or explicit reveal UI.
+1. Closed after this checkpoint: `settings:getSecure` is no longer a renderer-accessible secret path. The remaining secret-storage caveat is operational rather than architectural: on systems where Electron `safeStorage` is unavailable, secrets are kept in main-process memory for the run instead of persisted as plaintext.
 
 2. `dispatch:brokered` still relies on `AgentDispatchService` sanitization and thrown errors instead of the shared `validateDispatchCreatePayload` plus `errorPayload` pattern. It does not create files or spawn commands, so this is not a blocker, but it is the last uneven IPC edge in the A/B/C surface.
 

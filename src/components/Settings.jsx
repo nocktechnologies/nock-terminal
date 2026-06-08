@@ -3,7 +3,7 @@ import {
   Settings2, Cpu, TerminalSquare, Code2, FolderTree,
   Send, Keyboard, Database, Info,
   RotateCcw, Download, Upload, ExternalLink,
-  Eye, EyeOff, Trash2,
+  Trash2,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -208,19 +208,6 @@ export default function Settings() {
     updateSetting(key, draft);
   }, [updateSetting]);
 
-  const revealSecureSetting = useCallback(async (key) => {
-    if (!window.nockTerminal.settings.getSecure) return;
-    const value = await window.nockTerminal.settings.getSecure(key);
-    setSettings(prev => ({ ...prev, [key]: value || '' }));
-    setSecureStatus(prev => ({ ...prev, [key]: Boolean(value) }));
-    setRevealedSecureKeys(prev => ({ ...prev, [key]: true }));
-  }, []);
-
-  const hideSecureSetting = useCallback((key) => {
-    setSettings(prev => ({ ...prev, [key]: '' }));
-    setRevealedSecureKeys(prev => ({ ...prev, [key]: false }));
-  }, []);
-
   const updateSecureSetting = useCallback((key, value) => {
     updateSetting(key, value);
     setSecureStatus(prev => ({ ...prev, [key]: Boolean(value) }));
@@ -231,7 +218,7 @@ export default function Settings() {
     updateSetting(key, '');
     setSettings(prev => ({ ...prev, [key]: '' }));
     setSecureStatus(prev => ({ ...prev, [key]: false }));
-    setRevealedSecureKeys(prev => ({ ...prev, [key]: true }));
+    setRevealedSecureKeys(prev => ({ ...prev, [key]: false }));
   }, [updateSetting]);
 
   // -----------------------------------------------------------------------
@@ -526,7 +513,7 @@ export default function Settings() {
 
       case 'telegram':
         const telegramTokenConfigured = secureStatus.telegramBotToken === true;
-        const telegramTokenRevealed = revealedSecureKeys.telegramBotToken === true || !telegramTokenConfigured;
+        const telegramTokenEditing = revealedSecureKeys.telegramBotToken === true || !telegramTokenConfigured;
         return (
           <SettingsSection title="Telegram" description="Receive push notifications via Telegram bot">
             <Field label="Enable Telegram">
@@ -539,33 +526,13 @@ export default function Settings() {
             <Field label="Bot Token" description="From @BotFather">
               <div className="flex flex-wrap items-center gap-2">
                 <input
-                  type={telegramTokenRevealed ? 'text' : 'password'}
-                  value={telegramTokenRevealed ? (settings.telegramBotToken || '') : ''}
+                  type="text"
+                  value={telegramTokenEditing ? (settings.telegramBotToken || '') : ''}
                   onChange={(e) => updateSecureSetting('telegramBotToken', e.target.value)}
                   className="settings-input font-mono min-w-[260px] flex-1"
-                  placeholder={telegramTokenConfigured && !telegramTokenRevealed ? 'Saved token hidden' : '123456:ABC-DEF...'}
+                  placeholder={telegramTokenConfigured && !telegramTokenEditing ? 'Saved token hidden' : '123456:ABC-DEF...'}
                   autoComplete="off"
                 />
-                {telegramTokenConfigured && !telegramTokenRevealed && (
-                  <button
-                    type="button"
-                    onClick={() => revealSecureSetting('telegramBotToken')}
-                    className="settings-button flex items-center gap-2"
-                  >
-                    <Eye size={14} />
-                    Reveal
-                  </button>
-                )}
-                {telegramTokenConfigured && telegramTokenRevealed && (
-                  <button
-                    type="button"
-                    onClick={() => hideSecureSetting('telegramBotToken')}
-                    className="settings-button flex items-center gap-2"
-                  >
-                    <EyeOff size={14} />
-                    Hide
-                  </button>
-                )}
                 {telegramTokenConfigured && (
                   <button
                     type="button"
