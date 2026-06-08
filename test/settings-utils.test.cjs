@@ -120,7 +120,11 @@ test('migrateSettingsStore uses whole-store replacement when available', () => {
     theme: 'dark',
     defaultModel: 'llama3.2',
     secureSettings: {
-      telegramBotToken: { value: 'encrypted-token' },
+      telegramBotToken: {
+        value: 'encrypted-token',
+        encoding: 'base64',
+        storage: 'safeStorage',
+      },
     },
   };
   let writes = 0;
@@ -150,7 +154,11 @@ test('migrateSettingsStore uses whole-store replacement when available', () => {
   assert.equal(backing.theme, undefined);
   assert.equal(backing.defaultModel, 'llama3.2');
   assert.deepEqual(backing.secureSettings, {
-    telegramBotToken: { value: 'encrypted-token' },
+    telegramBotToken: {
+      value: 'encrypted-token',
+      encoding: 'base64',
+      storage: 'safeStorage',
+    },
   });
   assert.equal(backing[SETTINGS_SCHEMA_KEY], SETTINGS_SCHEMA_VERSION);
 });
