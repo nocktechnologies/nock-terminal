@@ -511,7 +511,7 @@ export default function Settings() {
           </SettingsSection>
         );
 
-      case 'telegram':
+      case 'telegram': {
         const telegramTokenConfigured = secureStatus.telegramBotToken === true;
         const telegramTokenEditing = revealedSecureKeys.telegramBotToken === true || !telegramTokenConfigured;
         return (
@@ -611,6 +611,7 @@ export default function Settings() {
             </Field>
           </SettingsSection>
         );
+      }
 
       case 'shortcuts':
         return (
