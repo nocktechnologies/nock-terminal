@@ -16,6 +16,15 @@ function assertPathInside(parent, child) {
   assert.equal(relative.startsWith('..') || path.isAbsolute(relative), false);
 }
 
+async function waitForPathToDisappear(filePath, timeoutMs = 500) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!fs.existsSync(filePath)) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.equal(fs.existsSync(filePath), false);
+}
+
 test('builds brokered dispatch messages for Mira orchestration', () => {
   const message = buildBrokeredDispatchMessage({
     agentName: 'Ash',
@@ -128,8 +137,7 @@ test('cleans up payload files after the configured TTL', async () => {
   }, { tmpDir, cleanupAfterMs: 5 });
 
   assert.equal(fs.existsSync(result.filePath), true);
-  await new Promise(resolve => setTimeout(resolve, 30));
-  assert.equal(fs.existsSync(result.filePath), false);
+  await waitForPathToDisappear(result.filePath);
 });
 
 test('sanitizes dispatch text while preserving useful newlines', () => {
