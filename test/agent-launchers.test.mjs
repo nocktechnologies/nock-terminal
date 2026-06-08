@@ -87,7 +87,8 @@ test('resolves project and agent-folder launches', () => {
   assert.equal(agentLaunch.mode, 'terminal');
   assert.equal(agentLaunch.action, 'launch');
   assert.equal(agentLaunch.actionLabel, 'Launch');
-  assert.equal(agentLaunch.canLaunch, true);
+  assert.equal(agentLaunch.canLaunch, false);
+  assert.match(agentLaunch.disabledReason, /requires confirmation/i);
 });
 
 test('preserves discovered attach action labels for agent folders', () => {
@@ -151,9 +152,23 @@ test('runs attach actions by default but lets folder-open suppress command execu
   assert.equal(shouldRunSessionLaunch(attachAgent, { openFolderOnly: true }), false);
 });
 
-test('does not auto-run plain running agents unless launch is explicit', () => {
+test('does not auto-run untrusted agent-folder commands even when launch is explicit', () => {
   assert.equal(shouldRunSessionLaunch(agent), false);
-  assert.equal(shouldRunSessionLaunch(agent, { launchFresh: true }), true);
+  assert.equal(shouldRunSessionLaunch(agent, { launchFresh: true }), false);
+  assert.equal(canRunResolvedLaunch(resolveSessionLaunch(agent, {})), false);
+});
+
+test('auto-runs explicitly trusted agent-folder launch metadata', () => {
+  const trustedAgent = {
+    ...agent,
+    launch: {
+      ...agent.launch,
+      canLaunch: true,
+    },
+  };
+
+  assert.equal(shouldRunSessionLaunch(trustedAgent, { launchFresh: true }), true);
+  assert.equal(canRunResolvedLaunch(resolveSessionLaunch(trustedAgent, {})), true);
 });
 
 test('never runs disabled launch metadata even when a command is present', () => {

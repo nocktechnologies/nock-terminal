@@ -45,7 +45,7 @@ test('agent session contracts separate transcript, attach, resume, and launch se
   assert.equal(gemini.transcriptDiscovery.state, 'future');
   assert.equal(localFolder.liveAttach.state, 'conditional');
   assert.equal(localFolder.resumeCommand.state, 'conditional');
-  assert.equal(localFolder.folderLaunch.state, 'supported');
+  assert.equal(localFolder.folderLaunch.state, 'conditional');
 });
 
 test('agent session contracts are defensive copies', () => {
