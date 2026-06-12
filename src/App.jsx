@@ -26,12 +26,9 @@ import {
   canRunResolvedLaunch,
   resolveSessionLaunch,
   sanitizeStagedTerminalInput,
-  shouldRunSessionLaunch,
 } from './utils/agentLaunchers.mjs';
-
-function createTabId(prefix = 'tab') {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
+import { createTabId } from './utils/tabOps.mjs';
+import useTabs from './hooks/useTabs.js';
 
 function projectNameFromPath(projectPath) {
   const normalized = String(projectPath || '').replace(/[\\/]+$/, '');
@@ -40,8 +37,23 @@ function projectNameFromPath(projectPath) {
 
 export default function App() {
   const [view, setView] = useState('dashboard'); // dashboard | terminal | settings
-  const [tabs, setTabs] = useState([]);
-  const [activeTabId, setActiveTabId] = useState(null);
+  const {
+    tabs,
+    setTabs,
+    activeTabId,
+    setActiveTabId,
+    activeTab,
+    openTab,
+    openTerminalTab,
+    launchAgentFresh,
+    openNewTab,
+    openTerminalWithClaude,
+    closeTab,
+    renameTab,
+    pinTab,
+    duplicateTab,
+    reorderTabs,
+  } = useTabs({ setView });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
@@ -264,50 +276,6 @@ export default function App() {
     }
   }, [profilesByPath]);
 
-  // Open a terminal tab for a session or agent folder
-  const openTerminalTab = useCallback((session, options = {}) => {
-    const launchFresh = options?.launchFresh === true;
-    const existingTab = !launchFresh
-      ? [...tabs].reverse().find(t => t.sessionId === session.id)
-      : null;
-    if (existingTab) {
-      setActiveTabId(existingTab.id);
-      setView('terminal');
-      return;
-    }
-
-    const tabId = createTabId();
-    const isAgent = session.kind === 'agent';
-    const launchCommand = shouldRunSessionLaunch(session, options) ? session.launch.command : undefined;
-    const initialInput = sanitizeStagedTerminalInput(options?.initialInput || '');
-    const cwd = isAgent ? (session.launch?.cwd || session.path) : session.path;
-    const newTab = {
-      id: tabId,
-      sessionId: session.id,
-      title: session.name,
-      branch: session.branch,
-      status: session.status,
-      cwd,
-      splitContent: null,
-      splitRatio: 0.5,
-      launchCommand,
-      initialInput,
-    };
-
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(tabId);
-    setView('terminal');
-    window.nockTerminal.sessionHistory.start(tabId, {
-      project: session.name,
-      shell: launchCommand || '',
-      cwd,
-    });
-  }, [tabs]);
-
-  const launchAgentFresh = useCallback((session) => {
-    openTerminalTab(session, { launchFresh: true });
-  }, [openTerminalTab]);
-
   const openSession = useCallback((session, options = {}) => {
     if (session?.launch?.mode === 'dispatch' && options.openDispatchFolder !== true) {
       openCommandPaletteForSession(session);
@@ -355,9 +323,8 @@ export default function App() {
           if (payload?.success === false) {
             throw new Error(payload.error || 'Dispatch payload validation failed');
           }
-          const tabId = createTabId();
-          const newTab = {
-            id: tabId,
+          openTab({
+            id: createTabId(),
             sessionId: session.id,
             title: `${session.name} Dispatch`,
             branch: session.branch,
@@ -368,12 +335,7 @@ export default function App() {
             launchCommand: payload.command,
             initialInput: '',
             agentId: launch.agentId,
-          };
-
-          setTabs(prev => [...prev, newTab]);
-          setActiveTabId(tabId);
-          setView('terminal');
-          window.nockTerminal.sessionHistory.start(tabId, {
+          }, {
             project: `${session.name} Dispatch`,
             shell: payload.command,
             cwd: launch.cwd || undefined,
@@ -429,9 +391,8 @@ export default function App() {
       return;
     }
 
-    const tabId = createTabId();
-    const newTab = {
-      id: tabId,
+    openTab({
+      id: createTabId(),
       sessionId: session.id,
       title: launch.title,
       branch: session.branch,
@@ -442,126 +403,12 @@ export default function App() {
       launchCommand: launch.command,
       initialInput,
       agentId: launch.agentId,
-    };
-
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(tabId);
-    setView('terminal');
-    window.nockTerminal.sessionHistory.start(tabId, {
+    }, {
       project: launch.title,
       shell: launch.command,
       cwd: launch.cwd || undefined,
     });
-  }, [getProfileForPath, openTerminalTab, recordDispatchRun]);
-
-  // Open a new blank terminal
-  const openNewTab = useCallback((cwd) => {
-    const tabId = createTabId();
-    const newTab = {
-      id: tabId,
-      sessionId: null,
-      title: 'Terminal',
-      branch: null,
-      status: 'active',
-      cwd: cwd || undefined,
-      splitContent: null,
-      splitRatio: 0.5,
-    };
-
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(tabId);
-    setView('terminal');
-    window.nockTerminal.sessionHistory.start(tabId, { project: 'Terminal', shell: '', cwd: cwd || undefined });
-  }, []);
-
-  // Open a new terminal tab with Claude Code launched
-  const openTerminalWithClaude = useCallback(async (cwd) => {
-    let launchCommand = 'claude';
-    if (cwd) {
-      try {
-        const profile = await window.nockTerminal.profiles.get(cwd);
-        if (profile?.claudeCommand?.trim()) {
-          launchCommand = profile.claudeCommand.trim();
-        }
-      } catch {
-        launchCommand = 'claude';
-      }
-    }
-
-    const tabId = createTabId();
-    const newTab = {
-      id: tabId,
-      sessionId: null,
-      title: 'Kit (Claude)',
-      branch: null,
-      status: 'active',
-      cwd: cwd || undefined,
-      splitContent: null,
-      splitRatio: 0.5,
-      launchCommand,
-    };
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(tabId);
-    setView('terminal');
-    window.nockTerminal.sessionHistory.start(tabId, { project: 'Kit (Claude)', shell: launchCommand, cwd: cwd || undefined });
-  }, []);
-
-  const closeTab = useCallback((tabId) => {
-    const tabToClose = tabs.find(t => t.id === tabId);
-    if (tabToClose?.pinned) return;
-    if (tabToClose?.splitContent?.type === 'editor') {
-      const message = buildUnsavedFilesMessage(tabToClose.splitContent.unsavedFiles);
-      if (message && !window.confirm(message)) return;
-    }
-
-    setTabs(prev => {
-      const tab = prev.find(t => t.id === tabId);
-      if (tab?.pinned) return prev; // Don't close pinned tabs
-      const filtered = prev.filter(t => t.id !== tabId);
-      if (activeTabId === tabId) {
-        if (filtered.length > 0) {
-          setActiveTabId(filtered[filtered.length - 1].id);
-        } else {
-          setActiveTabId(null);
-          setView('dashboard');
-        }
-      }
-      return filtered;
-    });
-    window.nockTerminal.terminal.destroy(tabId);
-  }, [activeTabId, tabs]);
-
-  const renameTab = useCallback((tabId, title) => {
-    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, title } : t));
-  }, []);
-
-  const pinTab = useCallback((tabId) => {
-    setTabs(prev => prev.map(t => t.id === tabId ? { ...t, pinned: !t.pinned } : t));
-  }, []);
-
-  const duplicateTab = useCallback((tab) => {
-    const tabId = createTabId();
-    const newTab = { ...tab, id: tabId, pinned: false, initialInput: '' };
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(tabId);
-    window.nockTerminal.sessionHistory.start(tabId, {
-      project: tab.title || 'Terminal',
-      shell: '',
-      cwd: tab.cwd || undefined,
-    });
-  }, []);
-
-  const reorderTabs = useCallback((dragId, targetId) => {
-    setTabs(prev => {
-      const arr = [...prev];
-      const dragIdx = arr.findIndex(t => t.id === dragId);
-      const targetIdx = arr.findIndex(t => t.id === targetId);
-      if (dragIdx === -1 || targetIdx === -1) return prev;
-      const [dragged] = arr.splice(dragIdx, 1);
-      arr.splice(targetIdx, 0, dragged);
-      return arr;
-    });
-  }, []);
+  }, [getProfileForPath, openTab, openTerminalTab, recordDispatchRun]);
 
   const openFileInEditor = useCallback((filePath) => {
     if (!activeTabId) return;
@@ -796,8 +643,6 @@ export default function App() {
   }, [processStatus, lastDataTimestamps]);
 
   const ctrlPFocusRef = useRef(null);
-
-  const activeTab = tabs.find(t => t.id === activeTabId);
 
   // File tree path: active tab's cwd, or fall back to first session's path
   const activeProjectPath = activeTab?.cwd || sessions[0]?.path || null;
