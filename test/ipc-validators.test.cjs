@@ -10,6 +10,7 @@ const {
   validateDispatchCreatePayload,
   validateFilesPayload,
   validateProfileSavePayload,
+  validateProjectLookupPath,
   validatePromptSavePayload,
   validateSettingsSetPayload,
   validateTerminalCreatePayload,
@@ -184,6 +185,23 @@ test('profile and file validators resolve paths before authorization checks', ()
     validateProfileSavePayload({ projectPath: sneakyPath, profile: {} }, { isAllowedPath }).ok,
     false
   );
+  assert.equal(validateProjectLookupPath(sneakyPath, { isAllowedPath }).ok, false);
+});
+
+test('project lookup path validator resolves valid paths and rejects bad input', () => {
+  const sandbox = makeSandbox();
+  const allowedRoot = path.join(sandbox, 'allowed');
+  fs.mkdirSync(allowedRoot, { recursive: true });
+  const isAllowedPath = (candidate) => candidate.startsWith(allowedRoot);
+
+  const accepted = validateProjectLookupPath(path.join(allowedRoot, 'repo'), { isAllowedPath });
+  assert.equal(accepted.ok, true);
+  assert.equal(accepted.value, path.resolve(allowedRoot, 'repo'));
+
+  assert.equal(validateProjectLookupPath('', { isAllowedPath }).ok, false);
+  assert.equal(validateProjectLookupPath(undefined, { isAllowedPath }).ok, false);
+  assert.equal(validateProjectLookupPath(42, { isAllowedPath }).ok, false);
+  assert.equal(validateProjectLookupPath(path.join(sandbox, 'outside'), { isAllowedPath }).ok, false);
 });
 
 test('prompts:save rejects malformed ids and non-string bodies', () => {

@@ -239,6 +239,16 @@ function validateProfileSavePayload(payload, context = {}) {
   return ok({ projectPath, profile });
 }
 
+function validateProjectLookupPath(projectPath, context = {}) {
+  const projectPathInput = normalizePathString(projectPath);
+  if (!projectPathInput) return invalid('projectPath must be a non-empty path string');
+  const resolved = path.resolve(projectPathInput);
+  if (typeof context.isAllowedPath === 'function' && !context.isAllowedPath(resolved)) {
+    return invalid('projectPath is outside allowed project roots');
+  }
+  return ok(resolved);
+}
+
 function validatePromptSavePayload(payload) {
   if (!isPlainObject(payload)) return invalid('prompts:save payload must be an object');
   const id = payload.id === undefined || payload.id === null || payload.id === ''
@@ -441,6 +451,7 @@ module.exports = {
   validateDispatchStatusUpdatesPayload,
   validateFilesPayload,
   validateProfileSavePayload,
+  validateProjectLookupPath,
   validatePromptSavePayload,
   validateSettingsSetPayload,
   validateTerminalCreatePayload,
