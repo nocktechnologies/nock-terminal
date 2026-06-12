@@ -182,10 +182,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // Current Electron 28 preload is CommonJS-based. Keep sandbox disabled
-      // until the preload bridge is migrated and smoke-tested under sandbox:true.
-      // node-pty remains isolated to the main process.
-      sandbox: false,
+      // The preload bridge only requires the sandbox-safe 'electron' module
+      // (contextBridge + ipcRenderer), so the renderer runs fully sandboxed.
+      // node-pty and all filesystem access stay in the main process.
+      sandbox: true,
     },
     show: false,
   };
