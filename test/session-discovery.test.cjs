@@ -20,6 +20,38 @@ function writeFile(filePath, value) {
   fs.writeFileSync(filePath, value);
 }
 
+test('logs missing Claude projects directory at debug level when discovery debug is enabled', async () => {
+  const root = makeTempDir();
+  const claudeDir = path.join(root, '.claude');
+  const messages = [];
+  const originalDebug = console.debug;
+  const originalEnv = process.env.NOCK_DEBUG_DISCOVERY;
+  console.debug = (...args) => messages.push(args.join(' '));
+  process.env.NOCK_DEBUG_DISCOVERY = '1';
+
+  try {
+    const discovery = new SessionDiscovery({
+      claudeDir,
+      devRoots: [],
+      fileBusRoot: path.join(root, '.claude-remote', 'default'),
+    });
+
+    assert.deepEqual(await discovery._discoverSessions(), []);
+    assert.ok(messages.some(message =>
+      message.includes('[session-discovery]')
+      && message.includes('Claude projects directory unavailable')
+      && message.includes(path.join(claudeDir, 'projects'))
+    ));
+  } finally {
+    console.debug = originalDebug;
+    if (originalEnv === undefined) {
+      delete process.env.NOCK_DEBUG_DISCOVERY;
+    } else {
+      process.env.NOCK_DEBUG_DISCOVERY = originalEnv;
+    }
+  }
+});
+
 test('discovers agent folders from existing config.json files', async () => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');

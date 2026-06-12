@@ -17,6 +17,12 @@ June 8 audit-hardening addendum:
 - Nock `7975` closed untrusted local agent-folder auto-exec in PR #62.
 - Nock `7976` tracks secret-storage hardening: Telegram/NockCC credentials move out of plaintext renderer settings and `settings:getSecure` becomes status-only/compatibility behavior.
 
+June 12 Wave 2 hardening addendum:
+
+- PR #65 closed the loader-injection environment deny-list and project lookup IPC validation work.
+- PR #72 closed discovery fallback debug logging and removed bare `catch {}` blocks from `electron/session-discovery.js`. It also carried the minimal esbuild `0.28.1` lockfile bump required by the live release gate audit.
+- PR #71 is open and green for dispatch validation helper dedupe. It is not merged in this ledger because the Wave 2 instruction explicitly pre-approved PR #72 only; merge #71 after explicit approval or owner review.
+
 ## Reconciled Nocks
 
 | Nock | Live state | Project lane | Repo status | Decision |

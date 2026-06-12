@@ -19,6 +19,22 @@ test('agent adapter registry includes Claude, Codex, and Gemini context groups',
   assert.ok(labels.includes('GEMINI.md'));
 });
 
+test('agent context groups merge duplicate labels across adapters', () => {
+  const groups = getAgentContextGroups();
+  const labels = groups.map(group => group.label);
+
+  assert.deepEqual(labels, [
+    'CLAUDE.md',
+    'AGENTS.md',
+    '.codex/config.toml',
+    'GEMINI.md',
+    '.nock/config.toml',
+  ]);
+
+  const agentsMd = groups.find(group => group.label === 'AGENTS.md');
+  assert.deepEqual(agentsMd.paths, ['AGENTS.md', '.codex/AGENTS.md', '.Codex/AGENTS.md']);
+});
+
 test('agent process matching detects supported agent process names', () => {
   const names = getAgentProcessNames();
   assert.ok(names.includes('claude'));

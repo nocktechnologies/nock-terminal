@@ -134,7 +134,8 @@ class SessionDiscovery {
     const sessions = [];
     try {
       await fsp.access(this.projectsDir);
-    } catch {
+    } catch (err) {
+      this._debugDiscovery('Claude projects directory unavailable', { path: this.projectsDir, error: err });
       return sessions;
     }
     try {
@@ -157,7 +158,8 @@ class SessionDiscovery {
     for (const root of this.devRoots) {
       try {
         await fsp.access(root);
-      } catch {
+      } catch (err) {
+        this._debugDiscovery('Dev root unavailable', { path: root, error: err });
         continue; // Root doesn't exist
       }
       try {
@@ -168,7 +170,12 @@ class SessionDiscovery {
           // Only include directories that are git repos
           try {
             await fsp.access(path.join(projectPath, '.git'));
-          } catch {
+          } catch (err) {
+            this._debugDiscovery('Skipping non-git dev project', {
+              path: projectPath,
+              marker: path.join(projectPath, '.git'),
+              error: err,
+            });
             return null;
           }
           const gitInfo = await this._getGitInfo(projectPath);
@@ -208,7 +215,8 @@ class SessionDiscovery {
     for (const root of this.devRoots) {
       try {
         await fsp.access(root);
-      } catch {
+      } catch (err) {
+        this._debugDiscovery('Agent dev root unavailable', { path: root, error: err });
         continue;
       }
       for (const configPath of await this._candidateAgentConfigPaths(root)) {
@@ -262,7 +270,8 @@ class SessionDiscovery {
     let entries = [];
     try {
       entries = await fsp.readdir(root, { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      this._debugDiscovery('Agent config candidate scan failed', { path: root, error: err });
       return [...configs];
     }
 
@@ -291,7 +300,8 @@ class SessionDiscovery {
     let entries = [];
     try {
       entries = await fsp.readdir(agentsRoot, { withFileTypes: true });
-    } catch {
+    } catch (err) {
+      this._debugDiscovery('Agent config root scan failed', { path: agentsRoot, error: err });
       return;
     }
 
@@ -396,7 +406,8 @@ class SessionDiscovery {
         },
         sessionContract,
       };
-    } catch {
+    } catch (err) {
+      this._debugDiscovery('Agent folder parse failed', { path: configPath, error: err });
       return null;
     }
   }
@@ -412,9 +423,21 @@ class SessionDiscovery {
   }
 
   _debugIgnoredAgentConfig(configPath, reason) {
-    if (process.env.NOCK_DEBUG_DISCOVERY === '1') {
-      console.debug(`[session-discovery] Ignored agent config (${reason}): ${configPath}`);
-    }
+    this._debugDiscovery('Ignored agent config', { path: configPath, reason });
+  }
+
+  _debugDiscovery(message, context = {}) {
+    if (process.env.NOCK_DEBUG_DISCOVERY !== '1') return;
+    const details = Object.entries(context)
+      .map(([key, value]) => {
+        if (value == null || value === '') return '';
+        if (value instanceof Error) return `${key}=${value.code || value.message}`;
+        if (key === 'error' && value?.message) return `${key}=${value.code || value.message}`;
+        return `${key}=${String(value)}`;
+      })
+      .filter(Boolean)
+      .join(' ');
+    console.debug(`[session-discovery] ${message}${details ? `: ${details}` : ''}`);
   }
 
   _safeString(value, maxLength = 500) {
@@ -601,7 +624,8 @@ class SessionDiscovery {
     try {
       await fsp.access(aliasPath);
       return aliasPath;
-    } catch {
+    } catch (err) {
+      this._debugDiscovery('Dispatch alias unavailable', { path: aliasPath, agentName, error: err });
       return '';
     }
   }
@@ -613,7 +637,8 @@ class SessionDiscovery {
       try {
         await fsp.access(scriptPath);
         return current;
-      } catch {
+      } catch (err) {
+        this._debugDiscovery('Dispatch root script unavailable', { path: scriptPath, scriptName, error: err });
         const parent = path.dirname(current);
         if (!parent || parent === current) return '';
         current = parent;
@@ -631,7 +656,8 @@ class SessionDiscovery {
         .map(token => token.replace(/^['"]|['"]$/g, ''))
         .map(token => this._safeAgentName(token))
         .filter(Boolean);
-    } catch {
+    } catch (err) {
+      this._debugDiscovery('Dispatch allowlist unreadable', { path: scriptPath, error: err });
       return [];
     }
   }
@@ -737,14 +763,17 @@ class SessionDiscovery {
           if (!entry.isFile() || entry.name.startsWith('.')) continue;
           count += 1;
           try {
-            const stat = await fsp.stat(path.join(dir, entry.name));
+            const itemPath = path.join(dir, entry.name);
+            const stat = await fsp.stat(itemPath);
             lastActivity = Math.max(lastActivity, stat.mtimeMs);
-          } catch {
+          } catch (err) {
             // File may have been processed between readdir and stat.
+            this._debugDiscovery('File bus item stat failed', { path: path.join(dir, entry.name), error: err });
           }
         }
-      } catch {
+      } catch (err) {
         // Missing bus directories are normal for agents that have never run.
+        this._debugDiscovery('File bus directory unavailable', { path: dir, kind, alias, error: err });
       }
     }
     return { count, lastActivity };
@@ -769,8 +798,9 @@ class SessionDiscovery {
             fsp.stat(filePath),
           ]);
           latest = Math.max(latest, this._timestampFromText(content) || stat.mtimeMs);
-        } catch {
+        } catch (err) {
           // Not every agent has every heartbeat file.
+          this._debugDiscovery('Heartbeat file unavailable', { path: filePath, alias, error: err });
         }
       }
     }
@@ -787,8 +817,13 @@ class SessionDiscovery {
           agentState: this._safeString(parsed.agent, 80).toLowerCase(),
           lastChecked: this._timestampFromText(parsed.checked),
         };
-      } catch {
+      } catch (err) {
         // Try the next alias.
+        this._debugDiscovery('Agent stats unreadable', {
+          path: path.join(this.fileBusRoot, 'state', `${alias}.stats.json`),
+          alias,
+          error: err,
+        });
       }
     }
     return { agentState: '', lastChecked: null };
@@ -804,8 +839,13 @@ class SessionDiscovery {
             .map(value => Number(value))
             .filter(value => Number.isInteger(value) && value > 0);
           if (pids.some(pid => this._pidIsAlive(pid))) return true;
-        } catch {
+        } catch (err) {
           // Missing pid files are normal.
+          this._debugDiscovery('Agent pid file unavailable', {
+            path: path.join(this.fileBusRoot, 'state', `${alias}.${suffix}`),
+            alias,
+            error: err,
+          });
         }
       }
     }
@@ -867,7 +907,11 @@ class SessionDiscovery {
               jsonlFiles.push({ file, mtime: stat.mtimeMs });
             }
             return stat;
-          } catch {
+          } catch (err) {
+            this._debugDiscovery('Claude transcript file stat failed', {
+              path: path.join(projectPath, file),
+              error: err,
+            });
             return null;
           }
         })
@@ -916,7 +960,8 @@ class SessionDiscovery {
         dirty: gitInfo.dirty,
         sessionContract,
       };
-    } catch {
+    } catch (err) {
+      this._debugDiscovery('Claude project parse failed', { path: projectPath, dirName, error: err });
       return null;
     }
   }
@@ -944,15 +989,20 @@ class SessionDiscovery {
             // Unescape JSON string (handles \\ → \)
             try {
               return JSON.parse(`"${match[1]}"`);
-            } catch {
+            } catch (err) {
+              this._debugDiscovery('Claude transcript cwd JSON parse failed', { path: full, error: err });
               return match[1].replace(/\\\\/g, '\\');
             }
           }
         } finally {
           await fd.close();
         }
-      } catch {
+      } catch (err) {
         // Skip unreadable transcripts, try next
+        this._debugDiscovery('Claude transcript unreadable', {
+          path: path.join(projectPath, file),
+          error: err,
+        });
       }
     }
     return null;
@@ -984,9 +1034,10 @@ class SessionDiscovery {
 
     const info = { branch: null, dirty: false };
 
+    const headFile = path.join(projectPath, '.git', 'HEAD');
+
     // Try to read branch from .git/HEAD (fast, no subprocess)
     try {
-      const headFile = path.join(projectPath, '.git', 'HEAD');
       const content = await fsp.readFile(headFile, 'utf-8');
       const trimmed = content.trim();
       if (trimmed.startsWith('ref: refs/heads/')) {
@@ -994,8 +1045,9 @@ class SessionDiscovery {
       } else {
         info.branch = trimmed.substring(0, 8);
       }
-    } catch {
+    } catch (err) {
       // Not a git repo or unreadable
+      this._debugDiscovery('Git HEAD unreadable', { path: headFile, projectPath, error: err });
       this.gitCache.set(projectPath, { ...info, cachedAt: Date.now() });
       return info;
     }
@@ -1008,7 +1060,8 @@ class SessionDiscovery {
         windowsHide: true,
       });
       info.dirty = stdout.trim().length > 0;
-    } catch {
+    } catch (err) {
+      this._debugDiscovery('Git dirty check failed', { path: projectPath, error: err });
       info.dirty = false;
     }
 
