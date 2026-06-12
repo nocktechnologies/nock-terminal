@@ -59,7 +59,7 @@ export default function Dashboard({
     setContextMenu(null);
   }, []);
 
-  const buildCardMenuItems = (session) => {
+  const buildCardMenuItems = useCallback((session) => {
     const items = [
       {
         label: session.kind === 'agent' ? 'Open Agent Folder' : 'Open Terminal',
@@ -149,7 +149,7 @@ export default function Dashboard({
     );
 
     return items;
-  };
+  }, [onSessionClick, onOpenCommandPalette, onLaunchAgentFresh, onLaunchSessionWithAgent]);
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -325,7 +325,7 @@ function SessionSearch({ value, onChange, resultCount, totalCount }) {
   );
 }
 
-function OperationsPanel({
+const OperationsPanel = React.memo(function OperationsPanel({
   sessions,
   tabs,
   processStatus,
@@ -338,17 +338,17 @@ function OperationsPanel({
     () => summarizeFleet({ sessions, tabs, processStatus, lastDataTimestamps }),
     [sessions, tabs, processStatus, lastDataTimestamps]
   );
-  const visibleAgents = sessions
+  const visibleAgents = useMemo(() => sessions
     .filter((session) => session.kind === 'agent' && ['running', 'idle', 'stale'].includes(session.agent?.lifecycle))
-    .slice(0, 4);
-  const dispatchAgents = sessions
+    .slice(0, 4), [sessions]);
+  const dispatchAgents = useMemo(() => sessions
     .filter((session) => session.kind === 'agent' && session.launch?.mode === 'dispatch')
     .sort((a, b) => {
       const launchableA = a.launch?.canLaunch === true ? 1 : 0;
       const launchableB = b.launch?.canLaunch === true ? 1 : 0;
       if (launchableA !== launchableB) return launchableB - launchableA;
       return String(a.name || '').localeCompare(String(b.name || ''));
-    });
+    }), [sessions]);
   const recentDispatchRuns = Array.isArray(dispatchRuns) ? dispatchRuns.slice(0, 4) : [];
 
   if (sessions.length === 0 && tabs.length === 0) return null;
@@ -415,7 +415,7 @@ function OperationsPanel({
       )}
     </div>
   );
-}
+});
 
 function dispatchStatusDotClass(status) {
   const tones = {
@@ -456,7 +456,7 @@ function OpsCell({ Icon, label, value, detail, tone }) {
   );
 }
 
-function SessionSection({ label, sessions, offset, onSessionClick, onContextMenu, profilesByPath }) {
+const SessionSection = React.memo(function SessionSection({ label, sessions, offset, onSessionClick, onContextMenu, profilesByPath }) {
   if (sessions.length === 0) return null;
   return (
     <div className="mb-7 last:mb-0">
@@ -486,7 +486,7 @@ function SessionSection({ label, sessions, offset, onSessionClick, onContextMenu
       </div>
     </div>
   );
-}
+});
 
 function StatCell({ label, value, accent, pulse }) {
   const colors = {
