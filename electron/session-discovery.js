@@ -7,11 +7,19 @@ const { getAgentSessionContract } = require('./agent-adapters');
 
 const execAsync = promisify(exec);
 const UNTRUSTED_AGENT_LAUNCH_REASON = 'Agent launch command requires confirmation before it can run.';
+const CODEX_ROLLOUT_HEAD_BYTES = 16 * 1024;
+const CODEX_ROLLOUT_RECENCY_DAYS = 45;
+const CODEX_ROLLOUT_SCAN_LIMIT = 500;
+const CODEX_ROLLOUT_MAX_DEPTH = 6;
 
 class SessionDiscovery {
   constructor(opts = {}) {
     this.claudeDir = opts.claudeDir || path.join(os.homedir(), '.claude');
     this.projectsDir = path.join(this.claudeDir, 'projects');
+    this.codexSessionsDir = opts.codexSessionsDir || path.join(os.homedir(), '.codex', 'sessions');
+    this.codexRolloutHeadBytes = this._positiveInteger(opts.codexRolloutHeadBytes, CODEX_ROLLOUT_HEAD_BYTES);
+    this.codexRolloutRecencyDays = this._positiveInteger(opts.codexRolloutRecencyDays, CODEX_ROLLOUT_RECENCY_DAYS);
+    this.codexRolloutScanLimit = this._positiveInteger(opts.codexRolloutScanLimit, CODEX_ROLLOUT_SCAN_LIMIT);
     this.fileBusRoot = opts.fileBusRoot || this._defaultFileBusRoot();
     // Dev root directories to scan for git projects (merged with sessions)
     this.defaultDevRoots = Array.isArray(opts.defaultDevRoots)
@@ -63,8 +71,11 @@ class SessionDiscovery {
   }
 
   async discover() {
-    // 1. Parse Claude Code sessions (authoritative cwd + activity timestamps)
-    const sessions = await this._discoverSessions();
+    // 1. Parse transcript sessions (authoritative cwd + activity timestamps)
+    const sessions = [
+      ...(await this._discoverSessions()),
+      ...(await this._discoverCodexSessions()),
+    ];
 
     // 2. Scan dev roots for git repos — adds projects without sessions
     const devProjects = await this._discoverDevProjects();
@@ -78,7 +89,11 @@ class SessionDiscovery {
     // Claude transcript rows into first-class agent rows.
     const byPath = new Map();
     for (const s of sessions) {
-      byPath.set(this._pathKey(s.path), s);
+      const key = this._pathKey(s.path);
+      const existing = byPath.get(key);
+      if (!existing || (s.lastActivity || 0) >= (existing.lastActivity || 0)) {
+        byPath.set(key, s);
+      }
     }
     for (const p of devProjects) {
       const key = this._pathKey(p.path);
@@ -151,6 +166,184 @@ class SessionDiscovery {
       console.error('Session discovery error:', err.message);
     }
     return sessions;
+  }
+
+  async _discoverCodexSessions() {
+    const rolloutFiles = await this._collectCodexRolloutFiles();
+    if (rolloutFiles.length === 0) return [];
+
+    const cutoff = Date.now() - this.codexRolloutRecencyDays * 24 * 60 * 60 * 1000;
+    const recentFiles = rolloutFiles
+      .filter(file => file.mtimeMs >= cutoff)
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+    const skippedByRecency = rolloutFiles.length - recentFiles.length;
+    if (skippedByRecency > 0) {
+      this._debugDiscovery('Skipped stale Codex rollouts', {
+        count: skippedByRecency,
+        recencyDays: this.codexRolloutRecencyDays,
+      });
+    }
+
+    const scanFiles = recentFiles.slice(0, this.codexRolloutScanLimit);
+    if (recentFiles.length > scanFiles.length) {
+      this._debugDiscovery('Capped Codex rollout scan', {
+        scanned: scanFiles.length,
+        available: recentFiles.length,
+      });
+    }
+
+    const results = await this._mapLimit(scanFiles, 8, file =>
+      this._parseCodexRollout(file)
+    );
+    return this._dedupeCodexSessions(results.filter(Boolean));
+  }
+
+  async _collectCodexRolloutFiles() {
+    try {
+      await fsp.access(this.codexSessionsDir);
+    } catch (err) {
+      this._debugDiscovery('Codex sessions directory unavailable', {
+        path: this.codexSessionsDir,
+        error: err,
+      });
+      return [];
+    }
+
+    const files = [];
+    const stack = [{ dir: this.codexSessionsDir, depth: 0 }];
+    while (stack.length > 0) {
+      const { dir, depth } = stack.pop();
+      let entries = [];
+      try {
+        entries = await fsp.readdir(dir, { withFileTypes: true });
+      } catch (err) {
+        this._debugDiscovery('Codex sessions directory scan failed', { path: dir, error: err });
+        continue;
+      }
+
+      for (const entry of entries) {
+        const entryPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (depth < CODEX_ROLLOUT_MAX_DEPTH && !entry.name.startsWith('.')) {
+            stack.push({ dir: entryPath, depth: depth + 1 });
+          }
+          continue;
+        }
+        if (!entry.isFile() || !/^rollout-.*\.jsonl$/i.test(entry.name)) continue;
+
+        try {
+          const stat = await fsp.stat(entryPath);
+          if (stat.isFile()) {
+            files.push({ path: entryPath, mtimeMs: stat.mtimeMs });
+          }
+        } catch (err) {
+          this._debugDiscovery('Codex rollout stat failed', { path: entryPath, error: err });
+        }
+      }
+    }
+    return files;
+  }
+
+  async _parseCodexRollout(rolloutFile) {
+    const filePath = rolloutFile.path;
+    try {
+      const text = await this._readFileHead(filePath, this.codexRolloutHeadBytes);
+      if (!text.trim()) {
+        this._debugDiscovery('Codex rollout cwd unavailable', { path: filePath, reason: 'empty' });
+        return null;
+      }
+
+      let sessionId = '';
+      let cliVersion = '';
+      let projectPath = '';
+      let cwdSource = '';
+      let eventTimestamp = 0;
+
+      for (const rawLine of text.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line) continue;
+
+        let event;
+        try {
+          event = JSON.parse(line);
+        } catch (err) {
+          this._debugDiscovery('Codex rollout JSON parse failed', { path: filePath, error: err });
+          continue;
+        }
+
+        if (!event || typeof event !== 'object' || Array.isArray(event)) continue;
+        const payload = event.payload && typeof event.payload === 'object' && !Array.isArray(event.payload)
+          ? event.payload
+          : {};
+        eventTimestamp = this._timestampFromEvent(event, payload) || eventTimestamp;
+
+        if (event.type === 'session_meta') {
+          sessionId = this._safeString(payload.id || sessionId, 200);
+          cliVersion = this._safeString(payload.cli_version || payload.cliVersion || cliVersion, 120);
+          const cwd = this._safeProjectPath(payload.cwd);
+          if (cwd) {
+            projectPath = cwd;
+            cwdSource = 'session_meta';
+          }
+        } else if (event.type === 'turn_context' && !projectPath) {
+          const cwd = this._safeProjectPath(payload.cwd);
+          if (cwd) {
+            projectPath = cwd;
+            cwdSource = 'turn_context';
+          }
+        }
+
+        if (projectPath && sessionId) break;
+      }
+
+      if (!projectPath) {
+        this._debugDiscovery('Codex rollout cwd unavailable', { path: filePath, reason: 'missing-cwd' });
+        return null;
+      }
+
+      const sessionContract = getAgentSessionContract('codex');
+      sessionContract.adapterId = 'codex';
+      sessionContract.transcriptDiscovery = {
+        ...(sessionContract.transcriptDiscovery || {}),
+        filePath,
+        sessionId,
+        cliVersion,
+        cwdSource,
+      };
+
+      const gitInfo = this._canInspectLocalPath(projectPath)
+        ? await this._getGitInfo(projectPath)
+        : { branch: null, dirty: false };
+      const lastActivity = eventTimestamp || rolloutFile.mtimeMs || 0;
+
+      return {
+        id: `codex:${sessionId || path.basename(filePath, '.jsonl')}`,
+        name: this._projectNameFromPath(projectPath),
+        path: projectPath,
+        branch: gitInfo.branch,
+        status: this._statusFromActivity(lastActivity),
+        lastActivity,
+        lastActivityFormatted: this._formatTime(lastActivity),
+        dirty: gitInfo.dirty,
+        sessionContract,
+      };
+    } catch (err) {
+      this._debugDiscovery('Codex rollout parse failed', { path: filePath, error: err });
+      return null;
+    }
+  }
+
+  _dedupeCodexSessions(sessions) {
+    const byPath = new Map();
+    for (const session of sessions) {
+      const key = this._pathKey(session.path);
+      const existing = byPath.get(key);
+      if (!existing || (session.lastActivity || 0) >= (existing.lastActivity || 0)) {
+        byPath.set(key, session);
+      }
+    }
+    return [...byPath.values()];
   }
 
   async _discoverDevProjects() {
@@ -443,6 +636,61 @@ class SessionDiscovery {
   _safeString(value, maxLength = 500) {
     if (typeof value !== 'string') return '';
     return value.trim().slice(0, maxLength);
+  }
+
+  _positiveInteger(value, fallback) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+  }
+
+  async _readFileHead(filePath, byteLimit) {
+    const fd = await fsp.open(filePath, 'r');
+    try {
+      const buf = Buffer.alloc(byteLimit);
+      const { bytesRead } = await fd.read(buf, 0, buf.length, 0);
+      return buf.slice(0, bytesRead).toString('utf-8');
+    } finally {
+      await fd.close();
+    }
+  }
+
+  _timestampFromEvent(event, payload = {}) {
+    return this._timestampFromText(payload.timestamp)
+      || this._timestampFromText(event.timestamp)
+      || this._timestampFromText(event.created_at)
+      || null;
+  }
+
+  _safeProjectPath(value) {
+    const text = this._safeString(value, 2000);
+    if (!text) return '';
+    if (path.isAbsolute(text) || this._isWindowsAbsolutePath(text)) return text;
+    return '';
+  }
+
+  _isWindowsAbsolutePath(value) {
+    return /^[A-Za-z]:[\\/]/.test(String(value || '')) || /^\\\\[^\\]+\\[^\\]+/.test(String(value || ''));
+  }
+
+  _canInspectLocalPath(value) {
+    const text = this._safeProjectPath(value);
+    if (!text) return false;
+    if (process.platform === 'win32') return true;
+    return path.isAbsolute(text) && !this._isWindowsAbsolutePath(text);
+  }
+
+  _projectNameFromPath(value) {
+    const trimmed = String(value || '').replace(/[\\/]+$/, '');
+    const parts = trimmed.split(/[\\/]+/).filter(Boolean);
+    return parts[parts.length - 1] || trimmed || 'Project';
+  }
+
+  _statusFromActivity(lastActivity) {
+    if (!lastActivity) return 'inactive';
+    const minutesAgo = (Date.now() - lastActivity) / 60000;
+    if (minutesAgo < 5) return 'active';
+    if (minutesAgo < 60) return 'recent';
+    return 'inactive';
   }
 
   _formatAgentName(agentName) {
