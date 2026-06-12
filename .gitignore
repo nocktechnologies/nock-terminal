@@ -5,3 +5,6 @@ dist-react/
 *.log
 .env
 .env.local
+
+# memsearch plugin session memory (machine-local)
+.memsearch/
