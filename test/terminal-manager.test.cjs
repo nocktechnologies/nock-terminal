@@ -89,6 +89,33 @@ test('create injects only valid project environment variables', () => {
   assert.equal(calls[0].options.env.TERM, 'xterm-256color');
 });
 
+test('create drops loader-injection and shell-hook environment variables', () => {
+  const { manager, calls } = createManagerWithFakePty();
+
+  const result = manager.create('tab-1', '/tmp', {
+    shell: '/bin/bash',
+    envVars: [
+      'LD_PRELOAD=/tmp/evil.so',
+      'DYLD_INSERT_LIBRARIES=/tmp/evil.dylib',
+      'NODE_OPTIONS=--require /tmp/evil.js',
+      'node_options=--require /tmp/evil.js',
+      'BASH_ENV=/tmp/evil.sh',
+      'PROMPT_COMMAND=touch /tmp/pwned',
+      'SAFE_VAR=ok',
+    ].join('\n'),
+  });
+
+  assert.equal(result.success, true);
+  const env = calls[0].options.env;
+  assert.equal(env.SAFE_VAR, 'ok');
+  assert.notEqual(env.LD_PRELOAD, '/tmp/evil.so');
+  assert.notEqual(env.DYLD_INSERT_LIBRARIES, '/tmp/evil.dylib');
+  assert.notEqual(env.NODE_OPTIONS, '--require /tmp/evil.js');
+  assert.notEqual(env.node_options, '--require /tmp/evil.js');
+  assert.notEqual(env.BASH_ENV, '/tmp/evil.sh');
+  assert.notEqual(env.PROMPT_COMMAND, 'touch /tmp/pwned');
+});
+
 test('listTerminals exposes terminal metadata and activity timestamps', () => {
   let now = 10_000;
   const { manager, processes } = createManagerWithFakePty({ now: () => now });

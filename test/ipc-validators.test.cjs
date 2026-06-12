@@ -6,10 +6,14 @@ const path = require('path');
 
 const {
   errorPayload,
+  safeAgentName,
+  safeRuntime,
+  sanitizeDispatchText,
   validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
   validateFilesPayload,
   validateProfileSavePayload,
+  validateProjectLookupPath,
   validatePromptSavePayload,
   validateSettingsSetPayload,
   validateTerminalCreatePayload,
@@ -184,6 +188,23 @@ test('profile and file validators resolve paths before authorization checks', ()
     validateProfileSavePayload({ projectPath: sneakyPath, profile: {} }, { isAllowedPath }).ok,
     false
   );
+  assert.equal(validateProjectLookupPath(sneakyPath, { isAllowedPath }).ok, false);
+});
+
+test('project lookup path validator resolves valid paths and rejects bad input', () => {
+  const sandbox = makeSandbox();
+  const allowedRoot = path.join(sandbox, 'allowed');
+  fs.mkdirSync(allowedRoot, { recursive: true });
+  const isAllowedPath = (candidate) => candidate.startsWith(allowedRoot);
+
+  const accepted = validateProjectLookupPath(path.join(allowedRoot, 'repo'), { isAllowedPath });
+  assert.equal(accepted.ok, true);
+  assert.equal(accepted.value, path.resolve(allowedRoot, 'repo'));
+
+  assert.equal(validateProjectLookupPath('', { isAllowedPath }).ok, false);
+  assert.equal(validateProjectLookupPath(undefined, { isAllowedPath }).ok, false);
+  assert.equal(validateProjectLookupPath(42, { isAllowedPath }).ok, false);
+  assert.equal(validateProjectLookupPath(path.join(sandbox, 'outside'), { isAllowedPath }).ok, false);
 });
 
 test('prompts:save rejects malformed ids and non-string bodies', () => {
@@ -210,6 +231,15 @@ test('dispatch:createPayload rejects malformed payloads before temp files are cr
   assert.equal(result.ok, true);
   assert.equal(result.value.agentName, 'ash');
   assert.equal(result.value.agentBound, true);
+});
+
+test('exports shared dispatch validation helpers', () => {
+  assert.equal(safeAgentName(' Ash '), 'ash');
+  assert.equal(safeAgentName('../ash'), '');
+  assert.equal(safeRuntime(' CODEX '), 'codex');
+  assert.equal(safeRuntime('node'), '');
+  assert.equal(sanitizeDispatchText(' one\u0000\n\ttwo '), 'one\n\ttwo');
+  assert.equal(sanitizeDispatchText(123), '');
 });
 
 test('dispatch:brokered rejects malformed payloads with the shared IPC error shape', () => {
