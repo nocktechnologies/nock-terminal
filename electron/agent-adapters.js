@@ -190,11 +190,26 @@ function getAgentAdapters() {
   }));
 }
 
+// Merged by label so adapters that share a context file (e.g. Codex and
+// DeepSeek both read AGENTS.md) produce one display row with the union of
+// their lookup paths, in first-seen order.
 function getAgentContextGroups() {
-  return [
+  const merged = new Map();
+  const allGroups = [
     ...AGENT_ADAPTERS.flatMap(adapter => adapter.contextGroups),
     ...SHARED_CONTEXT_GROUPS,
-  ].map(group => ({ ...group, paths: [...group.paths] }));
+  ];
+  for (const group of allGroups) {
+    const existing = merged.get(group.label);
+    if (existing) {
+      for (const candidate of group.paths) {
+        if (!existing.paths.includes(candidate)) existing.paths.push(candidate);
+      }
+    } else {
+      merged.set(group.label, { label: group.label, paths: [...group.paths] });
+    }
+  }
+  return [...merged.values()];
 }
 
 function getAgentProcessNames() {

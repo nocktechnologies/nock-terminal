@@ -6,7 +6,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 
-const { getAgentAdapters } = require('./agent-adapters');
+const { getAgentAdapters, getAgentContextGroups } = require('./agent-adapters');
 const { normalizeSettingValue } = require('./settings-utils');
 const { listAvailableShells } = require('./system-shells');
 
@@ -85,6 +85,7 @@ function registerSystemWindowIPC({
   detectShells = listAvailableShells,
   fetchOllamaVersion = defaultFetchOllamaVersion,
   agentAdapters = getAgentAdapters,
+  agentContextGroups = getAgentContextGroups,
   findCommand = defaultFindCommand,
   logger = console,
 }) {
@@ -142,6 +143,8 @@ function registerSystemWindowIPC({
     }));
     return agents.map(agent => ({ ...agent, installed: !!agent.path }));
   });
+
+  ipcMain.handle('system:agentContextGroups', () => agentContextGroups());
 
   ipcMain.on('shell:openExternal', (_, url) => {
     if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
