@@ -20,6 +20,13 @@ function writeFile(filePath, value) {
   fs.writeFileSync(filePath, value);
 }
 
+function writeRollout(filePath, lines, { mtime } = {}) {
+  writeFile(filePath, `${lines.map(line => JSON.stringify(line)).join('\n')}\n`);
+  if (mtime) {
+    fs.utimesSync(filePath, mtime, mtime);
+  }
+}
+
 test('logs missing Claude projects directory at debug level when discovery debug is enabled', async () => {
   const root = makeTempDir();
   const claudeDir = path.join(root, '.claude');
@@ -161,6 +168,192 @@ test('adds Claude session contract metadata to transcript-only project rows', as
   assert.equal(project.sessionContract.transcriptDiscovery.state, 'supported');
   assert.equal(project.sessionContract.transcriptDiscovery.projectPath, claudeProjectPath);
   assert.equal(project.sessionContract.liveAttach.state, 'unsupported');
+});
+
+test('discovers Codex rollout sessions from session_meta cwd', async () => {
+  const root = makeTempDir();
+  const codexSessionsDir = path.join(root, '.codex', 'sessions');
+  const projectPath = path.join(root, 'Dev', 'nock-terminal');
+  const rolloutPath = path.join(codexSessionsDir, '2026', '06', '12', 'rollout-2026-06-12T10-00-00.jsonl');
+
+  writeRollout(rolloutPath, [
+    {
+      type: 'session_meta',
+      timestamp: '2026-06-12T10:00:00.000Z',
+      payload: {
+        id: 'codex-session-1',
+        cwd: projectPath,
+        cli_version: '1.2.3',
+      },
+    },
+  ]);
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir,
+    devRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const project = sessions.find(session => session.path === projectPath);
+
+  assert.ok(project);
+  assert.equal(project.id, 'codex:codex-session-1');
+  assert.equal(project.name, 'nock-terminal');
+  assert.equal(project.sessionContract.adapterId, 'codex');
+  assert.equal(project.sessionContract.transcriptDiscovery.state, 'supported');
+  assert.equal(project.sessionContract.transcriptDiscovery.source, 'codex-rollout-jsonl');
+  assert.equal(project.sessionContract.transcriptDiscovery.filePath, rolloutPath);
+  assert.equal(project.sessionContract.transcriptDiscovery.sessionId, 'codex-session-1');
+  assert.equal(project.sessionContract.transcriptDiscovery.cliVersion, '1.2.3');
+  assert.equal(project.sessionContract.liveAttach.state, 'future');
+  assert.equal(project.sessionContract.resumeCommand.state, 'future');
+});
+
+test('falls back to Codex turn_context cwd when session_meta lacks cwd', async () => {
+  const root = makeTempDir();
+  const codexSessionsDir = path.join(root, '.codex', 'sessions');
+  const projectPath = path.join(root, 'Dev', 'fallback-project');
+  const rolloutPath = path.join(codexSessionsDir, '2026', '06', '12', 'rollout-fallback.jsonl');
+
+  writeRollout(rolloutPath, [
+    {
+      type: 'session_meta',
+      timestamp: '2026-06-12T10:00:00.000Z',
+      payload: { id: 'codex-session-2' },
+    },
+    {
+      type: 'turn_context',
+      timestamp: '2026-06-12T10:01:00.000Z',
+      payload: { cwd: projectPath },
+    },
+  ]);
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir,
+    devRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const project = sessions.find(session => session.path === projectPath);
+
+  assert.ok(project);
+  assert.equal(project.id, 'codex:codex-session-2');
+  assert.equal(project.name, 'fallback-project');
+  assert.equal(project.sessionContract.transcriptDiscovery.cwdSource, 'turn_context');
+});
+
+test('skips malformed or empty Codex rollouts with debug logging', async () => {
+  const root = makeTempDir();
+  const codexSessionsDir = path.join(root, '.codex', 'sessions');
+  const projectPath = path.join(root, 'Dev', 'valid-project');
+  const messages = [];
+  const originalDebug = console.debug;
+  const originalEnv = process.env.NOCK_DEBUG_DISCOVERY;
+  console.debug = (...args) => messages.push(args.join(' '));
+  process.env.NOCK_DEBUG_DISCOVERY = '1';
+
+  try {
+    writeFile(path.join(codexSessionsDir, '2026', '06', '12', 'rollout-bad.jsonl'), '{bad json\n');
+    writeFile(path.join(codexSessionsDir, '2026', '06', '12', 'rollout-empty.jsonl'), '');
+    writeRollout(path.join(codexSessionsDir, '2026', '06', '12', 'rollout-valid.jsonl'), [
+      {
+        type: 'session_meta',
+        timestamp: '2026-06-12T10:00:00.000Z',
+        payload: { id: 'codex-session-valid', cwd: projectPath },
+      },
+    ]);
+
+    const discovery = new SessionDiscovery({
+      claudeDir: path.join(root, '.claude'),
+      codexSessionsDir,
+      devRoots: [],
+      fileBusRoot: path.join(root, '.claude-remote', 'default'),
+    });
+
+    const sessions = await discovery.discover();
+
+    assert.ok(sessions.some(session => session.path === projectPath));
+    assert.ok(messages.some(message => message.includes('Codex rollout JSON parse failed')));
+    assert.ok(messages.some(message => message.includes('Codex rollout cwd unavailable')));
+  } finally {
+    console.debug = originalDebug;
+    if (originalEnv === undefined) {
+      delete process.env.NOCK_DEBUG_DISCOVERY;
+    } else {
+      process.env.NOCK_DEBUG_DISCOVERY = originalEnv;
+    }
+  }
+});
+
+test('applies Codex rollout recency and bounded read caps', async () => {
+  const root = makeTempDir();
+  const codexSessionsDir = path.join(root, '.codex', 'sessions');
+  const oldProjectPath = path.join(root, 'Dev', 'old-project');
+  const hiddenProjectPath = path.join(root, 'Dev', 'hidden-project');
+  const oldDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+
+  writeRollout(
+    path.join(codexSessionsDir, '2026', '05', '01', 'rollout-old.jsonl'),
+    [
+      {
+        type: 'session_meta',
+        timestamp: oldDate.toISOString(),
+        payload: { id: 'old-session', cwd: oldProjectPath },
+      },
+    ],
+    { mtime: oldDate }
+  );
+  writeFile(
+    path.join(codexSessionsDir, '2026', '06', '12', 'rollout-after-cap.jsonl'),
+    `${JSON.stringify({ type: 'session_meta', payload: { id: 'after-cap-session' } })}\n`
+    + `${' '.repeat(256)}${JSON.stringify({ type: 'turn_context', payload: { cwd: hiddenProjectPath } })}\n`
+  );
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir,
+    codexRolloutHeadBytes: 96,
+    codexRolloutRecencyDays: 1,
+    devRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+
+  assert.equal(sessions.some(session => session.path === oldProjectPath), false);
+  assert.equal(sessions.some(session => session.path === hiddenProjectPath), false);
+});
+
+test('derives Codex project names from Windows cwd strings without changing the path', async () => {
+  const root = makeTempDir();
+  const codexSessionsDir = path.join(root, '.codex', 'sessions');
+  const windowsProjectPath = 'C:\\Users\\Kevin\\Dev\\nock-terminal';
+
+  writeRollout(path.join(codexSessionsDir, '2026', '06', '12', 'rollout-windows.jsonl'), [
+    {
+      type: 'session_meta',
+      timestamp: '2026-06-12T10:00:00.000Z',
+      payload: { id: 'windows-session', cwd: windowsProjectPath },
+    },
+  ]);
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir,
+    devRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const project = sessions.find(session => session.id === 'codex:windows-session');
+
+  assert.ok(project);
+  assert.equal(project.path, windowsProjectPath);
+  assert.equal(project.name, 'nock-terminal');
 });
 
 test('uses CRM tmux attach fallback for enabled persistent agents without shell aliases', async () => {

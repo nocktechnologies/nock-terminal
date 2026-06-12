@@ -179,5 +179,5 @@ It should not change dispatch-agent discovery, direct payload creation, or dispa
 ## Current Limits
 
 - Completion tracking is request-level, not full session replay. Brokered runs can advance from `sent` when NockCC live AgentMessages report a correlated status, but the app does not yet render the full AgentMessage thread or dispatched agent transcript.
-- Codex transcript discovery, Codex session resume, and attach semantics remain future adapter work.
+- Codex rollout transcript discovery is supported for recent local CLI sessions; Codex session resume, attach semantics, full transcript replay, and dispatch completion-thread rendering remain future adapter work.
 - DeepSeek support is API-backed through the CRM dispatcher; there is no standalone DeepSeek CLI profile launcher.

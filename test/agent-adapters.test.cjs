@@ -56,7 +56,9 @@ test('agent session contracts separate transcript, attach, resume, and launch se
 
   assert.equal(claude.transcriptDiscovery.state, 'supported');
   assert.equal(claude.liveAttach.state, 'unsupported');
-  assert.equal(codex.transcriptDiscovery.state, 'future');
+  assert.equal(codex.transcriptDiscovery.state, 'supported');
+  assert.equal(codex.transcriptDiscovery.source, 'codex-rollout-jsonl');
+  assert.deepEqual(codex.transcriptDiscovery.paths, ['~/.codex/sessions/**/rollout-*.jsonl']);
   assert.equal(codex.resumeCommand.state, 'future');
   assert.equal(gemini.transcriptDiscovery.state, 'future');
   assert.equal(localFolder.liveAttach.state, 'conditional');
