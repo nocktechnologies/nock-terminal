@@ -84,15 +84,6 @@ function normalizeInteger(value, { min, max } = {}) {
   return ok(normalized);
 }
 
-function normalizeNumber(value, { min, max, decimals } = {}) {
-  if (!Number.isFinite(value)) return invalid();
-  const factor = Number.isInteger(decimals) ? 10 ** decimals : 1;
-  const normalized = factor > 1 ? Math.round(value * factor) / factor : value;
-  if ((min != null && normalized < min) || (max != null && normalized > max)) {
-    return invalid();
-  }
-  return ok(normalized);
-}
 
 function normalizeUrl(value) {
   const normalized = normalizeString(value, { maxLength: 1000 });

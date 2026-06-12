@@ -2,11 +2,6 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Pin } from 'lucide-react';
 import ContextMenu from './ContextMenu';
 
-const STATUS_COLORS = {
-  active:   'bg-nock-green',
-  recent:   'bg-nock-yellow',
-  inactive: 'bg-nock-text-muted',
-};
 
 export default function TabBar({
   tabs,

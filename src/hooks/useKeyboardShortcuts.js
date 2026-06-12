@@ -117,5 +117,7 @@ export default function useKeyboardShortcuts({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // Setters and refs are stable; listing them would only churn the listener.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabs, activeTabId, openNewTab, closeTab, closeSplit, toggleTerminalSplit, view]);
 }

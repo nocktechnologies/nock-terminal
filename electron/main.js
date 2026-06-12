@@ -231,7 +231,7 @@ function createWindow() {
   });
   setTimeout(showInitialWindow, 2500);
 
-  mainWindow.on('close', (e) => {
+  mainWindow.on('close', () => {
     // Save window bounds before closing
     const bounds = mainWindow.getBounds();
     store.set('windowBounds', bounds);

@@ -25,7 +25,7 @@ class PromptStore {
   }
 
   _safePath(id) {
-    const safe = String(id).replace(/[\/\\\.]+/g, '').slice(0, 50);
+    const safe = String(id).replace(/[/\\.]+/g, '').slice(0, 50);
     if (!safe) throw new Error('Invalid prompt ID');
     const resolved = path.join(this.dir, `${safe}.md`);
     if (!resolved.startsWith(this.dir)) throw new Error('Path traversal blocked');

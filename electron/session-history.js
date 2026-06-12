@@ -69,8 +69,8 @@ class SessionHistory {
   }
 
   _safeFilename(startTime, tabId) {
-    const safeTime = String(startTime).replace(/[\/\\:*?"<>|]/g, '-');
-    const safeTab = String(tabId).replace(/[\/\\:*?"<>|]/g, '-');
+    const safeTime = String(startTime).replace(/[/\\:*?"<>|]/g, '-');
+    const safeTab = String(tabId).replace(/[/\\:*?"<>|]/g, '-');
     return `${safeTime}-${safeTab}`;
   }
 
