@@ -21,7 +21,6 @@ import {
   readDispatchRunsFromStorage,
   writeDispatchRunsToStorage,
 } from './utils/dispatchRuns.mjs';
-import { buildUnsavedFilesMessage, normalizeUnsavedFiles } from './utils/unsavedFiles.mjs';
 import {
   canRunResolvedLaunch,
   resolveSessionLaunch,
@@ -29,6 +28,7 @@ import {
 } from './utils/agentLaunchers.mjs';
 import { createTabId } from './utils/tabOps.mjs';
 import useTabs from './hooks/useTabs.js';
+import useTabSplits from './hooks/useTabSplits.js';
 
 function projectNameFromPath(projectPath) {
   const normalized = String(projectPath || '').replace(/[\\/]+$/, '');
@@ -54,6 +54,15 @@ export default function App() {
     duplicateTab,
     reorderTabs,
   } = useTabs({ setView });
+  const {
+    openFileInEditor,
+    toggleTerminalSplit,
+    closeSplit,
+    closeEditorFile,
+    updateEditorUnsavedFiles,
+    setActiveEditorFile,
+    updateSplitRatio,
+  } = useTabSplits({ tabs, setTabs, activeTabId });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [sessions, setSessions] = useState([]);
@@ -409,120 +418,6 @@ export default function App() {
       cwd: launch.cwd || undefined,
     });
   }, [getProfileForPath, openTab, openTerminalTab, recordDispatchRun]);
-
-  const openFileInEditor = useCallback((filePath) => {
-    if (!activeTabId) return;
-    setTabs(prev => prev.map(tab => {
-      if (tab.id !== activeTabId) return tab;
-      const existingFiles = tab.splitContent?.type === 'editor' ? tab.splitContent.files : [];
-      if (existingFiles.includes(filePath)) {
-        return {
-          ...tab,
-          splitContent: { ...tab.splitContent, type: 'editor', files: existingFiles, activeFile: filePath },
-        };
-      }
-      return {
-        ...tab,
-        splitContent: {
-          ...(tab.splitContent?.type === 'editor' ? tab.splitContent : {}),
-          type: 'editor',
-          files: [...existingFiles, filePath],
-          activeFile: filePath,
-        },
-      };
-    }));
-  }, [activeTabId]);
-
-  const toggleTerminalSplit = useCallback(() => {
-    if (!activeTabId) return;
-    const active = tabs.find(t => t.id === activeTabId);
-    if (active?.splitContent?.type === 'editor') {
-      const message = buildUnsavedFilesMessage(active.splitContent.unsavedFiles);
-      if (message && !window.confirm(message)) return;
-    }
-
-    setTabs(prev => prev.map(tab => {
-      if (tab.id !== activeTabId) return tab;
-      if (tab.splitContent?.type === 'terminal') {
-        window.nockTerminal.terminal.destroy(tab.splitContent.id);
-        return { ...tab, splitContent: null };
-      }
-      const splitId = createTabId(`${tab.id}-split`);
-      return {
-        ...tab,
-        splitContent: { type: 'terminal', id: splitId },
-      };
-    }));
-  }, [activeTabId, tabs]);
-
-  const closeSplit = useCallback(() => {
-    if (!activeTabId) return;
-    const active = tabs.find(t => t.id === activeTabId);
-    if (active?.splitContent?.type === 'editor') {
-      const message = buildUnsavedFilesMessage(active.splitContent.unsavedFiles);
-      if (message && !window.confirm(message)) return;
-    }
-
-    setTabs(prev => prev.map(tab => {
-      if (tab.id !== activeTabId) return tab;
-      if (tab.splitContent?.type === 'terminal') {
-        window.nockTerminal.terminal.destroy(tab.splitContent.id);
-      }
-      return { ...tab, splitContent: null };
-    }));
-  }, [activeTabId, tabs]);
-
-  const closeEditorFile = useCallback((filePath) => {
-    if (!activeTabId) return;
-    const active = tabs.find(t => t.id === activeTabId);
-    const unsavedFiles = normalizeUnsavedFiles(active?.splitContent?.unsavedFiles);
-    if (unsavedFiles.includes(filePath)) {
-      const message = buildUnsavedFilesMessage([filePath]);
-      if (message && !window.confirm(message)) return;
-    }
-
-    setTabs(prev => prev.map(tab => {
-      if (tab.id !== activeTabId || tab.splitContent?.type !== 'editor') return tab;
-      const remaining = tab.splitContent.files.filter(f => f !== filePath);
-      if (remaining.length === 0) {
-        return { ...tab, splitContent: null };
-      }
-      const activeFile = tab.splitContent.activeFile === filePath ? remaining[remaining.length - 1] : tab.splitContent.activeFile;
-      const remainingUnsaved = normalizeUnsavedFiles(tab.splitContent.unsavedFiles)
-        .filter(f => f !== filePath);
-      return {
-        ...tab,
-        splitContent: { ...tab.splitContent, files: remaining, activeFile, unsavedFiles: remainingUnsaved },
-      };
-    }));
-  }, [activeTabId, tabs]);
-
-  const updateEditorUnsavedFiles = useCallback((tabId, unsavedFiles) => {
-    const normalized = normalizeUnsavedFiles(unsavedFiles);
-    setTabs(prev => prev.map(tab => {
-      if (tab.id !== tabId || tab.splitContent?.type !== 'editor') return tab;
-      return {
-        ...tab,
-        splitContent: { ...tab.splitContent, unsavedFiles: normalized },
-      };
-    }));
-  }, []);
-
-  const setActiveEditorFile = useCallback((filePath) => {
-    if (!activeTabId) return;
-    setTabs(prev => prev.map(tab => {
-      if (tab.id !== activeTabId || tab.splitContent?.type !== 'editor') return tab;
-      return {
-        ...tab,
-        splitContent: { ...tab.splitContent, activeFile: filePath },
-      };
-    }));
-  }, [activeTabId]);
-
-  const updateSplitRatio = useCallback((ratio) => {
-    if (!activeTabId) return;
-    setTabs(prev => prev.map(tab => tab.id === activeTabId ? { ...tab, splitRatio: ratio } : tab));
-  }, [activeTabId]);
 
   const executePrompt = useCallback((promptText) => {
     const text = typeof promptText === 'string' ? promptText.trim() : '';
