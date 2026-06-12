@@ -56,6 +56,7 @@ Current execution posture:
 - Nock `7682` / Phase H H6b is done via PR #59: attach-capable CRM agent actions execute the proven tmux attach command, while explicit folder-open actions suppress command execution and unsupported resume/attach states remain disabled.
 - Nock `7975` / audit hardening blocks arbitrary agent-folder config commands from auto-running. CRM tmux attach, dispatch requests, and trusted project-profile launches remain runnable; untrusted folder commands are metadata until a confirmation/trust UI exists.
 - Nock `7976` / audit hardening moves Telegram and NockCC credentials behind main-process secure storage. Renderer settings APIs can set or clear credentials and query configured status, but cannot read raw token/API-key values.
+- June 12 Wave 2 hardening: PR #65 closed loader-injection env var blocking and project lookup IPC validation; PR #72 closed discovery fallback debug logging and refreshed the esbuild lockfile to keep `npm run release:check` green. PR #71 is open and green for dispatch validation helper dedupe, awaiting explicit merge approval.
 - Nock `123` is active on `codex/phase-h-release-truth`: release readiness now has an explicit decision log and evidence ledger for signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback. The Nock remains open until signed target-OS smoke evidence exists.
 
 ### May 24 Phase H Execution Plan
