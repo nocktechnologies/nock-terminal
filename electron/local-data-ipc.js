@@ -1,6 +1,7 @@
 const {
   errorPayload,
   validateProfileSavePayload,
+  validateProjectLookupPath,
   validatePromptSavePayload,
 } = require('./ipc-validators');
 
@@ -20,8 +21,12 @@ function registerLocalDataIPC({
   promptStore,
   sessionHistory,
 }) {
+  const lookupContext = { isAllowedPath: candidate => fileService.isAllowedPath(candidate) };
+
   ipcMain.handle('profiles:get', (_, projectPath) => {
-    return projectProfiles.get(projectPath);
+    const validated = validateProjectLookupPath(projectPath, lookupContext);
+    if (!validated.ok) return null;
+    return projectProfiles.get(validated.value);
   });
 
   ipcMain.handle('profiles:save', (_, payload) => {
@@ -33,7 +38,9 @@ function registerLocalDataIPC({
   });
 
   ipcMain.handle('profiles:delete', (_, projectPath) => {
-    return projectProfiles.delete(projectPath);
+    const validated = validateProjectLookupPath(projectPath, lookupContext);
+    if (!validated.ok) return null;
+    return projectProfiles.delete(validated.value);
   });
 
   ipcMain.handle('profiles:list', () => {
@@ -46,7 +53,8 @@ function registerLocalDataIPC({
 
   ipcMain.handle('sessionHistory:getOutput', (_, payload) => {
     const { startTime, tabId } = safePayload(payload);
-    if (startTime === undefined || tabId === undefined) return null;
+    if (typeof startTime !== 'number' || !Number.isFinite(startTime)) return null;
+    if (typeof tabId !== 'string' || tabId === '') return null;
     return sessionHistory.getOutput(startTime, tabId);
   });
 
