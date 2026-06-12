@@ -16,7 +16,7 @@ const AGENT_LIFECYCLE_LABELS = {
   disabled: { label: 'DISABLED', text: 'text-nock-red' },
 };
 
-export default function ProjectCard({ session, profile, index, onClick }) {
+function ProjectCard({ session, profile, index, onClick }) {
   const cfg = STATUS_CONFIG[session.status] || STATUS_CONFIG.inactive;
   const isAgent = session.kind === 'agent';
   const isDispatchAgent = session.launch?.mode === 'dispatch';
@@ -165,3 +165,5 @@ export default function ProjectCard({ session, profile, index, onClick }) {
     </button>
   );
 }
+
+export default React.memo(ProjectCard);
