@@ -282,12 +282,13 @@ function safeRuntime(value) {
   return ['codex', 'deepseek'].includes(normalized) ? normalized : '';
 }
 
-function sanitizeDispatchText(value) {
-  if (typeof value !== 'string') return '';
-  return value
+function sanitizeDispatchText(value, { maxLength = 12000, stringify = false } = {}) {
+  const text = stringify ? String(value || '') : value;
+  if (typeof text !== 'string') return '';
+  return text
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
     .trim()
-    .slice(0, 12000);
+    .slice(0, maxLength);
 }
 
 function validateDispatchPayload(payload, operation) {
@@ -446,6 +447,9 @@ function errorPayload(result) {
 
 module.exports = {
   errorPayload,
+  safeAgentName,
+  safeRuntime,
+  sanitizeDispatchText,
   validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
   validateDispatchStatusUpdatesPayload,
