@@ -239,6 +239,16 @@ function validateProfileSavePayload(payload, context = {}) {
   return ok({ projectPath, profile });
 }
 
+function validateProjectLookupPath(projectPath, context = {}) {
+  const projectPathInput = normalizePathString(projectPath);
+  if (!projectPathInput) return invalid('projectPath must be a non-empty path string');
+  const resolved = path.resolve(projectPathInput);
+  if (typeof context.isAllowedPath === 'function' && !context.isAllowedPath(resolved)) {
+    return invalid('projectPath is outside allowed project roots');
+  }
+  return ok(resolved);
+}
+
 function validatePromptSavePayload(payload) {
   if (!isPlainObject(payload)) return invalid('prompts:save payload must be an object');
   const id = payload.id === undefined || payload.id === null || payload.id === ''
@@ -272,12 +282,13 @@ function safeRuntime(value) {
   return ['codex', 'deepseek'].includes(normalized) ? normalized : '';
 }
 
-function sanitizeDispatchText(value) {
-  if (typeof value !== 'string') return '';
-  return value
+function sanitizeDispatchText(value, { maxLength = 12000, stringify = false } = {}) {
+  const text = stringify ? String(value || '') : value;
+  if (typeof text !== 'string') return '';
+  return text
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
     .trim()
-    .slice(0, 12000);
+    .slice(0, maxLength);
 }
 
 function validateDispatchPayload(payload, operation) {
@@ -436,11 +447,15 @@ function errorPayload(result) {
 
 module.exports = {
   errorPayload,
+  safeAgentName,
+  safeRuntime,
+  sanitizeDispatchText,
   validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
   validateDispatchStatusUpdatesPayload,
   validateFilesPayload,
   validateProfileSavePayload,
+  validateProjectLookupPath,
   validatePromptSavePayload,
   validateSettingsSetPayload,
   validateTerminalCreatePayload,

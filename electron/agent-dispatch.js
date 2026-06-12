@@ -8,6 +8,12 @@ const https = require('https');
 const os = require('os');
 const path = require('path');
 
+const {
+  safeAgentName,
+  safeRuntime,
+  sanitizeDispatchText: sanitizeDispatchTextValue,
+} = require('./ipc-validators');
+
 const DEFAULT_BROKER_AGENT = 'mira-nockos';
 const DEFAULT_STATUS_POLL_AGENT = 'nock-terminal';
 const MAX_TASK_LENGTH = 12000;
@@ -21,16 +27,6 @@ let payloadCleanupHandlersInstalled = false;
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function safeAgentName(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  return /^[a-z0-9_-]{1,100}$/.test(normalized) ? normalized : '';
-}
-
-function safeRuntime(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  return ['codex', 'deepseek'].includes(normalized) ? normalized : '';
 }
 
 function safeString(value, maxLength = 1000) {
@@ -63,12 +59,9 @@ function normalizeRequestIds(value) {
   return requestIds;
 }
 
-function sanitizeDispatchText(value, maxLength = MAX_TASK_LENGTH) {
-  return String(value || '')
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
-    .trim()
-    .slice(0, maxLength);
-}
+const sanitizeDispatchText = (value, maxLength = MAX_TASK_LENGTH) => (
+  sanitizeDispatchTextValue(value, { maxLength, stringify: true })
+);
 
 function requestId() {
   if (typeof crypto.randomUUID === 'function') {
