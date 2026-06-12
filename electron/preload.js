@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('nockTerminal', {
   system: {
     detectShells: () => ipcRenderer.invoke('system:detectShells'),
     detectAgents: () => ipcRenderer.invoke('system:detectAgents'),
+    agentContextGroups: () => ipcRenderer.invoke('system:agentContextGroups'),
     ollamaVersion: () => ipcRenderer.invoke('system:ollamaVersion'),
     appVersion: () => ipcRenderer.invoke('system:appVersion'),
   },

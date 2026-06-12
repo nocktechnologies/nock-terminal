@@ -124,6 +124,9 @@ function registerHarness(overrides = {}) {
       { id: 'codex', label: 'Codex', command: 'codex' },
       { id: 'custom', label: 'Custom', command: '' },
     ],
+    agentContextGroups: () => [
+      { label: 'CLAUDE.md', paths: ['CLAUDE.md'] },
+    ],
     findCommand: async (command) => (command === 'codex' ? '/usr/local/bin/codex' : null),
     ...overrides,
   });
@@ -137,6 +140,7 @@ test('registerSystemWindowIPC registers the renderer system/window contract', ()
   assert.deepEqual(ipc.registeredHandleChannels(), [
     'clipboard:read',
     'ports:scan',
+    'system:agentContextGroups',
     'system:appVersion',
     'system:detectAgents',
     'system:detectShells',
@@ -200,6 +204,9 @@ test('system handlers delegate ports, shell discovery, versions, and agents', as
       path: null,
       installed: false,
     },
+  ]);
+  assert.deepEqual(await ipc.invoke('system:agentContextGroups'), [
+    { label: 'CLAUDE.md', paths: ['CLAUDE.md'] },
   ]);
 });
 
