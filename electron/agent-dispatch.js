@@ -12,8 +12,11 @@ const DEFAULT_BROKER_AGENT = 'mira-nockos';
 const DEFAULT_STATUS_POLL_AGENT = 'nock-terminal';
 const MAX_TASK_LENGTH = 12000;
 const DEFAULT_PAYLOAD_CLEANUP_MS = 24 * 60 * 60 * 1000;
+const MAX_NOCKCC_RESPONSE_BYTES = 1024 * 1024;
+const DISPATCH_PAYLOAD_DIR_PREFIX = 'nock-dispatch-';
 const DISPATCH_LIVE_STATUSES = new Set(['accepted', 'running', 'blocked', 'completed', 'failed']);
 const pendingPayloadDirs = new Set();
+const payloadSweepPromises = new Map();
 let payloadCleanupHandlersInstalled = false;
 
 function isPlainObject(value) {
@@ -72,6 +75,12 @@ function requestId() {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+}
+
+function buildNockCCUrl(baseUrl, apiPath) {
+  const normalizedBase = `${String(baseUrl || '').trim().replace(/\/+$/, '')}/`;
+  const relativePath = String(apiPath || '').replace(/^\/+/, '');
+  return new URL(relativePath, normalizedBase);
 }
 
 function shellQuote(value) {
@@ -276,6 +285,41 @@ async function cleanupDispatchPayloadDir(dir) {
   }
 }
 
+async function sweepStaleDispatchPayloadDirs(tmpRoot, opts = {}) {
+  const staleAfterMs = Number.isFinite(opts.stalePayloadMaxAgeMs) && opts.stalePayloadMaxAgeMs > 0
+    ? opts.stalePayloadMaxAgeMs
+    : DEFAULT_PAYLOAD_CLEANUP_MS;
+  const now = Date.now();
+  let entries = [];
+  try {
+    entries = await fsp.readdir(tmpRoot, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  await Promise.all(entries
+    .filter(entry => entry.isDirectory() && entry.name.startsWith(DISPATCH_PAYLOAD_DIR_PREFIX))
+    .map(async (entry) => {
+      const dir = path.join(tmpRoot, entry.name);
+      try {
+        const stat = await fsp.stat(dir);
+        if (now - stat.mtimeMs > staleAfterMs) {
+          await fsp.rm(dir, { recursive: true, force: true });
+        }
+      } catch {
+        // Best-effort cleanup only.
+      }
+    }));
+}
+
+function sweepStaleDispatchPayloadDirsOnce(tmpRoot, opts = {}) {
+  const rootKey = path.resolve(tmpRoot);
+  if (!payloadSweepPromises.has(rootKey)) {
+    payloadSweepPromises.set(rootKey, sweepStaleDispatchPayloadDirs(rootKey, opts));
+  }
+  return payloadSweepPromises.get(rootKey);
+}
+
 function installPayloadCleanupHandlers() {
   if (payloadCleanupHandlersInstalled || typeof process === 'undefined') return;
   payloadCleanupHandlersInstalled = true;
@@ -304,7 +348,8 @@ function schedulePayloadCleanup(dir, opts = {}) {
 async function createDispatchPayloadFile(input = {}, opts = {}) {
   const request = buildDispatchRequest(input);
   const tmpRoot = opts.tmpDir || os.tmpdir();
-  const dir = await fsp.mkdtemp(path.join(tmpRoot, 'nock-dispatch-'));
+  await sweepStaleDispatchPayloadDirsOnce(tmpRoot, opts);
+  const dir = await fsp.mkdtemp(path.join(tmpRoot, DISPATCH_PAYLOAD_DIR_PREFIX));
   const filePath = path.join(dir, `${request.agentName}-${request.requestId}.txt`);
   await fsp.writeFile(filePath, request.body, { mode: 0o600 });
   const cleanupAfterMs = schedulePayloadCleanup(dir, opts);
@@ -353,7 +398,7 @@ function requestJson({ baseUrl, apiKey }, method, apiPath, body) {
 
   let parsed;
   try {
-    parsed = new URL(baseUrl.replace(/\/$/, '') + apiPath);
+    parsed = buildNockCCUrl(baseUrl, apiPath);
   } catch {
     return Promise.reject(new Error('NockCC URL is invalid'));
   }
@@ -376,11 +421,30 @@ function requestJson({ baseUrl, apiKey }, method, apiPath, body) {
 
   return new Promise((resolve, reject) => {
     const transport = parsed.protocol === 'https:' ? https : http;
+    let settled = false;
+    const rejectOnce = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
     const req = transport.request(options, (res) => {
       res.setEncoding('utf8');
       let data = '';
-      res.on('data', chunk => { data += chunk; });
+      let responseBytes = 0;
+      res.on('data', (chunk) => {
+        responseBytes += Buffer.byteLength(chunk);
+        if (responseBytes > MAX_NOCKCC_RESPONSE_BYTES) {
+          const error = new Error('NockCC response exceeded 1 MB');
+          req.destroy(error);
+          res.destroy(error);
+          rejectOnce(error);
+          return;
+        }
+        data += chunk;
+      });
       res.on('end', () => {
+        if (settled) return;
+        settled = true;
         let json = {};
         try {
           json = data ? JSON.parse(data) : {};
@@ -393,8 +457,9 @@ function requestJson({ baseUrl, apiKey }, method, apiPath, body) {
           reject(new Error(`NockCC returned HTTP ${res.statusCode}`));
         }
       });
+      res.on('error', rejectOnce);
     });
-    req.on('error', reject);
+    req.on('error', rejectOnce);
     req.on('timeout', () => {
       req.destroy(new Error('NockCC request timed out'));
     });
