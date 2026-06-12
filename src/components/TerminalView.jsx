@@ -239,6 +239,9 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
         terminalRef.current = null;
       }
     };
+    // initialInput is staged once at tab creation; re-running this effect on
+    // its change would destroy and recreate the live terminal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, cwd, launchCommand]);
 
   // Refit on visibility change or window resize

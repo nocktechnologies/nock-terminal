@@ -372,7 +372,6 @@ class TerminalManager extends EventEmitter {
     const args = [];
     let current = '';
     let quote = null;
-    let escaped = false;
 
     for (let i = 0; i < value.length; i += 1) {
       const char = value[i];

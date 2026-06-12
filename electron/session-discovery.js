@@ -453,7 +453,7 @@ class SessionDiscovery {
       .join(' ');
   }
 
-  _resolveAgentLaunchCommand(config, agentName, agentPath = '', crmAttachCommand = '') {
+  _resolveAgentLaunchCommand(config, agentName, _agentPath = '', crmAttachCommand = '') {
     const candidates = [
       config.launch_command,
       config.launchCommand,

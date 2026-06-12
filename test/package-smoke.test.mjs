@@ -65,8 +65,8 @@ test('buffers smoke ready markers split across output chunks', () => {
       },
     });
 
-    inspector.inspect(Buffer.from(`${SMOKE_READY_PREFIX}{\"isPack`), 'stdout');
-    inspector.inspect(Buffer.from('aged\":true,\"renderer\":{\"bodyHasDashboard\":true}}\n'), 'stdout');
+    inspector.inspect(Buffer.from(`${SMOKE_READY_PREFIX}{"isPack`), 'stdout');
+    inspector.inspect(Buffer.from('aged":true,"renderer":{"bodyHasDashboard":true}}\n'), 'stdout');
 
     assert.deepEqual(payloads, [
       { isPackaged: true, renderer: { bodyHasDashboard: true } },
