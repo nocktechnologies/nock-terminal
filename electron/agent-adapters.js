@@ -89,8 +89,10 @@ const AGENT_SESSION_CONTRACTS = [
     id: 'codex',
     label: 'Codex CLI',
     transcriptDiscovery: {
-      state: 'future',
-      notes: 'Codex CLI process detection and launch exist; transcript discovery waits for filesystem/runtime evidence.',
+      state: 'supported',
+      source: 'codex-rollout-jsonl',
+      paths: ['~/.codex/sessions/**/rollout-*.jsonl'],
+      notes: 'Nock reads bounded heads from Codex rollout JSONL files and recovers project cwd from session_meta, with turn_context fallback.',
     },
     liveAttach: {
       state: 'future',
