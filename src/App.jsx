@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import TitleBar from './components/TitleBar';
 import Sidebar from './components/Sidebar';
@@ -13,15 +13,6 @@ import Settings from './components/Settings';
 import StatusBar from './components/StatusBar';
 import CommandPalette from './components/CommandPalette';
 import {
-  MAX_DISPATCH_RUNS,
-  applyDispatchRunUpdates,
-  createDispatchRun,
-  getDispatchRunStorage,
-  isTerminalDispatchStatus,
-  readDispatchRunsFromStorage,
-  writeDispatchRunsToStorage,
-} from './utils/dispatchRuns.mjs';
-import {
   canRunResolvedLaunch,
   resolveSessionLaunch,
   sanitizeStagedTerminalInput,
@@ -30,6 +21,9 @@ import { createTabId } from './utils/tabOps.mjs';
 import useTabs from './hooks/useTabs.js';
 import useTabSplits from './hooks/useTabSplits.js';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts.js';
+import useSessions from './hooks/useSessions.js';
+import useProcessActivity from './hooks/useProcessActivity.js';
+import useDispatchRuns from './hooks/useDispatchRuns.js';
 
 function projectNameFromPath(projectPath) {
   const normalized = String(projectPath || '').replace(/[\\/]+$/, '');
@@ -64,83 +58,24 @@ export default function App() {
     setActiveEditorFile,
     updateSplitRatio,
   } = useTabSplits({ tabs, setTabs, activeTabId });
+  const {
+    sessions,
+    refreshSessions,
+    activePorts,
+    profilesByPath,
+    getProfileForPath,
+    ollamaStatus,
+  } = useSessions();
+  const { processStatus, lastDataTimestamps, getSessionStatus } = useProcessActivity({ tabs });
+  const { dispatchRuns, recordDispatchRun } = useDispatchRuns();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [sessions, setSessions] = useState([]);
-  const [activePorts, setActivePorts] = useState([]);
-  const [processStatus, setProcessStatus] = useState({});
-  const [lastDataTimestamps, setLastDataTimestamps] = useState({});
-  const [ollamaStatus, setOllamaStatus] = useState(false);
   const [queuedPrompt, setQueuedPrompt] = useState(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [commandPalettePreset, setCommandPalettePreset] = useState(null);
-  const [profilesByPath, setProfilesByPath] = useState({});
-  const [dispatchRuns, setDispatchRuns] = useState(() => readDispatchRunsFromStorage(getDispatchRunStorage(window)));
   const [notice, setNotice] = useState(null);
   const queuedPromptIdRef = useRef(0);
   const ctrlPFocusRef = useRef(null);
-
-  // Discover sessions on mount and periodically
-  const refreshSessions = useCallback(async () => {
-    try {
-      const discovered = await window.nockTerminal.sessions.discover();
-      setSessions(discovered);
-    } catch (err) {
-      console.error('Session discovery failed:', err);
-    }
-  }, []);
-
-  const refreshPorts = useCallback(async () => {
-    try {
-      const ports = await window.nockTerminal.ports.scan();
-      setActivePorts(ports);
-    } catch (err) {
-      console.error('Port scan failed:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    refreshSessions();
-    refreshPorts();
-    const interval = setInterval(() => {
-      refreshSessions();
-      refreshPorts();
-    }, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
-  }, [refreshSessions, refreshPorts]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const paths = [...new Set(sessions.map(session => session.path).filter(Boolean))];
-    if (paths.length === 0) {
-      setProfilesByPath({});
-      return undefined;
-    }
-
-    Promise.all(paths.map(async (projectPath) => {
-      try {
-        const profile = await window.nockTerminal.profiles.get(projectPath);
-        return [projectPath, profile || {}];
-      } catch {
-        return [projectPath, {}];
-      }
-    })).then((entries) => {
-      if (!cancelled) {
-        setProfilesByPath(Object.fromEntries(entries));
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sessions]);
-
-  useEffect(() => {
-    const storage = getDispatchRunStorage(window);
-    if (storage) {
-      writeDispatchRunsToStorage(storage, dispatchRuns);
-    }
-  }, [dispatchRuns]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -169,123 +104,6 @@ export default function App() {
       focusTask: session?.launch?.mode === 'dispatch',
     });
   }, [openCommandPalette]);
-
-  // Poll Ollama status every 30s
-  useEffect(() => {
-    const checkOllama = async () => {
-      try {
-        const result = await window.nockTerminal.ai.ollama.status();
-        setOllamaStatus(result?.connected === true);
-      } catch {
-        setOllamaStatus(false);
-      }
-    };
-    checkOllama();
-    const interval = setInterval(checkOllama, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const cleanup = window.nockTerminal.process.onStatus((status) => {
-      setProcessStatus(prev => ({ ...prev, [status.tabId]: status }));
-    });
-    return cleanup;
-  }, []);
-
-  useEffect(() => {
-    const cleanup = window.nockTerminal.terminal.onData((id) => {
-      setLastDataTimestamps(prev => ({ ...prev, [id]: Date.now() }));
-    });
-    return cleanup;
-  }, []);
-
-  useEffect(() => {
-    const projectPaths = new Set(tabs.map(tab => tab.cwd).filter(Boolean));
-    const activeAgentSessionIds = [];
-    const activeClaudeSessionIds = [];
-
-    for (const tab of tabs) {
-      const status = processStatus[tab.id];
-      const activeAgents = Array.isArray(status?.activeAgents) ? [...status.activeAgents] : [];
-      if (status?.hasClaude && !activeAgents.includes('claude')) {
-        activeAgents.push('claude');
-      }
-
-      for (const agentId of activeAgents) {
-        activeAgentSessionIds.push(`${agentId}:${tab.id}`);
-        if (agentId === 'claude') activeClaudeSessionIds.push(tab.id);
-      }
-    }
-
-    window.nockTerminal.nockcc?.updateActivity({
-      activeProjectCount: projectPaths.size,
-      activeClaudeSessionIds,
-      activeAgentSessionIds,
-    });
-  }, [tabs, processStatus]);
-
-  const recordDispatchRun = useCallback((run) => {
-    setDispatchRuns(prev => [
-      createDispatchRun(run, { id: createTabId('dispatch') }),
-      ...prev,
-    ].slice(0, MAX_DISPATCH_RUNS));
-  }, []);
-
-  const activeBrokeredDispatchRequestKey = useMemo(() => {
-    const requestIds = [];
-    const seen = new Set();
-    for (const run of dispatchRuns) {
-      if (run.mode !== 'brokered' || !run.requestId || isTerminalDispatchStatus(run.status)) continue;
-      if (seen.has(run.requestId)) continue;
-      seen.add(run.requestId);
-      requestIds.push(run.requestId);
-    }
-    return requestIds.sort().join('|');
-  }, [dispatchRuns]);
-
-  useEffect(() => {
-    const requestIds = activeBrokeredDispatchRequestKey.split('|').filter(Boolean);
-    const pollStatusUpdates = window.nockTerminal.dispatch?.statusUpdates;
-    if (requestIds.length === 0 || typeof pollStatusUpdates !== 'function') return undefined;
-
-    let cancelled = false;
-    let inFlight = false;
-    const poll = async () => {
-      if (cancelled || inFlight) return;
-      inFlight = true;
-      try {
-        const result = await pollStatusUpdates({
-          requestIds,
-          agentName: 'nock-terminal',
-          limit: 50,
-        });
-        if (!cancelled && result?.success !== false && Array.isArray(result?.updates) && result.updates.length > 0) {
-          setDispatchRuns(prev => applyDispatchRunUpdates(prev, result.updates));
-        }
-      } catch {
-        // NockCC polling is best-effort; local/direct dispatch must keep working offline.
-      } finally {
-        inFlight = false;
-      }
-    };
-
-    poll();
-    const interval = setInterval(poll, 30000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [activeBrokeredDispatchRequestKey]);
-
-  const getProfileForPath = useCallback(async (projectPath) => {
-    if (!projectPath) return {};
-    if (profilesByPath[projectPath]) return profilesByPath[projectPath];
-    try {
-      return await window.nockTerminal.profiles.get(projectPath);
-    } catch {
-      return {};
-    }
-  }, [profilesByPath]);
 
   const openSession = useCallback((session, options = {}) => {
     if (session?.launch?.mode === 'dispatch' && options.openDispatchFolder !== true) {
@@ -445,15 +263,6 @@ export default function App() {
     setCommandPalettePreset,
     ctrlPFocusRef,
   });
-
-  const getSessionStatus = useCallback((tabId) => {
-    const proc = processStatus[tabId];
-    const lastData = lastDataTimestamps[tabId] || 0;
-    const hasAgent = proc?.hasClaude || (Array.isArray(proc?.activeAgents) && proc.activeAgents.length > 0);
-    if (!hasAgent) return 'inactive';
-    if (Date.now() - lastData < 2000) return 'active';
-    return 'ready';
-  }, [processStatus, lastDataTimestamps]);
 
   // File tree path: active tab's cwd, or fall back to first session's path
   const activeProjectPath = activeTab?.cwd || sessions[0]?.path || null;
