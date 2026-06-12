@@ -19,7 +19,13 @@
 
 **Test impact:** 59 → 66 (63 passing on darwin, 3 Windows-gated). Zero regressions.
 
-**Still on the roadmap:** §4.5 dedupe agent context groups via IPC, §4.2 `settings:set` dispatch map, §3.1 extract hooks from `App.jsx` (the big one), §1.5 env-var deny-list, §1.4 stop appending to closed-tab session history, §1.9 shell-detection logging behind debug flag.
+**June 12 Wave 2 hardening update:**
+- §1.5 env-var deny-list closed in PR #65. Terminal environment injection now rejects loader and shell-hook variables before process launch.
+- §1.9 discovery/shell fallback logging closed in PR #72. `session-discovery` no longer has bare `catch {}` blocks; fallback failures log path/context behind `NOCK_DEBUG_DISCOVERY=1`.
+- Dispatch validation helper dedupe is ready in PR #71 and green, but intentionally left open pending explicit merge approval. The PR body records the one sanitizer API difference found during the dedupe pass.
+- A fresh esbuild audit advisory hit the release gate during Wave 2. PR #72 included the minimal lockfile bump from esbuild `0.28.0` to `0.28.1`; `package.json` already allowed that patch version.
+
+**Still on the roadmap:** §4.5 dedupe agent context groups via IPC, §4.2 `settings:set` dispatch map, §3.1 extract hooks from `App.jsx` (the big one), §1.4 stop appending to closed-tab session history.
 
 ---
 
@@ -442,6 +448,6 @@ Better: when transcripts are absent, label paths in the UI as "decoded (unverifi
 - Replace `_parseShellArgs` with `shell-quote` (§4.1).
 - Split `Settings.jsx` per section.
 - Move agent aliases out of discovery (§3.5).
-- Add shell-detection logging behind `NOCK_DEBUG_DISCOVERY` (§1.9).
+- Add shell/discovery fallback logging behind `NOCK_DEBUG_DISCOVERY` (§1.9). **Done via PR #72.**
 
 After this week, the codebase is in good shape for handoff or growth. Skip it and the next person onboarding spends those days deleting your code before they can add theirs.
