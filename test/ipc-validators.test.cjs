@@ -6,6 +6,9 @@ const path = require('path');
 
 const {
   errorPayload,
+  safeAgentName,
+  safeRuntime,
+  sanitizeDispatchText,
   validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
   validateFilesPayload,
@@ -228,6 +231,15 @@ test('dispatch:createPayload rejects malformed payloads before temp files are cr
   assert.equal(result.ok, true);
   assert.equal(result.value.agentName, 'ash');
   assert.equal(result.value.agentBound, true);
+});
+
+test('exports shared dispatch validation helpers', () => {
+  assert.equal(safeAgentName(' Ash '), 'ash');
+  assert.equal(safeAgentName('../ash'), '');
+  assert.equal(safeRuntime(' CODEX '), 'codex');
+  assert.equal(safeRuntime('node'), '');
+  assert.equal(sanitizeDispatchText(' one\u0000\n\ttwo '), 'one\n\ttwo');
+  assert.equal(sanitizeDispatchText(123), '');
 });
 
 test('dispatch:brokered rejects malformed payloads with the shared IPC error shape', () => {
