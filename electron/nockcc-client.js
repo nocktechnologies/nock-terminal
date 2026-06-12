@@ -3,6 +3,46 @@
 const https = require('https');
 const http = require('http');
 
+const MAX_NOCKCC_RESPONSE_BYTES = 1024 * 1024;
+
+function buildNockCCUrl(baseUrl, apiPath) {
+  const normalizedBase = `${String(baseUrl || '').trim().replace(/\/+$/, '')}/`;
+  const relativePath = String(apiPath || '').replace(/^\/+/, '');
+  return new URL(relativePath, normalizedBase);
+}
+
+function readBoundedResponse(req, res, { encoding = null } = {}) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    let responseBytes = 0;
+    let settled = false;
+    const rejectOnce = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+
+    if (encoding) res.setEncoding(encoding);
+    res.on('data', (chunk) => {
+      responseBytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(chunk);
+      if (responseBytes > MAX_NOCKCC_RESPONSE_BYTES) {
+        const error = new Error('NockCC response exceeded 1 MB');
+        req.destroy(error);
+        res.destroy(error);
+        rejectOnce(error);
+        return;
+      }
+      data += chunk;
+    });
+    res.on('end', () => {
+      if (settled) return;
+      settled = true;
+      resolve(data);
+    });
+    res.on('error', rejectOnce);
+  });
+}
+
 /**
  * NockCC client — fire-and-forget HTTP calls to the NockCC server.
  *
@@ -21,8 +61,7 @@ class NockCCClient {
   _getConfig() {
     const apiKey = this._store.get('nockccApiKey') || '';
     const rawUrl = this._store.get('nockccUrl') || 'https://cc.nocktechnologies.io';
-    // Strip trailing slash
-    const baseUrl = rawUrl.replace(/\/$/, '');
+    const baseUrl = rawUrl.replace(/\/+$/, '');
     return { apiKey, baseUrl };
   }
 
@@ -34,13 +73,13 @@ class NockCCClient {
    */
   _request(method, path, body) {
     const { apiKey, baseUrl } = this._getConfig();
-    if (!apiKey) return; // not configured
+    if (!apiKey) return Promise.resolve(); // not configured
 
     let parsed;
     try {
-      parsed = new URL(baseUrl + path);
+      parsed = buildNockCCUrl(baseUrl, path);
     } catch {
-      return;
+      return Promise.resolve();
     }
 
     const payload = JSON.stringify(body);
@@ -52,20 +91,25 @@ class NockCCClient {
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(payload),
-        'X-Api-Key': apiKey,
+        'X-API-Key': apiKey,
       },
       timeout: 5000,
     };
 
-    const transport = parsed.protocol === 'https:' ? https : http;
-    const req = transport.request(options, (res) => {
-      // Drain response to free socket
-      res.resume();
+    return new Promise((resolve, reject) => {
+      const transport = parsed.protocol === 'https:' ? https : http;
+      const req = transport.request(options, (res) => {
+        readBoundedResponse(req, res)
+          .then(() => resolve())
+          .catch(reject);
+      });
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy(new Error('NockCC request timed out'));
+      });
+      req.write(payload);
+      req.end();
     });
-    req.on('error', () => { /* fire-and-forget */ });
-    req.on('timeout', () => { req.destroy(); });
-    req.write(payload);
-    req.end();
   }
 
   /**
@@ -81,7 +125,7 @@ class NockCCClient {
 
     let parsed;
     try {
-      parsed = new URL(baseUrl + '/api/terminal/sessions/');
+      parsed = buildNockCCUrl(baseUrl, '/api/terminal/sessions/');
     } catch {
       return;
     }
@@ -95,26 +139,26 @@ class NockCCClient {
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(payload),
-        'X-Api-Key': apiKey,
+        'X-API-Key': apiKey,
       },
       timeout: 5000,
     };
 
     const transport = parsed.protocol === 'https:' ? https : http;
     const req = transport.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.success && json.data && json.data.id) {
-            this._sessionId = json.data.id;
-          }
-        } catch { /* ignore */ }
-      });
+      readBoundedResponse(req, res, { encoding: 'utf8' })
+        .then((data) => {
+          try {
+            const json = JSON.parse(data);
+            if (json.success && json.data && json.data.id) {
+              this._sessionId = json.data.id;
+            }
+          } catch { /* ignore */ }
+        })
+        .catch(() => { /* fire-and-forget */ });
     });
     req.on('error', () => { /* fire-and-forget */ });
-    req.on('timeout', () => { req.destroy(); });
+    req.on('timeout', () => { req.destroy(new Error('NockCC request timed out')); });
     req.write(payload);
     req.end();
   }
@@ -132,11 +176,12 @@ class NockCCClient {
     activeAgentSessionIds = [],
   } = {}) {
     if (!this._sessionId) return;
-    this._request('PATCH', `/api/terminal/sessions/${this._sessionId}/`, {
+    const request = this._request('PATCH', `/api/terminal/sessions/${this._sessionId}/`, {
       active_project_count: activeProjectCount,
       active_claude_session_ids: activeClaudeSessionIds,
       active_agent_session_ids: activeAgentSessionIds,
     });
+    request?.catch?.(() => { /* fire-and-forget */ });
   }
 
   /**
@@ -144,7 +189,8 @@ class NockCCClient {
    */
   endSession() {
     if (!this._sessionId) return;
-    this._request('POST', `/api/terminal/sessions/${this._sessionId}/end/`, {});
+    const request = this._request('POST', `/api/terminal/sessions/${this._sessionId}/end/`, {});
+    request?.catch?.(() => { /* fire-and-forget */ });
     this._sessionId = null;
   }
 }

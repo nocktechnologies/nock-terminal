@@ -5,11 +5,27 @@ const os = require('os');
 const path = require('path');
 
 const {
+  AgentDispatchService,
   buildBrokeredDispatchMessage,
   buildDirectDispatchCommand,
   createDispatchPayloadFile,
   sanitizeDispatchText,
 } = require('../electron/agent-dispatch');
+
+async function withHttpServer(handler, callback) {
+  const http = require('http');
+  const server = http.createServer(handler);
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const { port } = server.address();
+  try {
+    return await callback(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+}
 
 function assertPathInside(parent, child) {
   const relative = path.relative(path.resolve(parent), path.resolve(child));
@@ -138,6 +154,53 @@ test('cleans up payload files after the configured TTL', async () => {
 
   assert.equal(fs.existsSync(result.filePath), true);
   await waitForPathToDisappear(result.filePath);
+});
+
+test('sweeps stale payload directories before creating a new payload', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nock-dispatch-test-'));
+  const staleDir = path.join(tmpDir, 'nock-dispatch-stale');
+  const freshDir = path.join(tmpDir, 'nock-dispatch-fresh');
+  fs.mkdirSync(staleDir);
+  fs.mkdirSync(freshDir);
+  fs.writeFileSync(path.join(staleDir, 'payload.txt'), 'old');
+  fs.writeFileSync(path.join(freshDir, 'payload.txt'), 'new');
+  const staleTime = new Date(Date.now() - (25 * 60 * 60 * 1000));
+  fs.utimesSync(staleDir, staleTime, staleTime);
+
+  const result = await createDispatchPayloadFile({
+    agentName: 'ash',
+    runtime: 'codex',
+    taskDescription: 'Create after startup cleanup.',
+    requestId: 'cleanup-2',
+  }, { tmpDir });
+
+  assert.equal(fs.existsSync(staleDir), false);
+  assert.equal(fs.existsSync(freshDir), true);
+  assert.equal(fs.existsSync(result.filePath), true);
+});
+
+test('brokered dispatch rejects oversized NockCC responses', async () => {
+  await withHttpServer((req, res) => {
+    req.resume();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('x'.repeat((1024 * 1024) + 1));
+  }, async (baseUrl) => {
+    const service = new AgentDispatchService({
+      get(key) {
+        return key === 'nockccApiKey' ? 'test-key' : baseUrl;
+      },
+    });
+
+    await assert.rejects(
+      service.sendBrokered({
+        agentName: 'ash',
+        runtime: 'codex',
+        taskDescription: 'This response should be capped.',
+        requestId: 'oversized-1',
+      }),
+      /NockCC response exceeded 1 MB/
+    );
+  });
 });
 
 test('sanitizes dispatch text while preserving useful newlines', () => {
