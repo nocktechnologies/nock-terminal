@@ -1,7 +1,32 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const http = require('http');
 
 const NockCCClient = require('../electron/nockcc-client');
+
+async function withHttpServer(handler, callback) {
+  const server = http.createServer(handler);
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const { port } = server.address();
+  try {
+    return await callback(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+}
+
+function createClient(baseUrl) {
+  return new NockCCClient({
+    get(key) {
+      if (key === 'nockccApiKey') return 'test-key';
+      if (key === 'nockccUrl') return baseUrl;
+      return '';
+    },
+  });
+}
 
 test('heartbeat sends real activity payload fields', () => {
   const client = new NockCCClient({ get: () => 'test' });
@@ -26,4 +51,30 @@ test('heartbeat sends real activity payload fields', () => {
       },
     },
   ]);
+});
+
+test('_request sends canonical X-API-Key header casing', async () => {
+  await withHttpServer((req, res) => {
+    req.resume();
+    assert.ok(req.rawHeaders.includes('X-API-Key'));
+    res.writeHead(204);
+    res.end();
+  }, async (baseUrl) => {
+    const client = createClient(baseUrl);
+    await client._request('PATCH', '/api/test/', {});
+  });
+});
+
+test('_request rejects oversized NockCC responses', async () => {
+  await withHttpServer((req, res) => {
+    req.resume();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('x'.repeat((1024 * 1024) + 1));
+  }, async (baseUrl) => {
+    const client = createClient(baseUrl);
+    await assert.rejects(
+      client._request('PATCH', '/api/test/', {}),
+      /NockCC response exceeded 1 MB/
+    );
+  });
 });
