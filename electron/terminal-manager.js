@@ -3,6 +3,26 @@ const os = require('os');
 
 const WRITE_CHUNK_SIZE = 512;
 
+// Environment variables that let a project profile run arbitrary code in the
+// spawned shell — dynamic-loader injection and shell/runtime startup hooks.
+// A project's profile must never be able to set these on a user's terminal.
+const BLOCKED_ENV_VAR_NAMES = new Set([
+  'NODE_OPTIONS',
+  'BASH_ENV',
+  'ENV',
+  'PROMPT_COMMAND',
+  'GLOBIGNORE',
+  'PERL5OPT',
+  'PYTHONSTARTUP',
+]);
+const BLOCKED_ENV_VAR_PREFIXES = ['LD_', 'DYLD_'];
+
+function isBlockedEnvVar(key) {
+  const upper = key.toUpperCase();
+  if (BLOCKED_ENV_VAR_NAMES.has(upper)) return true;
+  return BLOCKED_ENV_VAR_PREFIXES.some(prefix => upper.startsWith(prefix));
+}
+
 class TerminalManager extends EventEmitter {
   constructor(options = {}) {
     super();
@@ -408,6 +428,7 @@ class TerminalManager extends EventEmitter {
       const envValue = rawLine.slice(separator + 1);
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
       if (key.length > 128 || envValue.length > 4000) continue;
+      if (isBlockedEnvVar(key)) continue;
 
       env[key] = envValue;
     }

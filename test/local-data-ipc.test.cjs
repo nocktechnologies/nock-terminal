@@ -181,6 +181,24 @@ test('profile handlers delegate validated payloads to project profile storage', 
   ]);
 });
 
+test('profiles:get and profiles:delete reject paths outside allowed roots', () => {
+  const ipc = createLocalDataHarness();
+
+  assert.equal(ipc.invoke('profiles:get', ipc.outsideProject), null);
+  assert.equal(ipc.invoke('profiles:delete', ipc.outsideProject), null);
+  assert.deepEqual(ipc.calls, []);
+});
+
+test('profiles:get and profiles:delete reject non-string project paths', () => {
+  const ipc = createLocalDataHarness();
+
+  assert.equal(ipc.invoke('profiles:get'), null);
+  assert.equal(ipc.invoke('profiles:get', { projectPath: ipc.allowedProject }), null);
+  assert.equal(ipc.invoke('profiles:delete', 42), null);
+  assert.equal(ipc.invoke('profiles:delete', ''), null);
+  assert.deepEqual(ipc.calls, []);
+});
+
 test('session-history handlers delegate to session history storage', () => {
   const ipc = createLocalDataHarness();
 
@@ -209,6 +227,16 @@ test('session-history handlers ignore missing or malformed payloads', () => {
   assert.equal(ipc.invoke('sessionHistory:start'), null);
   assert.equal(ipc.invoke('sessionHistory:start', null), null);
   assert.equal(ipc.invoke('sessionHistory:start', { metadata: { project: 'missing tab' } }), null);
+
+  assert.deepEqual(ipc.calls, []);
+});
+
+test('sessionHistory:getOutput rejects mistyped startTime or tabId', () => {
+  const ipc = createLocalDataHarness();
+
+  assert.equal(ipc.invoke('sessionHistory:getOutput', { startTime: '100', tabId: 'tab-1' }), null);
+  assert.equal(ipc.invoke('sessionHistory:getOutput', { startTime: NaN, tabId: 'tab-1' }), null);
+  assert.equal(ipc.invoke('sessionHistory:getOutput', { startTime: 100, tabId: 42 }), null);
 
   assert.deepEqual(ipc.calls, []);
 });

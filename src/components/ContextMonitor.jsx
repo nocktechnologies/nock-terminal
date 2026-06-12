@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { AGENT_CONTEXT_GROUPS } from '../utils/agentContext.mjs';
 
 function joinProjectPath(basePath, relativePath) {
   const separator = basePath.includes('\\') ? '\\' : '/';
@@ -52,14 +51,27 @@ async function findNearestContextFile(projectPath, relativePaths, maxDepth = 5) 
 }
 
 export default function ContextMonitor({ projectPath, onEditFile }) {
+  const [contextGroups, setContextGroups] = useState([]);
   const [contextRows, setContextRows] = useState([]);
 
+  // Context groups come from the main-process agent adapter registry so the
+  // monitor stays in sync as adapters are added, instead of a renderer copy.
   useEffect(() => {
-    if (!projectPath) return;
+    let cancelled = false;
+    window.nockTerminal.system.agentContextGroups().then((groups) => {
+      if (!cancelled && Array.isArray(groups)) setContextGroups(groups);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!projectPath || contextGroups.length === 0) return;
 
     const check = async () => {
       const rows = await Promise.all(
-        AGENT_CONTEXT_GROUPS.map(async (group) => ({
+        contextGroups.map(async (group) => ({
           ...group,
           stat: await findNearestContextFile(projectPath, group.paths),
         }))
@@ -70,7 +82,7 @@ export default function ContextMonitor({ projectPath, onEditFile }) {
     check();
     const interval = setInterval(check, 30000);
     return () => clearInterval(interval);
-  }, [projectPath]);
+  }, [projectPath, contextGroups]);
 
   const formatTime = (ms) => {
     if (!ms) return '—';

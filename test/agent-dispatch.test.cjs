@@ -205,4 +205,5 @@ test('brokered dispatch rejects oversized NockCC responses', async () => {
 
 test('sanitizes dispatch text while preserving useful newlines', () => {
   assert.equal(sanitizeDispatchText(' one\u0000\n\ttwo '), 'one\n\ttwo');
+  assert.equal(sanitizeDispatchText(12345, 3), '123');
 });
