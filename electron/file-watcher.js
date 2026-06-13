@@ -3,7 +3,7 @@ const EventEmitter = require('events');
 
 // chokidar 4 dropped glob support; this regex covers the same paths the old
 // '**/<dir>/**' globs did (anything inside these directories at any depth).
-const IGNORED_DIRS = /[\\/](node_modules|\.git|__pycache__|dist|build|\.next|\.cache|coverage)[\\/]/;
+const IGNORED_DIRS = /(?:^|[\\/])(node_modules|\.git|__pycache__|dist|build|\.next|\.cache|coverage)[\\/]/;
 
 class FileWatcher extends EventEmitter {
   constructor(fileService) {

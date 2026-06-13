@@ -37,6 +37,7 @@ test('IGNORED_DIRS matches the same paths as the old chokidar 3 globs', () => {
     '/repo/.cache/tmp.bin',
     '/repo/coverage/lcov.info',
     'C:\\repo\\node_modules\\react\\index.js',
+    'node_modules/react/index.js',
   ];
   for (const p of ignoredContents) {
     assert.equal(FileWatcher.IGNORED_DIRS.test(p), true, `expected ignored: ${p}`);
