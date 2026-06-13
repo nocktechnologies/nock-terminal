@@ -108,6 +108,40 @@ test('discovers agent folders from existing config.json files', async () => {
   assert.equal(mira.sessionContract.resumeCommand.state, 'supported');
 });
 
+test('excludes ephemeral agent worktree paths from discovered sessions', async () => {
+  const root = makeTempDir();
+  const claudeDir = path.join(root, '.claude');
+  const repoPath = path.join(root, 'Dev', 'my-repo');
+  const claudeWorktree = path.join(repoPath, '.claude', 'worktrees', 'wave1-fix');
+  const plainWorktree = path.join(repoPath, '.worktrees', 'feature-x');
+
+  writeFile(
+    path.join(claudeDir, 'projects', 'repo-session', 'session.jsonl'),
+    `${JSON.stringify({ type: 'user', cwd: repoPath, message: { role: 'user', content: [] } })}\n`
+  );
+  writeFile(
+    path.join(claudeDir, 'projects', 'worktree-session', 'session.jsonl'),
+    `${JSON.stringify({ type: 'user', cwd: claudeWorktree, message: { role: 'user', content: [] } })}\n`
+  );
+  writeFile(
+    path.join(claudeDir, 'projects', 'plain-worktree-session', 'session.jsonl'),
+    `${JSON.stringify({ type: 'user', cwd: plainWorktree, message: { role: 'user', content: [] } })}\n`
+  );
+
+  const discovery = new SessionDiscovery({
+    claudeDir,
+    devRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const paths = sessions.map(session => session.path);
+
+  assert.ok(paths.includes(repoPath), 'repo itself stays discoverable');
+  assert.ok(!paths.includes(claudeWorktree), '.claude/worktrees checkout must be excluded');
+  assert.ok(!paths.includes(plainWorktree), '.worktrees checkout must be excluded');
+});
+
 test('upgrades Claude transcript paths to agent folders even without dev roots', async () => {
   const root = makeTempDir();
   const claudeDir = path.join(root, '.claude');

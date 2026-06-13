@@ -90,14 +90,19 @@ export default function Sidebar({
             ) : (
               <>
                 <SidebarSessionSection
-                  label="// Agents"
-                  sessions={groupedSessions.agents}
-                  onSessionClick={onSessionClick}
-                />
-                <SidebarSessionSection
                   label="// Projects"
+                  sectionKey="projects"
                   sessions={groupedSessions.projects}
                   onSessionClick={onSessionClick}
+                  searchActive={searchActive}
+                />
+                <SidebarSessionSection
+                  label="// Agents"
+                  sectionKey="agents"
+                  defaultCollapsed
+                  sessions={groupedSessions.agents}
+                  onSessionClick={onSessionClick}
+                  searchActive={searchActive}
                 />
               </>
             )}
@@ -214,13 +219,53 @@ function SessionListHeader({ onRefresh }) {
   );
 }
 
-function SidebarSessionSection({ label, sessions, onSessionClick }) {
+function readSectionCollapsed(sectionKey, defaultCollapsed) {
+  try {
+    const stored = window.localStorage?.getItem(`nockSidebar.${sectionKey}.collapsed`);
+    if (stored === '1') return true;
+    if (stored === '0') return false;
+  } catch {
+    // localStorage unavailable — fall through to default
+  }
+  return Boolean(defaultCollapsed);
+}
+
+function SidebarSessionSection({ label, sectionKey, sessions, onSessionClick, defaultCollapsed = false, searchActive = false }) {
+  const [collapsed, setCollapsed] = useState(() => readSectionCollapsed(sectionKey, defaultCollapsed));
   if (sessions.length === 0) return null;
+
+  const toggle = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      window.localStorage?.setItem(`nockSidebar.${sectionKey}.collapsed`, next ? '1' : '0');
+    } catch {
+      // best-effort persistence only
+    }
+  };
+  // An active search overrides collapse so matches are never hidden.
+  const open = searchActive || !collapsed;
+
   return (
     <div className="mb-3 last:mb-0">
-      <span className="font-mono text-[8px] text-nock-text-muted uppercase tracking-widest px-1 mb-1.5 block">
-        {label}
-      </span>
+      <button
+        type="button"
+        onClick={toggle}
+        className="sticky top-0 z-10 w-full flex items-center gap-1 px-1 py-1.5 mb-0.5 bg-nock-bg border-b border-nock-border/60 group/section"
+        aria-expanded={open}
+        aria-label={`${open ? 'Collapse' : 'Expand'} ${label.replace('// ', '')} section`}
+      >
+        <span className="font-mono text-[8px] text-nock-text-muted w-2 shrink-0">
+          {open ? '▾' : '▸'}
+        </span>
+        <span className="font-mono text-[8px] text-nock-text-muted uppercase tracking-widest group-hover/section:text-nock-text-dim transition-colors">
+          {label}
+        </span>
+        <span className="font-mono text-[8px] text-nock-text-muted ml-auto tabular-nums">
+          {sessions.length}
+        </span>
+      </button>
+      {open && (
       <div className="space-y-0.5">
         {sessions.map((session) => {
           const lifecycle = session.kind === 'agent' ? session.agent?.lifecycle : null;
@@ -244,6 +289,7 @@ function SidebarSessionSection({ label, sessions, onSessionClick }) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

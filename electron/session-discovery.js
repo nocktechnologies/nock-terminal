@@ -121,9 +121,12 @@ class SessionDiscovery {
       });
     }
 
-    // 5. Apply skip list (match against basename)
+    // 5. Apply skip list (match against basename) and drop ephemeral agent
+    // worktree checkouts — transcript cwds inside .claude/worktrees or
+    // .worktrees are session scratch space, not operator targets.
     const all = [...byPath.values()].filter(
       s => !this.skipList.includes(s.name.toLowerCase())
+        && !this._isEphemeralWorktreePath(s.path)
     );
 
     // Sort: sessions with activity first (newest → oldest), then alphabetical for inactive
@@ -139,6 +142,11 @@ class SessionDiscovery {
   _strongestStatus(a, b) {
     const rank = { active: 3, recent: 2, inactive: 1 };
     return (rank[a] || 0) >= (rank[b] || 0) ? a : b;
+  }
+
+  _isEphemeralWorktreePath(p) {
+    const normalized = String(p || '').replace(/\\/g, '/');
+    return normalized.includes('/.claude/worktrees/') || normalized.includes('/.worktrees/');
   }
 
   _pathKey(p) {
