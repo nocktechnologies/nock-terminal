@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { Activity, Command, GitBranch, Radio, Search, Terminal, Trash2, X } from 'lucide-react';
+import { Activity, ChevronDown, Command, GitBranch, Loader2, MessageSquare, Radio, Search, Terminal, Trash2, X } from 'lucide-react';
 import ProjectCard from './ProjectCard';
 import ContextMenu from './ContextMenu';
 import ProjectSettingsModal from './ProjectSettingsModal';
@@ -334,6 +334,8 @@ const OperationsPanel = React.memo(function OperationsPanel({
   onOpenCommandPalette,
   onCleanupStaleTerminals,
 }) {
+  const [expandedDispatchRunId, setExpandedDispatchRunId] = useState('');
+  const [dispatchThreadsByRunId, setDispatchThreadsByRunId] = useState({});
   const summary = useMemo(
     () => summarizeFleet({ sessions, tabs, processStatus, lastDataTimestamps }),
     [sessions, tabs, processStatus, lastDataTimestamps]
@@ -349,7 +351,72 @@ const OperationsPanel = React.memo(function OperationsPanel({
       if (launchableA !== launchableB) return launchableB - launchableA;
       return String(a.name || '').localeCompare(String(b.name || ''));
     }), [sessions]);
-  const recentDispatchRuns = Array.isArray(dispatchRuns) ? dispatchRuns.slice(0, 4) : [];
+  const recentDispatchRuns = useMemo(
+    () => (Array.isArray(dispatchRuns) ? dispatchRuns.slice(0, 4) : []),
+    [dispatchRuns]
+  );
+  const expandedDispatchRun = useMemo(
+    () => recentDispatchRuns.find(run => run.id === expandedDispatchRunId) || null,
+    [recentDispatchRuns, expandedDispatchRunId]
+  );
+  const expandedThreadState = expandedDispatchRun
+    ? dispatchThreadsByRunId[expandedDispatchRun.id]
+    : null;
+  const handleDispatchRunToggle = useCallback(async (run) => {
+    if (!run?.id) return;
+    if (expandedDispatchRunId === run.id) {
+      setExpandedDispatchRunId('');
+      return;
+    }
+
+    setExpandedDispatchRunId(run.id);
+    if (dispatchThreadsByRunId[run.id]?.loaded || dispatchThreadsByRunId[run.id]?.loading) return;
+
+    if (run.mode !== 'brokered' || !run.requestId) {
+      setDispatchThreadsByRunId(prev => ({
+        ...prev,
+        [run.id]: {
+          loaded: true,
+          loading: false,
+          entries: [],
+          emptyLabel: 'No request-level thread is available for this local dispatch run.',
+        },
+      }));
+      return;
+    }
+
+    setDispatchThreadsByRunId(prev => ({
+      ...prev,
+      [run.id]: { loaded: false, loading: true, entries: [] },
+    }));
+
+    try {
+      const result = await window.nockTerminal.dispatch?.thread?.(run.requestId);
+      const entries = Array.isArray(result?.thread) ? result.thread : [];
+      setDispatchThreadsByRunId(prev => ({
+        ...prev,
+        [run.id]: {
+          loaded: true,
+          loading: false,
+          entries,
+          checkedMessageCount: Number(result?.checkedMessageCount) || 0,
+          emptyLabel: entries.length === 0
+            ? 'No request-level messages found yet. Transcript replay is not implemented here.'
+            : '',
+        },
+      }));
+    } catch {
+      setDispatchThreadsByRunId(prev => ({
+        ...prev,
+        [run.id]: {
+          loaded: true,
+          loading: false,
+          entries: [],
+          emptyLabel: 'Message thread unavailable while NockCC is offline.',
+        },
+      }));
+    }
+  }, [dispatchThreadsByRunId, expandedDispatchRunId]);
 
   if (sessions.length === 0 && tabs.length === 0) return null;
 
@@ -404,18 +471,95 @@ const OperationsPanel = React.memo(function OperationsPanel({
             </span>
           ))}
           {recentDispatchRuns.map((run) => (
-            <span key={run.id} className="inline-flex min-w-0 items-center gap-1.5 rounded border border-nock-border bg-nock-bg/70 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-nock-text-dim">
-              <span className={`h-1.5 w-1.5 rounded-full ${dispatchStatusDotClass(run.status)}`} />
-              <span className="max-w-[100px] truncate text-nock-text">{run.agentDisplayName || run.agentName}</span>
-              <span>{run.mode}</span>
-              <span>{run.status}</span>
-            </span>
+            <DispatchRunChip
+              key={run.id}
+              run={run}
+              expanded={expandedDispatchRunId === run.id}
+              onToggle={handleDispatchRunToggle}
+            />
           ))}
+          {expandedDispatchRun && (
+            <DispatchThreadPanel
+              run={expandedDispatchRun}
+              state={expandedThreadState}
+            />
+          )}
         </div>
       )}
     </div>
   );
 });
+
+function DispatchRunChip({ run, expanded, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(run)}
+      className="inline-flex min-w-0 items-center gap-1.5 rounded border border-nock-border bg-nock-bg/70 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-nock-text-dim transition-colors hover:border-nock-accent-cyan/40 hover:text-nock-text"
+      aria-expanded={expanded}
+      title="Show request-level dispatch messages"
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${dispatchStatusDotClass(run.status)}`} />
+      <span className="max-w-[100px] truncate text-nock-text">{run.agentDisplayName || run.agentName}</span>
+      <span>{run.mode}</span>
+      <span>{run.status}</span>
+      <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? 'rotate-180 text-nock-accent-cyan' : ''}`} aria-hidden="true" />
+    </button>
+  );
+}
+
+function DispatchThreadPanel({ run, state }) {
+  const entries = Array.isArray(state?.entries) ? state.entries : [];
+  const isLoading = state?.loading === true;
+  const emptyLabel = state?.emptyLabel || 'Loading request-level messages...';
+
+  return (
+    <div className="basis-full border-t border-nock-border/70 pt-2">
+      <div className="mb-2 flex flex-wrap items-center gap-2 font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">
+        <MessageSquare className="h-3 w-3 text-nock-accent-cyan" aria-hidden="true" />
+        <span>Request Message Thread</span>
+        {run.requestId && <span className="normal-case tracking-normal text-nock-text-dim">{run.requestId}</span>}
+        <span className="text-nock-text-muted">not transcript replay</span>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center gap-2 py-1 font-mono text-[10px] text-nock-text-muted">
+          <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+          Fetching request messages
+        </div>
+      ) : entries.length > 0 ? (
+        <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+          {entries.map((entry, index) => (
+            <div key={entry.messageId || `${entry.createdAt}-${index}`} className="grid gap-1 border-l border-nock-border/80 pl-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-[9px] uppercase tracking-wider text-nock-text-muted">
+                <span className="text-nock-accent-cyan">{formatDispatchThreadTime(entry.createdAt)}</span>
+                <span className="max-w-[120px] truncate text-nock-text">{entry.fromAgent || 'unknown'}</span>
+                {entry.status && <span className="text-nock-green">{entry.status}</span>}
+                {entry.subject && <span className="min-w-0 flex-1 truncate normal-case tracking-normal text-nock-text-dim">{entry.subject}</span>}
+              </div>
+              {entry.body && (
+                <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-nock-text-dim">
+                  {entry.body}
+                </pre>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="py-1 font-mono text-[10px] text-nock-text-muted">{emptyLabel}</div>
+      )}
+    </div>
+  );
+}
+
+function formatDispatchThreadTime(value) {
+  const parsed = Date.parse(value || '');
+  if (!Number.isFinite(parsed)) return '--:--:--';
+  return new Date(parsed).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
 
 function dispatchStatusDotClass(status) {
   const tones = {

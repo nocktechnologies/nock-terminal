@@ -8,6 +8,7 @@ const {
   AgentDispatchService,
   buildBrokeredDispatchMessage,
   buildDirectDispatchCommand,
+  collectDispatchThreadEntries,
   createDispatchPayloadFile,
   sanitizeDispatchText,
 } = require('../electron/agent-dispatch');
@@ -198,6 +199,135 @@ test('brokered dispatch rejects oversized NockCC responses', async () => {
         taskDescription: 'This response should be capped.',
         requestId: 'oversized-1',
       }),
+      /NockCC response exceeded 1 MB/
+    );
+  });
+});
+
+test('normalizes dispatch thread entries for one request id', () => {
+  const hugeBody = `${'x'.repeat(5000)}\u0007`;
+  const entries = collectDispatchThreadEntries([
+    {
+      id: 3,
+      from_agent: 'mira-nockos',
+      subject: 'Wrong request',
+      body: 'completed',
+      context: { request_id: 'other-request', status: 'completed' },
+      created_at: '2026-06-12T10:03:00.000Z',
+    },
+    {
+      id: 2,
+      from_agent: 'mira-nockos',
+      subject: 'Completed',
+      body: hugeBody,
+      context: { request_id: 'req-1', status: 'completed' },
+      created_at: '2026-06-12T10:02:00.000Z',
+    },
+    {
+      id: 1,
+      from_agent: 'nock-terminal',
+      subject: 'Dispatch request',
+      body: 'request_id: req-1\nTask body',
+      context: JSON.stringify({ request_id: 'req-1' }),
+      created_at: '2026-06-12T10:01:00.000Z',
+    },
+    {
+      context: { request_id: 'req-1' },
+    },
+  ], 'req-1');
+
+  assert.equal(entries.length, 3);
+  assert.deepEqual(entries[0], {
+    messageId: '1',
+    fromAgent: 'nock-terminal',
+    subject: 'Dispatch request',
+    body: 'request_id: req-1\nTask body',
+    status: '',
+    createdAt: '2026-06-12T10:01:00.000Z',
+  });
+  assert.equal(entries[1].messageId, '2');
+  assert.equal(entries[1].fromAgent, 'mira-nockos');
+  assert.equal(entries[1].status, 'completed');
+  assert.equal(entries[1].body.length, 4000);
+  assert.equal(entries[1].body.includes('\u0007'), false);
+  assert.deepEqual(entries[2], {
+    messageId: '',
+    fromAgent: '',
+    subject: '',
+    body: '',
+    status: '',
+    createdAt: '',
+  });
+});
+
+test('fetches dispatch thread messages from NockCC inbox plumbing', async () => {
+  await withHttpServer((req, res) => {
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers['x-api-key'], 'test-key');
+    assert.equal(req.url, '/api/teams/messages/inbox/nock-terminal/?limit=100');
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      data: {
+        messages: [
+          {
+            id: 10,
+            from_agent: 'mira-nockos',
+            subject: 'Accepted',
+            body: 'accepted',
+            context: { request_id: 'req-thread', status: 'accepted' },
+            created_at: '2026-06-12T10:00:00.000Z',
+          },
+          {
+            id: 11,
+            from_agent: 'mira-nockos',
+            subject: 'Other',
+            context: { request_id: 'other-thread', status: 'completed' },
+            created_at: '2026-06-12T10:01:00.000Z',
+          },
+        ],
+      },
+    }));
+  }, async (baseUrl) => {
+    const service = new AgentDispatchService({
+      get(key) {
+        return key === 'nockccApiKey' ? 'test-key' : baseUrl;
+      },
+    });
+
+    assert.deepEqual(await service.getDispatchThread('req-thread'), {
+      success: true,
+      requestId: 'req-thread',
+      agentName: 'nock-terminal',
+      checkedMessageCount: 2,
+      thread: [
+        {
+          messageId: '10',
+          fromAgent: 'mira-nockos',
+          subject: 'Accepted',
+          body: 'accepted',
+          status: 'accepted',
+          createdAt: '2026-06-12T10:00:00.000Z',
+        },
+      ],
+    });
+  });
+});
+
+test('dispatch thread fetch rejects oversized NockCC responses', async () => {
+  await withHttpServer((req, res) => {
+    req.resume();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('x'.repeat((1024 * 1024) + 1));
+  }, async (baseUrl) => {
+    const service = new AgentDispatchService({
+      get(key) {
+        return key === 'nockccApiKey' ? 'test-key' : baseUrl;
+      },
+    });
+
+    await assert.rejects(
+      service.getDispatchThread('req-thread'),
       /NockCC response exceeded 1 MB/
     );
   });

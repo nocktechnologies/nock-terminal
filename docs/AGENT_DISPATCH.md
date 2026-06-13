@@ -88,6 +88,8 @@ H4 proper uses the live NockCC inbox API confirmed by Mira in live message `#151
 
 Status may come from `context.status`, `context.dispatch_status`, `context.dispatchStatus`, `context.state`, or a conservative status word in the body. The supported live statuses are `accepted`, `running`, `blocked`, `completed`, and `failed`. The reducer rejects invalid state movement, such as `running` back to `blocked`, so stale or out-of-order messages do not corrupt local history.
 
+Wave 4 adds on-demand request thread rendering for brokered runs. Expanding a dispatch run fetches a bounded NockCC inbox page for the same `context.request_id`, normalizes matching AgentMessages into chronological entries, and renders the request-level thread in the dashboard. This is not a transcript replay feature: it shows AgentMessages about the dispatch request, not the launched agent's terminal transcript.
+
 ### Correlation Fields
 
 Every dispatch route must carry a stable `request_id`.
@@ -147,6 +149,8 @@ For direct dispatch, the source of truth is split:
 
 If NockCC later exposes a push/live-subscription API, it can replace the bounded polling loop without changing the reducer contract. The current polling interval is 30 seconds, stops when all visible brokered runs are terminal, and never blocks direct dispatch.
 
+Request thread rendering intentionally does not add a polling loop. The dashboard fetches the thread only when the operator expands a brokered dispatch run, caches the result for that row, and shows a quiet empty/offline state when NockCC is unavailable or no correlated messages exist yet.
+
 ### Retention And Privacy
 
 - Keep the renderer-side history capped at 12 visible runs unless a user setting is added.
@@ -164,6 +168,7 @@ The implementation slice should add:
 - a NockCC live-message polling service with request-id correlation: H4
 - dashboard rendering for `accepted`, `running`, `blocked`, `completed`, `failed`, and `expired`: H4 via the normalized operations panel chips
 - soft failure when NockCC is unconfigured or unavailable: H4
+- on-demand brokered dispatch request-thread rendering: Wave 4
 
 It should not change dispatch-agent discovery, direct payload creation, or dispatcher script invocation unless the correlation contract cannot be satisfied without a minimal request-id propagation fix.
 
@@ -173,11 +178,12 @@ It should not change dispatch-agent discovery, direct payload creation, or dispa
 - `Ctrl+K` search matches runtime, dispatch state, broker, and command template.
 - Task staging switches copy and button text from terminal staging to dispatch request when a dispatch agent is selected.
 - Recent dispatch requests appear in the dashboard operations panel with route and status.
+- Brokered dispatch request rows expand to show the correlated NockCC AgentMessage thread, with monospace timestamps and offline-safe empty states.
 - Clicking a dispatch agent card opens the launcher with that agent selected in task staging, because dispatch agents need a task payload before they can launch.
 - Direct dispatch uses the per-agent alias script when available, and falls back to `core/scripts/dispatch-<runtime>.sh --agent <agent>` when no alias exists.
 
 ## Current Limits
 
-- Completion tracking is request-level, not full session replay. Brokered runs can advance from `sent` when NockCC live AgentMessages report a correlated status, but the app does not yet render the full AgentMessage thread or dispatched agent transcript.
-- Codex rollout transcript discovery is supported for recent local CLI sessions; Codex session resume, attach semantics, full transcript replay, and dispatch completion-thread rendering remain future adapter work.
+- Completion tracking and thread rendering are request-level, not full session replay. Brokered runs can advance from `sent` when NockCC live AgentMessages report a correlated status, and operators can expand a run to inspect the correlated AgentMessage thread. The app does not render the dispatched agent terminal transcript.
+- Codex rollout transcript discovery is supported for recent local CLI sessions; Codex session resume, attach semantics, and full transcript replay remain future adapter work.
 - DeepSeek support is API-backed through the CRM dispatcher; there is no standalone DeepSeek CLI profile launcher.

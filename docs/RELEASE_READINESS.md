@@ -90,6 +90,7 @@ Before a public beta announcement, install the generated artifacts on clean mach
 - Codex/DeepSeek dispatch agents appear once each, show `DISPATCH`, and do not duplicate from copied dispatch worktrees.
 - Clicking a Codex/DeepSeek dispatch agent opens task staging with that agent selected instead of opening a plain folder terminal.
 - Brokered dispatch sends a NockCC AgentMessage to Mira when NockCC is configured.
+- Brokered dispatch run rows expand to show the correlated request-level NockCC AgentMessage thread, and fail quietly when NockCC is offline.
 - Direct dispatch creates a sanitized temp payload file, schedules cleanup, and opens a terminal running the resolved per-agent alias or canonical CRM dispatch script.
 - Monaco can open, edit, save, and protect unsaved changes on close.
 - Context monitor reports `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, Codex config, and `.nock/config.toml` accurately.

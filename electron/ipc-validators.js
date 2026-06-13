@@ -390,6 +390,27 @@ function validateDispatchStatusUpdatesPayload(payload) {
   });
 }
 
+function validateDispatchThreadPayload(payload) {
+  if (!isPlainObject(payload)) return invalid('dispatch:thread payload must be an object');
+
+  const requestId = normalizeString(payload.requestId, { maxLength: 120, allowEmpty: false });
+  if (!requestId || !/^[A-Za-z0-9_-]+$/.test(requestId)) {
+    return invalid('dispatch:thread requires a valid requestId');
+  }
+
+  const agentName = payload.agentName === undefined
+    ? 'nock-terminal'
+    : safeAgentName(payload.agentName);
+  if (!agentName) return invalid('dispatch:thread requires a valid agentName');
+
+  const rawLimit = Number(payload.limit);
+  const limit = Number.isFinite(rawLimit)
+    ? Math.min(100, Math.max(1, Math.floor(rawLimit)))
+    : 100;
+
+  return ok({ requestId, agentName, limit });
+}
+
 function validateFilesPayload(operation, payload, context = {}) {
   switch (operation) {
     case 'tree':
@@ -453,6 +474,7 @@ module.exports = {
   validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
   validateDispatchStatusUpdatesPayload,
+  validateDispatchThreadPayload,
   validateFilesPayload,
   validateProfileSavePayload,
   validateProjectLookupPath,

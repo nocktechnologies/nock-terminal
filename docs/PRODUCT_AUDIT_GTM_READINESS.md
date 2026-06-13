@@ -11,7 +11,7 @@ Nock Terminal is not ready for public GTM or paid launch.
 
 After the May 15 remediation pass, it is ready for renewed internal dogfood and a controlled private alpha. The previous launch blockers around dependency audit, terminal settings, unsaved editor protection, NockCC placeholder activity, first-run onboarding, and release gates have been fixed or materially reduced.
 
-The remaining public-GTM blockers are product depth and distribution proof: broader reconnect/attach for live agents beyond the proven CRM tmux path, Codex resume/attach adapters, Gemini transcript adapters, worktree lanes, session replay, signed installer smoke coverage on every target OS, a public support/feedback route, crash/error reporting privacy posture, and a crisp public demo path.
+The remaining public-GTM blockers are product depth and distribution proof: broader reconnect/attach for live agents beyond the proven CRM tmux path, Codex resume/attach adapters, Gemini transcript adapters, worktree lanes, full session replay, signed installer smoke coverage on every target OS, a public support/feedback route, crash/error reporting privacy posture, and a crisp public demo path.
 
 The product has useful bones: a real PTY-backed terminal, Claude transcript discovery, agent-folder discovery, project cards, file tree, Monaco editing, local model chat, prompt/session history, git controls, port awareness, and notifications. The main problem is not lack of product surface. The problem is that the surface is not yet formed into a sharp promise people can immediately understand and trust.
 
@@ -53,6 +53,16 @@ Wave 3 closed the first Codex transcript-discovery adapter:
 - Codex `AGENT_SESSION_CONTRACTS.transcriptDiscovery` now honestly reports `supported` with source `codex-rollout-jsonl`; Codex live attach and resume command remain future work.
 
 Readiness impact: this removes the "Claude-only transcript discovery" truth gap for recent Codex CLI sessions. It does not make Codex fully first-class yet because resume/attach semantics, full transcript replay, worktree lanes, signed installer smoke, auto-update, crash reporting, public support, and demo material still need proof.
+
+## June 12 Wave 4 Progress
+
+Wave 4 closed request-level dispatch thread rendering:
+
+- Brokered dispatch rows in the dashboard can expand into an on-demand NockCC AgentMessage thread keyed by `context.request_id`.
+- The main process fetches the same live inbox family used for dispatch status updates, keeps the response bounded, filters foreign request ids, and caps body text before IPC.
+- The renderer presents the thread as request evidence with quiet loading, empty, and offline states. It deliberately does not claim launched-agent terminal transcript replay.
+
+Readiness impact: this improves operational observability for dispatched work and removes the "no visible request thread" gap. It still does not make full session replay, Codex resume/attach, Gemini transcript discovery, signed installer smoke, auto-update, crash reporting, public support, or demo material ready.
 
 ## Verification Summary
 
@@ -133,7 +143,7 @@ Impact: Users will bounce if the public promise says Codex but the app behaves l
 
 Status: Improved, still not public-GTM complete.
 
-The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an adapter registry for Claude/Codex/Gemini process detection and project context checks, first-class local agent-folder discovery from existing `config.json` files, profile-driven launches for Claude/Codex/Gemini/custom agents, Claude transcript discovery, recent Codex rollout transcript discovery, Codex/DeepSeek dispatch discovery, brokered dispatch through Mira, and a command launcher that can stage tasks into fresh agent terminals or dispatch requests. True reconnect/attach for live agents remains future work outside the proven CRM tmux path.
+The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an adapter registry for Claude/Codex/Gemini process detection and project context checks, first-class local agent-folder discovery from existing `config.json` files, profile-driven launches for Claude/Codex/Gemini/custom agents, Claude transcript discovery, recent Codex rollout transcript discovery, Codex/DeepSeek dispatch discovery, brokered dispatch through Mira, request-level dispatch AgentMessage thread rendering, and a command launcher that can stage tasks into fresh agent terminals or dispatch requests. True reconnect/attach for live agents remains future work outside the proven CRM tmux path.
 
 Recommendation: keep the private alpha agent-agnostic in launch/profile posture, while staying explicit that Codex transcript discovery covers recent rollout JSONL files only. Do not market Codex as fully first-class until Codex resume/attach, transcript history/replay, and settings are all backed by code.
 
