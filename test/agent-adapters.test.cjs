@@ -59,7 +59,8 @@ test('agent session contracts separate transcript, attach, resume, and launch se
   assert.equal(codex.transcriptDiscovery.state, 'supported');
   assert.equal(codex.transcriptDiscovery.source, 'codex-rollout-jsonl');
   assert.deepEqual(codex.transcriptDiscovery.paths, ['~/.codex/sessions/**/rollout-*.jsonl']);
-  assert.equal(codex.resumeCommand.state, 'future');
+  assert.equal(codex.resumeCommand.state, 'conditional');
+  assert.equal(codex.resumeCommand.evidence, 'codex-rollout-session-id');
   assert.equal(gemini.transcriptDiscovery.state, 'conditional');
   assert.equal(gemini.transcriptDiscovery.source, 'gemini-prompt-logs');
   assert.equal(gemini.transcriptDiscovery.evidence, 'gemini-prompt-logs');
@@ -69,7 +70,8 @@ test('agent session contracts separate transcript, attach, resume, and launch se
   ]);
   assert.match(gemini.transcriptDiscovery.notes, /user prompt events/i);
   assert.match(gemini.transcriptDiscovery.notes, /not full transcripts/i);
-  assert.equal(gemini.resumeCommand.state, 'future');
+  assert.equal(gemini.resumeCommand.state, 'conditional');
+  assert.equal(gemini.resumeCommand.evidence, 'gemini-latest-session');
   assert.equal(localFolder.liveAttach.state, 'conditional');
   assert.equal(localFolder.resumeCommand.state, 'conditional');
   assert.equal(localFolder.folderLaunch.state, 'conditional');

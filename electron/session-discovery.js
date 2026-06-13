@@ -331,6 +331,20 @@ class SessionDiscovery {
         cwdSource,
       };
 
+      // `codex resume <SESSION_ID>` takes the rollout UUID directly, so a
+      // safe session id becomes a per-session resume launch in the project cwd.
+      const resumable = /^[A-Za-z0-9-]{8,}$/.test(sessionId);
+      let resumeLaunch;
+      if (resumable) {
+        const command = `codex resume ${sessionId}`;
+        sessionContract.resumeCommand = {
+          state: 'supported',
+          command,
+          notes: 'Resumes this Codex rollout session by id in the project working directory.',
+        };
+        resumeLaunch = this._buildResumeLaunch(command, projectPath);
+      }
+
       const gitInfo = this._canInspectLocalPath(projectPath)
         ? await this._getGitInfo(projectPath)
         : { branch: null, dirty: false };
@@ -346,11 +360,27 @@ class SessionDiscovery {
         lastActivityFormatted: this._formatTime(lastActivity),
         dirty: gitInfo.dirty,
         sessionContract,
+        ...(resumable ? { codexSessionId: sessionId, launch: resumeLaunch } : {}),
       };
     } catch (err) {
       this._debugDiscovery('Codex rollout parse failed', { path: filePath, error: err });
       return null;
     }
+  }
+
+  // Shared shape for a transcript-derived resume launch (Claude/Codex/Gemini).
+  // The row only resumes from an explicit affordance, never a plain click —
+  // shouldRunSessionLaunch gates action:'resume' behind options.resume.
+  _buildResumeLaunch(command, cwd) {
+    return {
+      mode: 'terminal',
+      action: 'resume',
+      actionLabel: 'Resume',
+      capability: 'resume-command',
+      canLaunch: true,
+      command,
+      cwd,
+    };
   }
 
   _dedupeCodexSessions(sessions) {
@@ -440,6 +470,18 @@ class SessionDiscovery {
       lastActivitySource: promptLog.lastActivitySource,
     };
 
+    // Gemini resumes by recency/index ("latest"), not by the session id we
+    // recover — so we honestly offer "resume the latest session in this
+    // project," which is the session this row already represents (max
+    // activity). We never claim to resume a specific arbitrary session.
+    const command = 'gemini --resume latest';
+    sessionContract.resumeCommand = {
+      state: 'conditional',
+      evidence: 'gemini-latest-session',
+      command,
+      notes: 'Gemini resumes by recency, not session id; this resumes the most recent Gemini session in the project cwd.',
+    };
+
     const gitInfo = this._canInspectLocalPath(confirmedProjectPath)
       ? await this._getGitInfo(confirmedProjectPath)
       : { branch: null, dirty: false };
@@ -454,6 +496,7 @@ class SessionDiscovery {
       lastActivityFormatted: this._formatTime(promptLog.lastActivity),
       dirty: gitInfo.dirty,
       sessionContract,
+      launch: this._buildResumeLaunch(command, confirmedProjectPath),
     };
   }
 
@@ -1491,15 +1534,7 @@ class SessionDiscovery {
         sessionContract,
         ...(resumable ? {
           claudeSessionId: latestSessionId,
-          launch: {
-            mode: 'terminal',
-            action: 'resume',
-            actionLabel: 'Resume',
-            capability: 'resume-command',
-            canLaunch: true,
-            command: `claude --resume ${latestSessionId}`,
-            cwd: decodedPath,
-          },
+          launch: this._buildResumeLaunch(`claude --resume ${latestSessionId}`, decodedPath),
         } : {}),
       };
     } catch (err) {
