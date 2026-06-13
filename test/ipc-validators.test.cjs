@@ -11,6 +11,7 @@ const {
   sanitizeDispatchText,
   validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
+  validateDispatchThreadPayload,
   validateFilesPayload,
   validateProfileSavePayload,
   validateProjectLookupPath,
@@ -274,6 +275,27 @@ test('dispatch:brokered rejects malformed payloads with the shared IPC error sha
     agentBound: false,
     brokerAgent: 'mira-nockos',
     priority: 'high',
+  });
+});
+
+test('dispatch:thread validates request ids and optional polling bounds', () => {
+  assert.equal(validateDispatchThreadPayload({ requestId: '../escape' }).ok, false);
+  assert.equal(validateDispatchThreadPayload({ requestId: '' }).ok, false);
+  assert.equal(validateDispatchThreadPayload({ requestId: 'req-1', agentName: '../bad' }).ok, false);
+
+  const accepted = validateDispatchThreadPayload({
+    requestId: 'Req_1-2',
+    agentName: 'Nock-Terminal',
+    limit: 500,
+  });
+
+  assert.deepEqual(accepted, {
+    ok: true,
+    value: {
+      requestId: 'Req_1-2',
+      agentName: 'nock-terminal',
+      limit: 100,
+    },
   });
 });
 

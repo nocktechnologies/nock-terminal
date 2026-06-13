@@ -3,6 +3,7 @@ const {
   validateDispatchBrokeredPayload,
   validateDispatchCreatePayload,
   validateDispatchStatusUpdatesPayload,
+  validateDispatchThreadPayload,
 } = require('./ipc-validators');
 
 function dispatchServiceError(error, fallbackMessage) {
@@ -43,6 +44,16 @@ function registerDispatchIPC({
       return await agentDispatchService.pollStatusUpdates(validated.value);
     } catch (err) {
       return dispatchServiceError(err, 'Failed to poll dispatch status updates');
+    }
+  });
+
+  ipcMain.handle('dispatch:thread', async (_, payload) => {
+    const validated = validateDispatchThreadPayload(payload);
+    if (!validated.ok) return errorPayload(validated);
+    try {
+      return await agentDispatchService.getDispatchThread(validated.value);
+    } catch (err) {
+      return dispatchServiceError(err, 'Failed to fetch dispatch thread');
     }
   });
 }

@@ -17,6 +17,7 @@ const {
 const DEFAULT_BROKER_AGENT = 'mira-nockos';
 const DEFAULT_STATUS_POLL_AGENT = 'nock-terminal';
 const MAX_TASK_LENGTH = 12000;
+const MAX_THREAD_BODY_LENGTH = 4000;
 const DEFAULT_PAYLOAD_CLEANUP_MS = 24 * 60 * 60 * 1000;
 const MAX_NOCKCC_RESPONSE_BYTES = 1024 * 1024;
 const DISPATCH_PAYLOAD_DIR_PREFIX = 'nock-dispatch-';
@@ -216,6 +217,27 @@ function compareMessageOrder(a, b) {
   return 0;
 }
 
+function compareThreadMessageOrder(a, b) {
+  const aTime = Date.parse(a.createdAt || '');
+  const bTime = Date.parse(b.createdAt || '');
+  const aHasTime = Number.isFinite(aTime) && aTime > 0;
+  const bHasTime = Number.isFinite(bTime) && bTime > 0;
+  if (aHasTime && bHasTime && aTime !== bTime) return aTime - bTime;
+  if (aHasTime !== bHasTime) return aHasTime ? -1 : 1;
+
+  const aId = a.messageId || '';
+  const bId = b.messageId || '';
+  const aNumber = Number(aId);
+  const bNumber = Number(bId);
+  if (aId && bId && Number.isFinite(aNumber) && Number.isFinite(bNumber)) {
+    const diff = aNumber - bNumber;
+    if (diff !== 0) return diff;
+  }
+  if (aId < bId) return -1;
+  if (aId > bId) return 1;
+  return 0;
+}
+
 function collectDispatchStatusUpdates(messages, requestIds) {
   const wantedRequestIds = new Set(normalizeRequestIds(requestIds));
   if (!Array.isArray(messages) || wantedRequestIds.size === 0) return [];
@@ -246,6 +268,28 @@ function collectDispatchStatusUpdates(messages, requestIds) {
     })
     .filter(Boolean)
     .sort(compareMessageOrder);
+}
+
+function collectDispatchThreadEntries(messages, requestId) {
+  const wantedRequestId = safeRequestId(requestId);
+  if (!Array.isArray(messages) || !wantedRequestId) return [];
+
+  return messages
+    .map((message) => {
+      const context = normalizeMessageContext(message?.context);
+      if (requestIdFromMessage(message, context) !== wantedRequestId) return null;
+
+      return {
+        messageId: safeString(String(message?.id || message?.message_id || message?.messageId || ''), 200),
+        fromAgent: safeAgentName(message?.from_agent || message?.fromAgent || message?.sender_agent),
+        subject: safeString(message?.subject, 200),
+        body: sanitizeDispatchText(message?.body, MAX_THREAD_BODY_LENGTH),
+        status: statusFromMessage(message, context),
+        createdAt: safeString(message?.created_at || message?.createdAt, 80),
+      };
+    })
+    .filter(Boolean)
+    .sort(compareThreadMessageOrder);
 }
 
 function buildDirectDispatchCommand({ scriptPath, agentName, payloadFile, agentBound = false } = {}) {
@@ -517,12 +561,44 @@ class AgentDispatchService {
       updates: collectDispatchStatusUpdates(messages, requestIds),
     };
   }
+
+  async getDispatchThread(input = {}) {
+    const requestId = safeRequestId(typeof input === 'string' ? input : input.requestId);
+    const agentName = safeAgentName(input.agentName) || DEFAULT_STATUS_POLL_AGENT;
+    const limit = safeLimit(input.limit, 100);
+    if (!requestId) {
+      return {
+        success: true,
+        requestId: '',
+        agentName,
+        checkedMessageCount: 0,
+        thread: [],
+      };
+    }
+
+    const params = new URLSearchParams({ limit: String(limit) });
+    const config = await readNockCCConfig(this._store);
+    const response = await requestJson(
+      config,
+      'GET',
+      `/api/teams/messages/inbox/${encodeURIComponent(agentName)}/?${params.toString()}`
+    );
+    const messages = normalizeMessagesResponse(response);
+    return {
+      success: true,
+      requestId,
+      agentName,
+      checkedMessageCount: messages.length,
+      thread: collectDispatchThreadEntries(messages, requestId),
+    };
+  }
 }
 
 module.exports = {
   AgentDispatchService,
   buildBrokeredDispatchMessage,
   buildDirectDispatchCommand,
+  collectDispatchThreadEntries,
   collectDispatchStatusUpdates,
   createDispatchPayloadFile,
   sanitizeDispatchText,

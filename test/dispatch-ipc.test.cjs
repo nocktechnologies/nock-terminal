@@ -37,6 +37,10 @@ function registerHarness(serviceOverrides = {}) {
       calls.push(['pollStatusUpdates', payload]);
       return { success: true, route: 'statusUpdates', payload };
     },
+    async getDispatchThread(payload) {
+      calls.push(['getDispatchThread', payload]);
+      return { success: true, route: 'thread', payload };
+    },
     ...serviceOverrides,
   };
   const ipc = createIpcHarness();
@@ -56,6 +60,7 @@ test('registerDispatchIPC registers the renderer dispatch contract', () => {
     'dispatch:brokered',
     'dispatch:createPayload',
     'dispatch:statusUpdates',
+    'dispatch:thread',
   ]);
 });
 
@@ -153,6 +158,24 @@ test('dispatch status update handler validates and normalizes polling payloads',
   });
 });
 
+test('dispatch thread handler validates and normalizes request payloads', async () => {
+  const ipc = registerHarness();
+
+  assert.deepEqual(await ipc.invoke('dispatch:thread', {
+    requestId: 'Req-1',
+    agentName: 'Nock-Terminal',
+    limit: 500,
+  }), {
+    success: true,
+    route: 'thread',
+    payload: {
+      requestId: 'Req-1',
+      agentName: 'nock-terminal',
+      limit: 100,
+    },
+  });
+});
+
 test('dispatch status update handler rejects empty request id lists', async () => {
   const ipc = registerHarness();
 
@@ -161,6 +184,18 @@ test('dispatch status update handler rejects empty request id lists', async () =
   }), {
     success: false,
     error: 'dispatch:statusUpdates requires at least one valid requestId',
+    code: 'IPC_VALIDATION_ERROR',
+  });
+});
+
+test('dispatch thread handler rejects unsafe request ids', async () => {
+  const ipc = registerHarness();
+
+  assert.deepEqual(await ipc.invoke('dispatch:thread', {
+    requestId: '../escape',
+  }), {
+    success: false,
+    error: 'dispatch:thread requires a valid requestId',
     code: 'IPC_VALIDATION_ERROR',
   });
 });
@@ -174,6 +209,9 @@ test('dispatch handlers return stable failure messages for service errors', asyn
       throw new Error('');
     },
     async pollStatusUpdates() {
+      throw new Error('');
+    },
+    async getDispatchThread() {
       throw new Error('');
     },
   });
@@ -201,5 +239,12 @@ test('dispatch handlers return stable failure messages for service errors', asyn
   }), {
     success: false,
     error: 'Failed to poll dispatch status updates',
+  });
+
+  assert.deepEqual(await ipc.invoke('dispatch:thread', {
+    requestId: 'request-1',
+  }), {
+    success: false,
+    error: 'Failed to fetch dispatch thread',
   });
 });

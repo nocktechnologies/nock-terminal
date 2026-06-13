@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     brokered: (payload) => ipcRenderer.invoke('dispatch:brokered', payload),
     createPayload: (payload) => ipcRenderer.invoke('dispatch:createPayload', payload),
     statusUpdates: (payload) => ipcRenderer.invoke('dispatch:statusUpdates', payload),
+    thread: (requestId) => ipcRenderer.invoke('dispatch:thread', { requestId }),
   },
 
   // AI Chat
