@@ -101,8 +101,9 @@ export default function Dashboard({
       });
     } else {
       if (session.launch?.action === 'resume' && session.launch?.canLaunch === true) {
+        const resumeAgentLabel = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' }[session.sessionContract?.adapterId] || 'Agent';
         items.push({
-          label: 'Resume Claude Session',
+          label: `Resume ${resumeAgentLabel} Session`,
           icon: (
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" />

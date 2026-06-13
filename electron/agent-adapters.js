@@ -100,8 +100,9 @@ const AGENT_SESSION_CONTRACTS = [
       notes: 'No live Codex attach target is implemented.',
     },
     resumeCommand: {
-      state: 'future',
-      notes: 'No Codex resume command is exposed by Nock Terminal yet.',
+      state: 'conditional',
+      evidence: 'codex-rollout-session-id',
+      notes: 'Supported when discovery recovers a rollout session id; resumes via `codex resume <id>` in the project cwd.',
     },
     folderLaunch: {
       state: 'supported',
@@ -124,8 +125,9 @@ const AGENT_SESSION_CONTRACTS = [
       notes: 'No live Gemini attach target is implemented.',
     },
     resumeCommand: {
-      state: 'future',
-      notes: 'No Gemini resume command is exposed by Nock Terminal yet.',
+      state: 'conditional',
+      evidence: 'gemini-latest-session',
+      notes: 'Gemini resumes by recency, not session id; Nock offers `gemini --resume latest` (most recent session in the project cwd), not resume of a specific recovered session.',
     },
     folderLaunch: {
       state: 'supported',

@@ -315,7 +315,48 @@ test('discovers Codex rollout sessions from session_meta cwd', async () => {
   assert.equal(project.sessionContract.transcriptDiscovery.sessionId, 'codex-session-1');
   assert.equal(project.sessionContract.transcriptDiscovery.cliVersion, '1.2.3');
   assert.equal(project.sessionContract.liveAttach.state, 'future');
-  assert.equal(project.sessionContract.resumeCommand.state, 'future');
+  assert.equal(project.sessionContract.resumeCommand.state, 'supported');
+  assert.equal(project.sessionContract.resumeCommand.command, 'codex resume codex-session-1');
+  assert.equal(project.codexSessionId, 'codex-session-1');
+  assert.equal(project.launch.action, 'resume');
+  assert.equal(project.launch.actionLabel, 'Resume');
+  assert.equal(project.launch.canLaunch, true);
+  assert.equal(project.launch.command, 'codex resume codex-session-1');
+  assert.equal(project.launch.cwd, projectPath);
+});
+
+test('Codex rollout rows skip resume when the session id is unsafe', async () => {
+  const root = makeTempDir();
+  const codexSessionsDir = path.join(root, '.codex', 'sessions');
+  const projectPath = path.join(root, 'Dev', 'unsafe-id');
+  const rolloutPath = path.join(codexSessionsDir, '2026', '06', '12', 'rollout-unsafe.jsonl');
+
+  writeRollout(rolloutPath, [
+    {
+      type: 'session_meta',
+      timestamp: '2026-06-12T10:00:00.000Z',
+      payload: { id: 'bad id; rm -rf /', cwd: projectPath, cli_version: '1.2.3' },
+    },
+  ]);
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir,
+    devRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const project = sessions.find(session => session.path === projectPath);
+
+  assert.ok(project);
+  // No launch and no recovered id are the operative signals; the contract
+  // stays at the adapter-level 'conditional' (capability exists, this row
+  // just did not yield a usable id), never upgraded to 'supported'.
+  assert.equal(project.launch, undefined);
+  assert.equal(project.codexSessionId, undefined);
+  assert.notEqual(project.sessionContract.resumeCommand.state, 'supported');
+  assert.equal(project.sessionContract.resumeCommand.command, undefined);
 });
 
 test('falls back to Codex turn_context cwd when session_meta lacks cwd', async () => {
@@ -525,7 +566,11 @@ test('discovers Gemini prompt-log sessions from projects.json and logs.json', as
     path.join(geminiDir, 'tmp', slug, 'logs.json')
   );
   assert.equal(project.sessionContract.liveAttach.state, 'future');
-  assert.equal(project.sessionContract.resumeCommand.state, 'future');
+  assert.equal(project.sessionContract.resumeCommand.state, 'conditional');
+  assert.equal(project.sessionContract.resumeCommand.command, 'gemini --resume latest');
+  assert.equal(project.launch.action, 'resume');
+  assert.equal(project.launch.command, 'gemini --resume latest');
+  assert.equal(project.launch.cwd, projectPath);
 });
 
 test('Gemini project-presence entries without prompt records emit no rows', async () => {
