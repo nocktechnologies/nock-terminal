@@ -76,8 +76,9 @@ const AGENT_SESSION_CONTRACTS = [
       notes: 'Current Claude Code rows are transcript-derived project records; no proven live attach target is exposed yet.',
     },
     resumeCommand: {
-      state: 'future',
-      notes: 'Claude resume semantics need an explicit adapter before the UI should claim resume support.',
+      state: 'conditional',
+      evidence: 'claude-jsonl-session-id',
+      notes: 'Supported when discovery recovers a transcript session id; resumes via `claude --resume <id>` in the project cwd.',
     },
     folderLaunch: {
       state: 'supported',

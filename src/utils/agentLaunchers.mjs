@@ -161,6 +161,13 @@ function sessionCanLaunch(session) {
 
 export function shouldRunSessionLaunch(session, options = {}) {
   if (options?.openFolderOnly === true) return false;
+  // Resume launches replay a past session, so they never fire from a plain
+  // row click — only from an explicit resume affordance.
+  if (trimString(session?.launch?.action) === 'resume') {
+    return options?.resume === true
+      && session?.launch?.canLaunch === true
+      && Boolean(trimString(session?.launch?.command));
+  }
   if (!sessionCanLaunch(session)) return false;
   if (!trimString(session?.launch?.command)) return false;
   if (options?.launchFresh === true) return true;

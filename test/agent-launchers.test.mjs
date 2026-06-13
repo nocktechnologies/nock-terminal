@@ -284,3 +284,25 @@ test('sanitizes staged terminal input without submitting shell newlines', () => 
     'fix the bug then run tests please'
   );
 });
+
+test('resume launches run only when explicitly requested', () => {
+  const resumeRow = {
+    kind: 'project',
+    launch: {
+      mode: 'terminal',
+      action: 'resume',
+      actionLabel: 'Resume',
+      canLaunch: true,
+      command: 'claude --resume 11111111-aaaa-4bbb-8ccc-222222222222',
+    },
+  };
+
+  assert.equal(shouldRunSessionLaunch(resumeRow), false);
+  assert.equal(shouldRunSessionLaunch(resumeRow, { launchFresh: true }), false);
+  assert.equal(shouldRunSessionLaunch(resumeRow, { resume: true }), true);
+  assert.equal(shouldRunSessionLaunch(resumeRow, { resume: true, openFolderOnly: true }), false);
+  assert.equal(
+    shouldRunSessionLaunch({ ...resumeRow, launch: { ...resumeRow.launch, canLaunch: false } }, { resume: true }),
+    false
+  );
+});

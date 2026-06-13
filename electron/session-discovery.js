@@ -1192,6 +1192,23 @@ class SessionDiscovery {
         projectPath,
       };
 
+      // The newest transcript's filename is the Claude session id, which
+      // `claude --resume <id>` accepts. Only ids matching the safe charset
+      // become resume commands — anything else stays launch-less.
+      const newestJsonl = jsonlFiles.reduce(
+        (best, candidate) => (!best || candidate.mtime > best.mtime ? candidate : best),
+        null
+      );
+      const latestSessionId = newestJsonl ? path.basename(newestJsonl.file, '.jsonl') : '';
+      const resumable = /^[A-Za-z0-9-]{8,}$/.test(latestSessionId);
+      if (resumable) {
+        sessionContract.resumeCommand = {
+          state: 'supported',
+          command: `claude --resume ${latestSessionId}`,
+          notes: 'Resumes the newest transcript session for this project in its working directory.',
+        };
+      }
+
       // Get git info (branch + dirty) — cached and async
       const gitInfo = await this._getGitInfo(decodedPath);
 
@@ -1215,6 +1232,18 @@ class SessionDiscovery {
         lastActivityFormatted: this._formatTime(lastActivity),
         dirty: gitInfo.dirty,
         sessionContract,
+        ...(resumable ? {
+          claudeSessionId: latestSessionId,
+          launch: {
+            mode: 'terminal',
+            action: 'resume',
+            actionLabel: 'Resume',
+            capability: 'resume-command',
+            canLaunch: true,
+            command: `claude --resume ${latestSessionId}`,
+            cwd: decodedPath,
+          },
+        } : {}),
       };
     } catch (err) {
       this._debugDiscovery('Claude project parse failed', { path: projectPath, dirName, error: err });
