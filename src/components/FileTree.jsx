@@ -181,8 +181,12 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
             rootPath={rootPath}
             onFileClick={onFileClick}
             onContextMenu={handleContextMenu}
+            forceExpand={Boolean(filter)}
           />
         ))}
+        {filter && filteredTree.length === 0 && (
+          <p className="font-mono text-[10px] text-nock-text-muted px-2 py-1">No files match</p>
+        )}
       </div>
 
       {/* Context menu */}
@@ -198,29 +202,32 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
   );
 }
 
-function TreeNode({ node, depth, gitStatus, rootPath, onFileClick, onContextMenu }) {
+function TreeNode({ node, depth, gitStatus, rootPath, onFileClick, onContextMenu, forceExpand = false }) {
   const [expanded, setExpanded] = useState(depth < 1);
 
   const relativePath = node.path.replace(rootPath, '').replace(/^[/\\]/, '').replace(/\\/g, '/');
   const statusCode = gitStatus[relativePath] || gitStatus[relativePath.replace(/\//g, '\\')];
 
   if (node.type === 'dir') {
+    // While a filter is active every surviving folder opens, so matches deep
+    // in the tree are visible instead of hiding behind collapsed parents.
+    const isOpen = forceExpand || expanded;
     return (
       <div>
         <button
           type="button"
-          onClick={() => setExpanded(!expanded)}
+          onClick={() => setExpanded(!isOpen)}
           onContextMenu={(e) => onContextMenu(e, node)}
           className="w-full min-h-6 text-left flex items-center gap-1 py-0.5 hover:bg-nock-card/50 rounded transition-colors"
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
-          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${node.name}`}
+          aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${node.name}`}
         >
           <span className="text-[10px] text-nock-accent-blue w-3 shrink-0">
-            {expanded ? '▾' : '▸'}
+            {isOpen ? '▾' : '▸'}
           </span>
           <span className="text-[10px] text-nock-accent-blue truncate">{node.name}/</span>
         </button>
-        {expanded && node.children?.map(child => (
+        {isOpen && node.children?.map(child => (
           <TreeNode
             key={child.path}
             node={child}
@@ -229,6 +236,7 @@ function TreeNode({ node, depth, gitStatus, rootPath, onFileClick, onContextMenu
             rootPath={rootPath}
             onFileClick={onFileClick}
             onContextMenu={onContextMenu}
+            forceExpand={forceExpand}
           />
         ))}
       </div>

@@ -219,10 +219,10 @@ export default function Dashboard({
 
           {/* Stat strip — cockpit telemetry */}
           <div className="grid grid-cols-4 gap-0 border border-nock-border rounded-md overflow-hidden bg-nock-card/30 backdrop-blur-sm">
-            <StatCell label="Agents" value={stats.agents} accent="green" pulse={stats.agents > 0} />
-            <StatCell label="Active" value={stats.active} accent="blue" pulse={stats.active > 0} />
-            <StatCell label="Repos" value={stats.repos} accent="yellow" />
-            <StatCell label="Modified" value={stats.dirty} accent="purple" />
+            <StatCell label="Agents" value={stats.agents} accent="neutral" />
+            <StatCell label="Active" value={stats.active} accent="cyan" pulse={stats.active > 0} />
+            <StatCell label="Repos" value={stats.repos} accent="neutral" />
+            <StatCell label="Modified" value={stats.dirty} accent="amber" />
           </div>
         </div>
       </div>
@@ -357,10 +357,10 @@ const OperationsPanel = React.memo(function OperationsPanel({
     <div className="mb-6 overflow-hidden rounded-md border border-nock-border bg-nock-card/25">
       <div className="grid grid-cols-2 border-b border-nock-border md:grid-cols-4 xl:grid-cols-6">
         <OpsCell Icon={Activity} label="Agent Folders" value={summary.activeAgentFolders} detail={`${summary.agents} known`} tone="green" />
-        <OpsCell Icon={Radio} label="Agent Procs" value={summary.activeAgentProcesses} detail="live terminals" tone="cyan" />
-        <OpsCell Icon={Terminal} label="Terminals" value={summary.terminals} detail={`${summary.quietAgentTabs} quiet`} tone="blue" />
-        <OpsCell Icon={GitBranch} label="Dirty Repos" value={summary.dirtyRepos} detail={`${summary.repos} repos`} tone="yellow" />
-        <OpsCell Icon={Activity} label="Stale" value={summary.staleAgentFolders} detail="needs glance" tone="purple" />
+        <OpsCell Icon={Radio} label="Agent Procs" value={summary.activeAgentProcesses} detail="live agents" tone="cyan" />
+        <OpsCell Icon={Terminal} label="Terminals" value={summary.terminals} detail={`${summary.quietAgentTabs} quiet`} tone="cyan" />
+        <OpsCell Icon={GitBranch} label="Dirty Repos" value={summary.dirtyRepos} detail={`${summary.repos} repos`} tone="amber" />
+        <OpsCell Icon={Activity} label="Stale" value={summary.staleAgentFolders} detail="needs glance" tone="amber" />
         <div className="flex items-center justify-end gap-2 border-t border-nock-border px-4 py-3 md:border-t-0 xl:border-l">
           <button
             type="button"
@@ -434,20 +434,23 @@ function dispatchStatusDotClass(status) {
 
 function OpsCell({ Icon, label, value, detail, tone }) {
   const tones = {
-    blue: 'text-nock-accent-blue',
+    neutral: 'text-nock-text',
     cyan: 'text-nock-accent-cyan',
     green: 'text-nock-green',
-    yellow: 'text-nock-yellow',
-    purple: 'text-nock-accent-purple',
+    amber: 'text-nock-accent-amber',
   };
+  // A zero metric carries no signal — let it recede so the eye lands on
+  // whatever is actually live or needs attention.
+  const isZero = Number(value) === 0;
+  const accentClass = isZero ? 'text-nock-text-muted' : tones[tone];
   return (
     <div className="border-r border-nock-border px-4 py-3 last:border-r-0">
       <div className="mb-1 flex items-center gap-2">
-        <Icon className={`h-3 w-3 ${tones[tone]}`} aria-hidden="true" />
+        <Icon className={`h-3 w-3 ${isZero ? 'text-nock-text-muted' : tones[tone]}`} aria-hidden="true" />
         <span className="font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">{label}</span>
       </div>
       <div className="flex items-baseline gap-2">
-        <span className={`font-display text-2xl font-bold tabular-nums ${tones[tone]}`}>
+        <span className={`font-display text-2xl font-bold tabular-nums ${accentClass}`}>
           {String(value).padStart(2, '0')}
         </span>
         <span className="font-mono text-[9px] uppercase tracking-wider text-nock-text-muted">{detail}</span>
@@ -489,19 +492,23 @@ const SessionSection = React.memo(function SessionSection({ label, sessions, off
 });
 
 function StatCell({ label, value, accent, pulse }) {
+  // Plain counts stay quiet (text color); only state-bearing stats earn an
+  // accent — cyan for live, amber for what needs attention. A zero recedes.
   const colors = {
-    blue: 'text-nock-accent-blue',
+    neutral: 'text-nock-text',
+    cyan: 'text-nock-accent-cyan',
+    amber: 'text-nock-accent-amber',
     green: 'text-nock-green',
-    yellow: 'text-nock-yellow',
-    purple: 'text-nock-accent-purple',
   };
+  const isZero = Number(value) === 0;
+  const colorClass = isZero ? 'text-nock-text-muted' : colors[accent];
   return (
     <div className="relative px-5 py-4 border-r border-nock-border last:border-r-0 group">
       <p className="font-mono text-[9px] text-nock-text-muted tracking-widest uppercase mb-1">
         {label}
       </p>
       <div className="flex items-baseline gap-2">
-        <p className={`font-display font-bold text-3xl tabular-nums ${colors[accent]} ${pulse ? 'animate-pulse-glow' : ''}`}>
+        <p className={`font-display font-bold text-3xl tabular-nums ${colorClass} ${pulse && !isZero ? 'animate-pulse-glow' : ''}`}>
           {String(value).padStart(2, '0')}
         </p>
       </div>
