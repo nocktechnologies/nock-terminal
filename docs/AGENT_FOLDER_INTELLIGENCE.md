@@ -42,7 +42,7 @@ When no explicit launch command exists, enabled CRM persistent agents attach thr
 Current contract posture:
 
 - Claude Code has supported transcript discovery through `~/.claude/projects/*/*.jsonl`, but no proven live attach command yet.
-- Codex CLI and Gemini CLI have process/context detection and profile-driven folder launch, while transcript discovery, live attach, and resume remain future work until backed by runtime evidence.
+- Codex CLI has recent rollout transcript discovery plus process/context detection and profile-driven folder launch. Gemini CLI has process/context detection, profile-driven folder launch, and conditional prompt-log session-presence discovery; full transcript replay, live attach, and resume remain future work until backed by runtime evidence.
 - Local agent folders have config and file-bus discovery. CRM persistent agents get supported live attach/resume only when discovery derives a deterministic `tmux attach -t crm-<instance>-<agent>` command. Explicit custom commands remain conditional folder-launch metadata and are blocked from auto-run until explicitly trusted.
 - Dispatch agents are request-level workers. They support dispatch requests when allowlisted, but do not expose local transcript, attach, or resume capabilities.
 

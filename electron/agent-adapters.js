@@ -113,8 +113,11 @@ const AGENT_SESSION_CONTRACTS = [
     id: 'gemini',
     label: 'Gemini CLI',
     transcriptDiscovery: {
-      state: 'future',
-      notes: 'Gemini CLI process detection and launch exist; transcript discovery is not implemented.',
+      state: 'conditional',
+      source: 'gemini-prompt-logs',
+      evidence: 'gemini-prompt-logs',
+      paths: ['~/.gemini/projects.json', '~/.gemini/tmp/<slug>/logs.json'],
+      notes: 'Gemini CLI persists user prompt events, not full transcripts; Nock can recover project, session ids, and last activity, but cannot replay assistant/tool output.',
     },
     liveAttach: {
       state: 'future',

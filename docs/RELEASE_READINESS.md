@@ -80,7 +80,7 @@ Before a public beta announcement, install the generated artifacts on clean mach
 - Windows installer publisher is correct and SmartScreen does not show an unsigned-app warning.
 - Linux AppImage launches and the deb package installs cleanly.
 - First-run onboarding can detect dev roots, Claude/Codex CLI availability, project context files, and Ollama status.
-- Session discovery shows Claude transcript projects and recent Codex rollout transcript projects without reading whole transcript files at startup.
+- Session discovery shows Claude transcript projects, recent Codex rollout transcript projects, and Gemini prompt-log session-presence rows without unbounded startup reads or Gemini credential/history access.
 - Terminal tab opens in the selected shell and respects shell arguments and environment variables.
 - `Ctrl+K` command launcher opens, searches repos/agents, launches trusted project-profile targets, attaches proven CRM tmux agents, and opens fallback-discovered untrusted agent folders without auto-running config commands.
 - Persistent CRM agents without shell aliases attach through the canonical tmux fallback, such as `tmux attach -t crm-default-cooper`.

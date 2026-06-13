@@ -47,7 +47,7 @@ Current execution posture:
 - Nock `7608` / Phase F slice 6 is done via PR #48: system/window IPC extraction for window controls, ports, shell/clipboard, and system discovery handlers.
 - Nock `7614` / Phase F slice 7 is done via PR #49: NockCC activity IPC extraction for `nockcc:updateActivity` sanitization plus session start, heartbeat, and shutdown lifecycle wiring.
 - Nock `7620` / Phase F final slice is done via PR #50: session discovery, Ollama chat/status, and Telegram notifications now register through focused main-process modules with handler-level tests.
-- Phase F's `electron/main.js` IPC extraction is complete. Remaining work in this area should be framed as product adapter work, not IPC cleanup: Gemini transcript discovery, broader Codex/Gemini resume/attach support, and full dispatch transcript/replay rendering.
+- Phase F's `electron/main.js` IPC extraction is complete. Remaining work in this area should be framed as product adapter work, not IPC cleanup: Gemini full transcript/replay semantics, broader Codex/Gemini resume/attach support, and full dispatch transcript/replay rendering.
 - Nock `7621` / Phase H Task 0 captures the Phase H execution plan and Nock #123 rewrite.
 - Nock `7627` / Phase H H3 closed the dispatch completion tracking contract in PR #52.
 - Nock `7628` / Phase H H4a closed in PR #53 with the local dispatch status reducer and history normalization foundation.
@@ -59,6 +59,7 @@ Current execution posture:
 - June 12 Wave 2 hardening: PR #65 closed loader-injection env var blocking and project lookup IPC validation; PR #72 closed discovery fallback debug logging and refreshed the esbuild lockfile to keep `npm run release:check` green. PR #71 is open and green for dispatch validation helper dedupe, awaiting explicit merge approval.
 - June 12 Wave 3 Codex transcript discovery: Codex rollout JSONL files under `~/.codex/sessions/**/rollout-*.jsonl` are now a supported transcript source. Discovery recovers cwd from `session_meta` with `turn_context` fallback, skips malformed files with debug logging, and keeps startup bounded with a 45-day recency window, newest-500 file scan cap, and first-16 KiB read cap.
 - June 12 Wave 4 dispatch thread rendering: brokered dispatch rows can expand into an on-demand NockCC AgentMessage thread keyed by `context.request_id`. This is intentionally request-level evidence, not launched-agent transcript replay.
+- June 12 Wave 5 Gemini session presence: Gemini projects can now surface from `~/.gemini/projects.json` plus bounded prompt logs under `~/.gemini/tmp/<slug>/logs.json`. This is conditional session evidence from user prompt events, not full transcript replay; live attach and resume remain future work.
 - Nock `123` is active on `codex/phase-h-release-truth`: release readiness now has an explicit decision log and evidence ledger for signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback. The Nock remains open until signed target-OS smoke evidence exists.
 
 ### May 24 Phase H Execution Plan
@@ -155,7 +156,7 @@ Current adapter posture:
 - Codex CLI: context/process detection, profile-driven terminal launch, and recent rollout transcript discovery are implemented; resume/attach remain future work.
 - Codex dispatch agents: CRM brokered/direct dispatch is implemented for allowlisted agents; local dispatch-run history has a shared status normalizer, brokered runs poll live NockCC `status_update` messages by `context.request_id`, and operators can expand a brokered run to inspect its request-level AgentMessage thread. Full dispatched-agent transcript replay remains future work.
 - DeepSeek dispatch agents: API-backed CRM brokered/direct dispatch is implemented for allowlisted agents; there is no standalone DeepSeek CLI launcher.
-- Gemini CLI: process detection, `GEMINI.md` context checks, and profile-driven terminal launch are implemented; transcript discovery is not claimed.
+- Gemini CLI: process detection, `GEMINI.md` context checks, profile-driven terminal launch, and conditional prompt-log session-presence discovery are implemented; full transcript replay, live attach, and resume remain future work.
 
 Gemini context reference: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md
 

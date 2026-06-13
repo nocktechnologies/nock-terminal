@@ -11,7 +11,7 @@ Nock Terminal is not ready for public GTM or paid launch.
 
 After the May 15 remediation pass, it is ready for renewed internal dogfood and a controlled private alpha. The previous launch blockers around dependency audit, terminal settings, unsaved editor protection, NockCC placeholder activity, first-run onboarding, and release gates have been fixed or materially reduced.
 
-The remaining public-GTM blockers are product depth and distribution proof: broader reconnect/attach for live agents beyond the proven CRM tmux path, Codex resume/attach adapters, Gemini transcript adapters, worktree lanes, full session replay, signed installer smoke coverage on every target OS, a public support/feedback route, crash/error reporting privacy posture, and a crisp public demo path.
+The remaining public-GTM blockers are product depth and distribution proof: broader reconnect/attach for live agents beyond the proven CRM tmux path, Codex resume/attach adapters, Gemini full transcript/replay semantics, worktree lanes, full session replay, signed installer smoke coverage on every target OS, a public support/feedback route, crash/error reporting privacy posture, and a crisp public demo path.
 
 The product has useful bones: a real PTY-backed terminal, Claude transcript discovery, agent-folder discovery, project cards, file tree, Monaco editing, local model chat, prompt/session history, git controls, port awareness, and notifications. The main problem is not lack of product surface. The problem is that the surface is not yet formed into a sharp promise people can immediately understand and trust.
 
@@ -40,7 +40,7 @@ Phase H closed several truth gaps after the May 16 product slice:
 - CRM persistent agent folders have the first proven attach/resume metadata and execution path through deterministic `tmux attach -t crm-<instance>-<agent>` targets.
 - `docs/RELEASE_READINESS.md` now records the release decision log and signed artifact evidence ledger for Nock #123.
 
-Readiness impact: this reduces the product-truth risk around dispatch and CRM attach, but it does not make Gemini transcript discovery, Codex/Gemini resume and attach support, generic live reconnect, worktree lanes, session replay, signed artifact smoke, auto-update, crash reporting, or public support ready.
+Readiness impact: this reduces the product-truth risk around dispatch and CRM attach, but it does not make Gemini full transcript replay, Codex/Gemini resume and attach support, generic live reconnect, worktree lanes, session replay, signed artifact smoke, auto-update, crash reporting, or public support ready.
 
 ## June 12 Wave 3 Progress
 
@@ -62,7 +62,18 @@ Wave 4 closed request-level dispatch thread rendering:
 - The main process fetches the same live inbox family used for dispatch status updates, keeps the response bounded, filters foreign request ids, and caps body text before IPC.
 - The renderer presents the thread as request evidence with quiet loading, empty, and offline states. It deliberately does not claim launched-agent terminal transcript replay.
 
-Readiness impact: this improves operational observability for dispatched work and removes the "no visible request thread" gap. It still does not make full session replay, Codex resume/attach, Gemini transcript discovery, signed installer smoke, auto-update, crash reporting, public support, or demo material ready.
+Readiness impact: this improves operational observability for dispatched work and removes the "no visible request thread" gap. It still does not make full session replay, Codex resume/attach, Gemini full transcript replay, signed installer smoke, auto-update, crash reporting, public support, or demo material ready.
+
+## June 12 Wave 5 Progress
+
+Wave 5 added conditional Gemini session-presence discovery:
+
+- Gemini projects are discovered from the allowlisted `~/.gemini/projects.json` path plus `~/.gemini/tmp/<slug>/.project_root` and `~/.gemini/tmp/<slug>/logs.json`.
+- Discovery emits a project row only when `logs.json` contains prompt records with session evidence; empty, missing, malformed, or oversized logs are skipped with opt-in discovery debug logging.
+- The Gemini adapter contract now reports `transcriptDiscovery.state: conditional` with evidence `gemini-prompt-logs`.
+- This is deliberately not transcript replay: Gemini CLI prompt logs expose user prompt events, session ids, project paths, and last activity, but not assistant/tool output.
+
+Readiness impact: this removes the "Gemini has no local session signal" gap while preserving the public promise boundary. Gemini full transcript replay, live attach, resume commands, signed installer smoke, auto-update, crash reporting, public support, and demo material remain future work.
 
 ## Verification Summary
 
@@ -143,7 +154,7 @@ Impact: Users will bounce if the public promise says Codex but the app behaves l
 
 Status: Improved, still not public-GTM complete.
 
-The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an adapter registry for Claude/Codex/Gemini process detection and project context checks, first-class local agent-folder discovery from existing `config.json` files, profile-driven launches for Claude/Codex/Gemini/custom agents, Claude transcript discovery, recent Codex rollout transcript discovery, Codex/DeepSeek dispatch discovery, brokered dispatch through Mira, request-level dispatch AgentMessage thread rendering, and a command launcher that can stage tasks into fresh agent terminals or dispatch requests. True reconnect/attach for live agents remains future work outside the proven CRM tmux path.
+The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an adapter registry for Claude/Codex/Gemini process detection and project context checks, first-class local agent-folder discovery from existing `config.json` files, profile-driven launches for Claude/Codex/Gemini/custom agents, Claude transcript discovery, recent Codex rollout transcript discovery, conditional Gemini prompt-log session-presence discovery, Codex/DeepSeek dispatch discovery, brokered dispatch through Mira, request-level dispatch AgentMessage thread rendering, and a command launcher that can stage tasks into fresh agent terminals or dispatch requests. True reconnect/attach for live agents remains future work outside the proven CRM tmux path.
 
 Recommendation: keep the private alpha agent-agnostic in launch/profile posture, while staying explicit that Codex transcript discovery covers recent rollout JSONL files only. Do not market Codex as fully first-class until Codex resume/attach, transcript history/replay, and settings are all backed by code.
 
@@ -276,8 +287,8 @@ Do not launch broadly as "Nock Terminal for Codex" yet.
 Launch path:
 
 1. Private dogfood: continue exercising the remediated shell settings, unsaved editor protection, onboarding, context checks, and NockCC heartbeat.
-2. Private alpha: position as "local cockpit for terminal coding agents" while staying honest that Claude Code is the only transcript-discovery source today.
-3. Public beta: add Codex resume/attach adapters, Gemini transcript discovery, worktree lanes, session replay, crash/error reporting, signed artifact smoke coverage, update distribution, and a clear support path.
+2. Private alpha: position as "local cockpit for terminal coding agents" while staying honest that Claude and recent Codex have transcript discovery, while Gemini currently exposes only prompt-log session presence.
+3. Public beta: add Codex resume/attach adapters, Gemini full transcript/replay semantics if the CLI exposes them, worktree lanes, session replay, crash/error reporting, signed artifact smoke coverage, update distribution, and a clear support path.
 
 ## What Would Make People Want It
 
