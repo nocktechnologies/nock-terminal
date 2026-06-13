@@ -11,6 +11,8 @@ const CODEX_ROLLOUT_HEAD_BYTES = 16 * 1024;
 const CODEX_ROLLOUT_RECENCY_DAYS = 45;
 const CODEX_ROLLOUT_SCAN_LIMIT = 500;
 const CODEX_ROLLOUT_MAX_DEPTH = 6;
+const GEMINI_PROJECTS_BYTES = 256 * 1024;
+const GEMINI_LOGS_BYTES = 512 * 1024;
 
 class SessionDiscovery {
   constructor(opts = {}) {
@@ -20,6 +22,11 @@ class SessionDiscovery {
     this.codexRolloutHeadBytes = this._positiveInteger(opts.codexRolloutHeadBytes, CODEX_ROLLOUT_HEAD_BYTES);
     this.codexRolloutRecencyDays = this._positiveInteger(opts.codexRolloutRecencyDays, CODEX_ROLLOUT_RECENCY_DAYS);
     this.codexRolloutScanLimit = this._positiveInteger(opts.codexRolloutScanLimit, CODEX_ROLLOUT_SCAN_LIMIT);
+    this.geminiDir = opts.geminiDir || path.join(os.homedir(), '.gemini');
+    this.geminiProjectsPath = path.join(this.geminiDir, 'projects.json');
+    this.geminiTmpDir = path.join(this.geminiDir, 'tmp');
+    this.geminiProjectsBytes = this._positiveInteger(opts.geminiProjectsBytes, GEMINI_PROJECTS_BYTES);
+    this.geminiLogsBytes = this._positiveInteger(opts.geminiLogsBytes, GEMINI_LOGS_BYTES);
     this.fileBusRoot = opts.fileBusRoot || this._defaultFileBusRoot();
     // Dev root directories to scan for git projects (merged with sessions)
     this.defaultDevRoots = Array.isArray(opts.defaultDevRoots)
@@ -75,6 +82,7 @@ class SessionDiscovery {
     const sessions = [
       ...(await this._discoverSessions()),
       ...(await this._discoverCodexSessions()),
+      ...(await this._discoverGeminiSessions()),
     ];
 
     // 2. Scan dev roots for git repos — adds projects without sessions
@@ -343,6 +351,230 @@ class SessionDiscovery {
   }
 
   _dedupeCodexSessions(sessions) {
+    const byPath = new Map();
+    for (const session of sessions) {
+      const key = this._pathKey(session.path);
+      const existing = byPath.get(key);
+      if (!existing || (session.lastActivity || 0) >= (existing.lastActivity || 0)) {
+        byPath.set(key, session);
+      }
+    }
+    return [...byPath.values()];
+  }
+
+  async _discoverGeminiSessions() {
+    const projects = await this._readGeminiProjectEntries();
+    if (projects.length === 0) return [];
+
+    const results = await this._mapLimit(projects, 5, project =>
+      this._parseGeminiProject(project)
+    );
+    return this._dedupeGeminiSessions(results.filter(Boolean));
+  }
+
+  async _readGeminiProjectEntries() {
+    const parsed = await this._readJsonFileCapped(
+      this.geminiProjectsPath,
+      this.geminiProjectsBytes,
+      'Gemini projects file'
+    );
+    const projects = parsed?.value?.projects;
+    if (!projects || typeof projects !== 'object' || Array.isArray(projects)) {
+      if (parsed?.value) {
+        this._debugDiscovery('Gemini projects file has unsupported shape', { path: this.geminiProjectsPath });
+      }
+      return [];
+    }
+
+    const entries = [];
+    for (const [rawProjectPath, rawSlug] of Object.entries(projects)) {
+      const projectPath = this._safeProjectPath(rawProjectPath);
+      const slug = this._safeGeminiSlug(rawSlug);
+      if (!slug) {
+        this._debugDiscovery('Gemini project entry skipped', {
+          path: rawProjectPath,
+          slug: rawSlug,
+          reason: 'invalid-slug',
+        });
+        continue;
+      }
+      entries.push({ projectPath, slug });
+    }
+    return entries;
+  }
+
+  async _parseGeminiProject({ projectPath, slug }) {
+    const projectRootPath = await this._readGeminiProjectRoot(slug);
+    const confirmedProjectPath = projectPath || projectRootPath;
+    if (!confirmedProjectPath) {
+      this._debugDiscovery('Gemini project cwd unavailable', { slug, reason: 'missing-project-path' });
+      return null;
+    }
+    const promptLogPath = this._geminiPromptLogPath(slug);
+    const promptLog = await this._readGeminiPromptLog(promptLogPath);
+    if (!promptLog) return null;
+
+    const sessionContract = getAgentSessionContract('gemini');
+    sessionContract.adapterId = 'gemini';
+    sessionContract.transcriptDiscovery = {
+      ...(sessionContract.transcriptDiscovery || {}),
+      projectPath: confirmedProjectPath,
+      projectSlug: slug,
+      projectRootPath,
+      promptLogPath,
+      sessionId: promptLog.sessionId,
+      sessionCount: promptLog.sessionCount,
+      lastActivitySource: promptLog.lastActivitySource,
+    };
+
+    const gitInfo = this._canInspectLocalPath(confirmedProjectPath)
+      ? await this._getGitInfo(confirmedProjectPath)
+      : { branch: null, dirty: false };
+
+    return {
+      id: `gemini:${slug}:${promptLog.sessionId}`,
+      name: this._projectNameFromPath(confirmedProjectPath),
+      path: confirmedProjectPath,
+      branch: gitInfo.branch,
+      status: this._statusFromActivity(promptLog.lastActivity),
+      lastActivity: promptLog.lastActivity,
+      lastActivityFormatted: this._formatTime(promptLog.lastActivity),
+      dirty: gitInfo.dirty,
+      sessionContract,
+    };
+  }
+
+  async _readGeminiProjectRoot(slug) {
+    const projectRootPath = this._geminiProjectRootPath(slug);
+    try {
+      return this._safeProjectPath(await fsp.readFile(projectRootPath, 'utf-8'));
+    } catch (err) {
+      this._debugDiscovery('Gemini project root unavailable', { path: projectRootPath, slug, error: err });
+      return '';
+    }
+  }
+
+  async _readGeminiPromptLog(promptLogPath) {
+    const parsed = await this._readJsonFileCapped(
+      promptLogPath,
+      this.geminiLogsBytes,
+      'Gemini prompt log'
+    );
+    if (!parsed) return null;
+    if (!Array.isArray(parsed.value)) {
+      this._debugDiscovery('Gemini prompt log has unsupported shape', { path: promptLogPath });
+      return null;
+    }
+
+    const sessionIds = new Set();
+    let latest = null;
+    let firstSessionId = '';
+
+    for (const record of parsed.value) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) continue;
+      const sessionId = this._safeGeminiSessionId(record.sessionId);
+      if (!sessionId) continue;
+      if (!firstSessionId) firstSessionId = sessionId;
+      sessionIds.add(sessionId);
+
+      const timestamp = this._timestampFromText(record.timestamp)
+        || this._timestampFromText(record.created_at)
+        || this._timestampFromText(record.createdAt);
+      if (!timestamp) continue;
+      if (!latest || timestamp > latest.timestamp) {
+        latest = { sessionId, timestamp };
+      }
+    }
+
+    if (sessionIds.size === 0) {
+      this._debugDiscovery('Gemini prompt log has no session records', { path: promptLogPath });
+      return null;
+    }
+
+    if (!latest) {
+      const fallbackActivity = parsed.stat?.mtimeMs || 0;
+      if (!fallbackActivity) {
+        this._debugDiscovery('Gemini prompt log has no usable timestamps', { path: promptLogPath });
+        return null;
+      }
+      return {
+        sessionId: firstSessionId,
+        sessionCount: sessionIds.size,
+        lastActivity: fallbackActivity,
+        lastActivitySource: 'mtime',
+      };
+    }
+
+    return {
+      sessionId: latest.sessionId,
+      sessionCount: sessionIds.size,
+      lastActivity: latest.timestamp,
+      lastActivitySource: 'timestamp',
+    };
+  }
+
+  async _readJsonFileCapped(filePath, byteLimit, label) {
+    let stat;
+    try {
+      stat = await fsp.stat(filePath);
+    } catch (err) {
+      this._debugDiscovery(`${label} unavailable`, { path: filePath, error: err });
+      return null;
+    }
+    if (!stat.isFile()) {
+      this._debugDiscovery(`${label} skipped because path is not a file`, { path: filePath });
+      return null;
+    }
+    if (stat.size > byteLimit) {
+      this._debugDiscovery(`${label} skipped by size cap`, {
+        path: filePath,
+        size: stat.size,
+        byteLimit,
+      });
+      return null;
+    }
+
+    let content;
+    try {
+      content = await fsp.readFile(filePath, 'utf-8');
+    } catch (err) {
+      this._debugDiscovery(`${label} unreadable`, { path: filePath, error: err });
+      return null;
+    }
+    if (!content.trim()) {
+      this._debugDiscovery(`${label} empty`, { path: filePath });
+      return null;
+    }
+
+    try {
+      return { value: JSON.parse(content), stat };
+    } catch (err) {
+      this._debugDiscovery(`${label} JSON parse failed`, { path: filePath, error: err });
+      return null;
+    }
+  }
+
+  _geminiProjectRootPath(slug) {
+    return path.join(this.geminiTmpDir, slug, '.project_root');
+  }
+
+  _geminiPromptLogPath(slug) {
+    return path.join(this.geminiTmpDir, slug, 'logs.json');
+  }
+
+  _safeGeminiSlug(value) {
+    const slug = this._safeString(value, 200);
+    if (!slug || slug === '.' || slug === '..') return '';
+    if (slug.includes('/') || slug.includes('\\')) return '';
+    return /^[A-Za-z0-9._-]+$/.test(slug) ? slug : '';
+  }
+
+  _safeGeminiSessionId(value) {
+    const sessionId = this._safeString(value, 200);
+    return /^[A-Za-z0-9._:-]+$/.test(sessionId) ? sessionId : '';
+  }
+
+  _dedupeGeminiSessions(sessions) {
     const byPath = new Map();
     for (const session of sessions) {
       const key = this._pathKey(session.path);

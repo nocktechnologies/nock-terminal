@@ -75,7 +75,7 @@ Those acceptance criteria were not implemented by PR #33. The stale-contract cle
    H6b is closed by PR #59. Nock `123` is the active release-readiness track: repo docs now need honest release decisions and an evidence ledger, while real signed artifact smoke remains blocked until release credentials and clean target OS machines/VMs are available.
 
 3. **Keep Nock `886` as product/GTM work.**
-   It should be informed by current truth: Claude transcript discovery is real, Codex/Gemini launch profiles exist, Codex/DeepSeek dispatch exists, Linux unpacked packaged smoke exists, and full Codex/Gemini transcript discovery, attach/reconnect, signed installer smoke, update distribution, crash reporting, worktree lanes, and replay remain roadmap.
+   It should be informed by current truth: Claude transcript discovery is real, recent Codex rollout transcript discovery is real, Gemini prompt-log session presence is conditional, Codex/Gemini launch profiles exist, Codex/DeepSeek dispatch exists, Linux unpacked packaged smoke exists, and full Gemini transcript replay, Codex/Gemini attach/reconnect, signed installer smoke, update distribution, crash reporting, worktree lanes, and replay remain roadmap.
 
 ## Notes For Future Agents
 
