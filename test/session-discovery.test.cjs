@@ -108,6 +108,66 @@ test('discovers agent folders from existing config.json files', async () => {
   assert.equal(mira.sessionContract.resumeCommand.state, 'supported');
 });
 
+test('claude transcript rows expose a resume launch from the newest session id', async () => {
+  const root = makeTempDir();
+  const claudeDir = path.join(root, '.claude');
+  const repoPath = path.join(root, 'Dev', 'my-repo');
+  const projectDir = path.join(claudeDir, 'projects', 'encoded-my-repo');
+  const olderId = '11111111-aaaa-4bbb-8ccc-222222222222';
+  const newerId = '33333333-dddd-4eee-9fff-444444444444';
+  const line = `${JSON.stringify({ type: 'user', cwd: repoPath, message: { role: 'user', content: [] } })}\n`;
+
+  writeFile(path.join(projectDir, `${olderId}.jsonl`), line);
+  writeFile(path.join(projectDir, `${newerId}.jsonl`), line);
+  const past = new Date(Date.now() - 60 * 60 * 1000);
+  fs.utimesSync(path.join(projectDir, `${olderId}.jsonl`), past, past);
+
+  const discovery = new SessionDiscovery({
+    claudeDir,
+    devRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const row = sessions.find(session => session.path === repoPath);
+
+  assert.ok(row);
+  assert.equal(row.claudeSessionId, newerId);
+  assert.equal(row.launch.mode, 'terminal');
+  assert.equal(row.launch.action, 'resume');
+  assert.equal(row.launch.actionLabel, 'Resume');
+  assert.equal(row.launch.capability, 'resume-command');
+  assert.equal(row.launch.canLaunch, true);
+  assert.equal(row.launch.command, `claude --resume ${newerId}`);
+  assert.equal(row.launch.cwd, repoPath);
+  assert.equal(row.sessionContract.resumeCommand.state, 'supported');
+  assert.equal(row.sessionContract.resumeCommand.command, `claude --resume ${newerId}`);
+});
+
+test('claude transcript rows skip resume when the session id is not safe', async () => {
+  const root = makeTempDir();
+  const claudeDir = path.join(root, '.claude');
+  const repoPath = path.join(root, 'Dev', 'my-repo');
+  const projectDir = path.join(claudeDir, 'projects', 'encoded-my-repo');
+  writeFile(
+    path.join(projectDir, 'weird name; rm -rf.jsonl'),
+    `${JSON.stringify({ type: 'user', cwd: repoPath, message: { role: 'user', content: [] } })}\n`
+  );
+
+  const discovery = new SessionDiscovery({
+    claudeDir,
+    devRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const row = sessions.find(session => session.path === repoPath);
+
+  assert.ok(row);
+  assert.equal(row.claudeSessionId, undefined);
+  assert.equal(row.launch, undefined);
+});
+
 test('excludes ephemeral agent worktree paths from discovered sessions', async () => {
   const root = makeTempDir();
   const claudeDir = path.join(root, '.claude');
