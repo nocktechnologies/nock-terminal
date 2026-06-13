@@ -13,6 +13,9 @@ const CODEX_ROLLOUT_SCAN_LIMIT = 500;
 const CODEX_ROLLOUT_MAX_DEPTH = 6;
 const GEMINI_PROJECTS_BYTES = 256 * 1024;
 const GEMINI_LOGS_BYTES = 512 * 1024;
+// ~/.gemini/tmp entries that are never per-project session dirs: the bundled
+// `bin/`, plus credential/account/history names guarded against by the allowlist.
+const GEMINI_RESERVED_SLUGS = new Set(['bin', 'history', 'oauth_creds', 'google_accounts']);
 
 class SessionDiscovery {
   constructor(opts = {}) {
@@ -404,10 +407,20 @@ class SessionDiscovery {
   }
 
   async _parseGeminiProject({ projectPath, slug }) {
+    if (!(await this._geminiSlugDirIsSafe(slug))) {
+      this._debugDiscovery('Gemini slug dir skipped', { slug, reason: 'missing-or-symlinked' });
+      return null;
+    }
     const projectRootPath = await this._readGeminiProjectRoot(slug);
     const confirmedProjectPath = projectPath || projectRootPath;
     if (!confirmedProjectPath) {
       this._debugDiscovery('Gemini project cwd unavailable', { slug, reason: 'missing-project-path' });
+      return null;
+    }
+    // A project keyed to the home directory itself is never a useful cockpit
+    // row; exclude it structurally rather than relying on empty logs.
+    if (this._pathKey(confirmedProjectPath) === this._pathKey(os.homedir())) {
+      this._debugDiscovery('Gemini project skipped', { slug, reason: 'home-directory' });
       return null;
     }
     const promptLogPath = this._geminiPromptLogPath(slug);
@@ -566,7 +579,19 @@ class SessionDiscovery {
     const slug = this._safeString(value, 200);
     if (!slug || slug === '.' || slug === '..') return '';
     if (slug.includes('/') || slug.includes('\\')) return '';
+    if (GEMINI_RESERVED_SLUGS.has(slug.toLowerCase())) return '';
     return /^[A-Za-z0-9._-]+$/.test(slug) ? slug : '';
+  }
+
+  // The slug dir must be a real directory inside ~/.gemini/tmp, never a
+  // symlink — a symlinked slug would let prompt-log reads escape the tmp tree.
+  async _geminiSlugDirIsSafe(slug) {
+    try {
+      const stat = await fsp.lstat(path.join(this.geminiTmpDir, slug));
+      return stat.isDirectory() && !stat.isSymbolicLink();
+    } catch {
+      return false;
+    }
   }
 
   _safeGeminiSessionId(value) {

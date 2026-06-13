@@ -736,6 +736,93 @@ test('excludes Gemini prompt-log sessions from ephemeral worktree paths', async 
   assert.equal(sessions.some(session => session.path === worktreePath), false);
 });
 
+test('Gemini discovery refuses reserved slugs that map to non-session directories', async () => {
+  const root = makeTempDir();
+  const geminiDir = path.join(root, '.gemini');
+  const projectPath = path.join(root, 'Dev', 'reserved-probe');
+
+  // A projects.json that points at the bundled `bin` dir and credential-ish
+  // names must never cause a read of those directories.
+  for (const reserved of ['bin', 'history', 'oauth_creds', 'google_accounts']) {
+    writeFile(path.join(geminiDir, 'tmp', reserved, '.project_root'), `${projectPath}\n`);
+    writeJson(path.join(geminiDir, 'tmp', reserved, 'logs.json'), [
+      { sessionId: `${reserved}-session`, timestamp: '2026-06-12T10:00:00.000Z' },
+    ]);
+  }
+  writeJson(path.join(geminiDir, 'projects.json'), {
+    projects: {
+      [path.join(root, 'Dev', 'bin-proj')]: 'bin',
+      [path.join(root, 'Dev', 'hist-proj')]: 'history',
+      [path.join(root, 'Dev', 'oauth-proj')]: 'oauth_creds',
+      [path.join(root, 'Dev', 'goog-proj')]: 'google_accounts',
+    },
+  });
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir: path.join(root, '.codex', 'sessions'),
+    geminiDir,
+    devRoots: [],
+    defaultDevRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  assert.equal(sessions.some(session => String(session.id).startsWith('gemini:')), false);
+});
+
+test('Gemini discovery skips slug directories that are symlinks', async () => {
+  const root = makeTempDir();
+  const geminiDir = path.join(root, '.gemini');
+  const projectPath = path.join(root, 'Dev', 'symlink-probe');
+  const realDir = path.join(root, 'outside-gemini', 'real-session');
+
+  // A real session dir living OUTSIDE the tmp tree, reached via a symlinked slug.
+  writeFile(path.join(realDir, '.project_root'), `${projectPath}\n`);
+  writeJson(path.join(realDir, 'logs.json'), [
+    { sessionId: 'symlinked-session', timestamp: '2026-06-12T10:00:00.000Z' },
+  ]);
+  fs.mkdirSync(path.join(geminiDir, 'tmp'), { recursive: true });
+  fs.symlinkSync(realDir, path.join(geminiDir, 'tmp', 'evil-slug'));
+  writeJson(path.join(geminiDir, 'projects.json'), {
+    projects: { [projectPath]: 'evil-slug' },
+  });
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir: path.join(root, '.codex', 'sessions'),
+    geminiDir,
+    devRoots: [],
+    defaultDevRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  assert.equal(sessions.some(session => session.path === projectPath), false);
+});
+
+test('Gemini discovery never emits a row for the home directory itself', async () => {
+  const root = makeTempDir();
+  const geminiDir = path.join(root, '.gemini');
+  const home = os.homedir();
+
+  writeGeminiProject(root, home, 'home-slug', [
+    { sessionId: 'home-session', timestamp: '2026-06-12T10:00:00.000Z' },
+  ]);
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir: path.join(root, '.codex', 'sessions'),
+    geminiDir,
+    devRoots: [],
+    defaultDevRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  assert.equal(sessions.some(session => session.path === home), false);
+});
+
 test('uses CRM tmux attach fallback for enabled persistent agents without shell aliases', async () => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');
