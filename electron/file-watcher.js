@@ -1,6 +1,10 @@
 const chokidar = require('chokidar');
 const EventEmitter = require('events');
 
+// chokidar 4 dropped glob support; this regex covers the same paths the old
+// '**/<dir>/**' globs did (anything inside these directories at any depth).
+const IGNORED_DIRS = /(?:^|[\\/])(node_modules|\.git|__pycache__|dist|build|\.next|\.cache|coverage)[\\/]/;
+
 class FileWatcher extends EventEmitter {
   constructor(fileService) {
     super();
@@ -15,16 +19,7 @@ class FileWatcher extends EventEmitter {
     this.currentRoot = dirPath;
 
     this.watcher = chokidar.watch(dirPath, {
-      ignored: [
-        '**/node_modules/**',
-        '**/.git/**',
-        '**/__pycache__/**',
-        '**/dist/**',
-        '**/build/**',
-        '**/.next/**',
-        '**/.cache/**',
-        '**/coverage/**',
-      ],
+      ignored: IGNORED_DIRS,
       persistent: true,
       ignoreInitial: true,
       depth: 8,
@@ -49,9 +44,18 @@ class FileWatcher extends EventEmitter {
     }
   }
 
+  // Returns a promise that resolves once the chokidar watcher has closed, so
+  // exit paths that skip will-quit (app.exit) can wait for fsevents teardown.
   stop() {
+    let closed = null;
     if (this.watcher) {
-      try { this.watcher.close(); } catch (err) { console.error('FileWatcher: close error:', err.message); }
+      try {
+        closed = this.watcher.close().catch((err) => {
+          console.error('FileWatcher: close error:', err.message);
+        });
+      } catch (err) {
+        console.error('FileWatcher: close error:', err.message);
+      }
       this.watcher = null;
     }
     if (this.gitPollInterval) {
@@ -59,6 +63,7 @@ class FileWatcher extends EventEmitter {
       this.gitPollInterval = null;
     }
     this.currentRoot = null;
+    return closed || Promise.resolve();
   }
 
   _pollGitStatus() {
@@ -84,3 +89,4 @@ class FileWatcher extends EventEmitter {
 }
 
 module.exports = FileWatcher;
+module.exports.IGNORED_DIRS = IGNORED_DIRS;

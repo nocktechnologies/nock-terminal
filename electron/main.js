@@ -41,6 +41,7 @@ const SMOKE_READY_PREFIX = '[nock-terminal-smoke] ready ';
 const SMOKE_FAILURE_PREFIX = '[nock-terminal-smoke] failure ';
 const SMOKE_RENDER_TIMEOUT_MS = 10_000;
 const SMOKE_RENDER_POLL_MS = 100;
+const SMOKE_SHUTDOWN_TIMEOUT_MS = 2_000;
 
 if (IS_PACKAGED_SMOKE && process.env.NOCK_TERMINAL_USER_DATA_DIR) {
   try {
@@ -227,7 +228,7 @@ function createWindow() {
       errorDescription,
       validatedURL,
     })}`);
-    app.exit(1);
+    exitPackagedSmoke(1);
   });
   setTimeout(showInitialWindow, 2500);
 
@@ -336,6 +337,22 @@ async function readPackagedSmokeRendererState() {
   `, true);
 }
 
+// app.exit() skips before-quit/will-quit, so the chokidar watcher started by
+// the renderer (FileTree → files:watch) would still be live during Electron's
+// Node teardown. On macOS, fsevents 2.3.x then deadlocks in its napi finalizer
+// (fse_instance_destroy → napi_release_threadsafe_function) and the process
+// never exits. Run the will-quit teardown first, then exit.
+let packagedSmokeExitStarted = false;
+async function exitPackagedSmoke(code) {
+  if (packagedSmokeExitStarted) return;
+  packagedSmokeExitStarted = true;
+  try {
+    await Promise.race([shutdownServices(), sleep(SMOKE_SHUTDOWN_TIMEOUT_MS)]);
+  } finally {
+    app.exit(code);
+  }
+}
+
 async function finishPackagedSmokeCheck() {
   if (!IS_PACKAGED_SMOKE || !mainWindow || mainWindow.isDestroyed()) return;
 
@@ -365,10 +382,10 @@ async function finishPackagedSmokeCheck() {
       url: mainWindow.webContents.getURL(),
       renderer,
     })}`);
-    setTimeout(() => app.exit(0), 250);
+    setTimeout(() => { exitPackagedSmoke(0); }, 250);
   } catch (err) {
     console.error(`${SMOKE_FAILURE_PREFIX}${JSON.stringify({ error: err.message })}`);
-    app.exit(1);
+    exitPackagedSmoke(1);
   }
 }
 
@@ -547,12 +564,20 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('will-quit', () => {
+// Shared by the normal quit path (will-quit) and the packaged smoke exit.
+// Returns the file-watcher close promise so exit paths that bypass the quit
+// events (app.exit) can wait for fsevents teardown before terminating.
+function shutdownServices() {
   globalShortcut.unregisterAll();
   terminalManager?.destroyAll();
-  fileWatcher?.stop();
+  const watcherClosed = fileWatcher?.stop();
   processDetector?.stop();
   nockccActivityController?.stop();
+  return watcherClosed || Promise.resolve();
+}
+
+app.on('will-quit', () => {
+  shutdownServices();
 });
 
 app.on('before-quit', () => {
