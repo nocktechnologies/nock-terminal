@@ -33,6 +33,7 @@ const { registerSessionIPC } = require('./session-ipc');
 const { registerSystemWindowIPC } = require('./system-window-ipc');
 const { registerTelegramIPC } = require('./telegram-ipc');
 const { registerTerminalIPC } = require('./terminal-ipc');
+const { installWindowSecurity, acquireSingleInstanceLock } = require('./window-security');
 const { version: appVersion } = require('../package.json');
 
 const APP_NAME = 'Nock Terminal';
@@ -195,6 +196,15 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow(windowOptions);
+
+  // Renderer containment: deny in-app window-open (route real web links to the
+  // OS browser) and block main-frame navigation away from the app origin, so a
+  // renderer foothold can't reach attacker content and escalate via terminal:write.
+  installWindowSecurity(mainWindow.webContents, {
+    isDev,
+    appDir: path.join(__dirname, '..', 'dist-react'),
+    openExternal: (url) => shell.openExternal(url),
+  });
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -516,7 +526,22 @@ function wireFileEvents() {
   });
 }
 
+// Single-instance lock: a second launch of this tray app would spawn a
+// duplicate TerminalManager/Tray and race the global-shortcut registration.
+// The primary instance focuses its window when a second launch is attempted.
+const singleInstance = acquireSingleInstanceLock(app, () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    showMainWindow();
+  } else {
+    createWindow();
+  }
+});
+if (!singleInstance.acquired) {
+  app.quit();
+}
+
 app.whenReady().then(() => {
+  if (!singleInstance.acquired) return;
   secureSettings = new SecureSettingsStore({ store, safeStorage });
   runtimeSettingsStore = createSecureSettingsFacade(store, secureSettings);
   repairStoredSettings();
