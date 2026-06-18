@@ -30,7 +30,7 @@ This document describes the current codebase, not aspirational product copy. Tod
 - `ProcessDetector` observes terminal processes and reports active agent identities under each PTY through the adapter registry.
 - `agent-adapters.js` defines known terminal agents for main-process detection, context checks, and session capability contracts. The current registry covers Claude Code, Codex CLI, Gemini CLI, local agent folders, and dispatch-agent semantics.
 - `OllamaClient` streams local model chat through `/api/chat` and lists models through `/api/tags`; `electron/ollama-ipc.js` owns the renderer IPC bridge and stream forwarding.
-- `ClaudeCodeClient` can spawn `claude -p --output-format stream-json` for Claude Code chat-style calls.
+- Agent CLIs (Claude Code, Codex, Gemini) are run as **PTY processes** via `TerminalManager` and discovered through their transcripts by `SessionDiscovery` — the app supervises CLI agents rather than calling a programmatic chat/SDK client. (There is no dedicated `ClaudeCodeClient`; local model chat goes through `OllamaClient` above.)
 - `TelegramNotifier` sends configured notification events; `electron/telegram-ipc.js` owns the renderer IPC bridge.
 - `ProjectProfiles`, `SessionHistory`, and `PromptStore` persist project settings, terminal output metadata, and prompt library entries.
 - `NockCCClient` links this desktop app instance to the NockCC server.
