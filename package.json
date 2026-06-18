@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "chokidar": "^4.0.3",
-    "dompurify": "^3.4.3",
+    "dompurify": "^3.4.11",
     "electron-store": "^8.1.0",
     "highlight.js": "^11.9.0",
     "lucide-react": "^1.7.0",
@@ -95,7 +95,7 @@
   },
   "overrides": {
     "axios": "^1.16.1",
-    "dompurify": "^3.4.3"
+    "dompurify": "^3.4.11"
   },
   "knip": {
     "entry": [
