@@ -64,6 +64,29 @@ test('normalizeSettingValue accepts valid values across setting groups', () => {
   });
 });
 
+test('ollamaUrl is pinned to loopback (local service, no off-box redirect)', () => {
+  // Loopback variants pass.
+  assert.equal(normalizeSettingValue('ollamaUrl', 'http://localhost:11434').ok, true);
+  assert.equal(normalizeSettingValue('ollamaUrl', 'http://127.0.0.1:11434').ok, true);
+  assert.equal(normalizeSettingValue('ollamaUrl', 'http://[::1]:11434').ok, true);
+  // Non-loopback (incl. the link-local metadata endpoint) is rejected — a
+  // renderer can't redirect model traffic off the box.
+  assert.equal(normalizeSettingValue('ollamaUrl', 'http://evil.example:11434').ok, false);
+  assert.equal(normalizeSettingValue('ollamaUrl', 'https://evil.example').ok, false);
+  assert.equal(normalizeSettingValue('ollamaUrl', 'http://169.254.169.254/').ok, false);
+});
+
+test('nockccUrl rejects cleartext http to a remote host (it carries the API key)', () => {
+  // Default remote https, and any self-hosted https host, are allowed.
+  assert.equal(normalizeSettingValue('nockccUrl', 'https://cc.nocktechnologies.io').ok, true);
+  assert.equal(normalizeSettingValue('nockccUrl', 'https://my-nockcc.internal').ok, true);
+  // Cleartext http to a remote host is rejected — never send the key in plaintext.
+  assert.equal(normalizeSettingValue('nockccUrl', 'http://evil.example').ok, false);
+  // Loopback may use http (local NockCC dev instance).
+  assert.equal(normalizeSettingValue('nockccUrl', 'http://localhost:8642').ok, true);
+  assert.equal(normalizeSettingValue('nockccUrl', 'http://127.0.0.1:8000').ok, true);
+});
+
 test('sanitizeStoredSettings falls back to defaults for invalid persisted values', () => {
   const sanitized = sanitizeStoredSettings({
     windowOpacity: 'loud',
