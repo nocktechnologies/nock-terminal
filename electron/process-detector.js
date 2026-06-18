@@ -1,6 +1,24 @@
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 const EventEmitter = require('events');
 const { matchAgentProcesses } = require('./agent-adapters');
+
+// Parse a `ps -axo pid=,ppid=,command=` table into {pid, ppid, name} rows.
+// `name` is the FULL command line (not just comm) so script/arg-based agents
+// — e.g. `python3 .../deepseek-agent.py` — still match; matchAgentProcesses
+// tokenizes it and extracts basenames.
+function parseUnixProcessTable(output) {
+  const processes = [];
+  for (const line of String(output || '').split('\n')) {
+    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(.+)$/);
+    if (!match) continue;
+    processes.push({
+      pid: parseInt(match[1], 10),
+      ppid: parseInt(match[2], 10),
+      name: match[3],
+    });
+  }
+  return processes;
+}
 
 class ProcessDetector extends EventEmitter {
   constructor(terminalManager) {
@@ -82,23 +100,37 @@ class ProcessDetector extends EventEmitter {
   }
 
   _detectUnix() {
-    for (const [tabId, ptyProcess] of this.terminalManager.terminals) {
-      try {
-        const output = execSync(`pgrep -P ${ptyProcess.pid} -a 2>/dev/null || true`, {
-          encoding: 'utf-8',
-          timeout: 3000,
-        });
-        const activeAgents = matchAgentProcesses(output.split('\n').filter(Boolean));
-        this.emit('status', {
-          tabId,
-          activeAgents,
-          hasClaude: activeAgents.includes('claude'),
-        });
-      } catch {
+    // Snapshot the whole process table once, then walk each PTY's full subtree
+    // with the same BFS the Windows path uses. The old `pgrep -P <pid>` only
+    // saw DIRECT children, so an agent launched via a wrapper/login-shell (at
+    // depth >= 2 — the common case on macOS) was silently reported as inactive.
+    let processes;
+    try {
+      // execFileSync: no shell, no interpolation — ps args are passed directly.
+      const output = execFileSync('ps', ['-axo', 'pid=,ppid=,command='], {
+        encoding: 'utf-8',
+        timeout: 5000,
+      });
+      processes = parseUnixProcessTable(output);
+    } catch (err) {
+      console.error('ProcessDetector: Unix detection failed:', err.message);
+      // Fail closed: report no active agents rather than crash the poller.
+      for (const [tabId] of this.terminalManager.terminals) {
         this.emit('status', { tabId, activeAgents: [], hasClaude: false });
       }
+      return;
+    }
+
+    for (const [tabId, ptyProcess] of this.terminalManager.terminals) {
+      const activeAgents = this._agentsInTree(ptyProcess.pid, processes);
+      this.emit('status', {
+        tabId,
+        activeAgents,
+        hasClaude: activeAgents.includes('claude'),
+      });
     }
   }
 }
 
 module.exports = ProcessDetector;
+module.exports.parseUnixProcessTable = parseUnixProcessTable;
