@@ -85,7 +85,18 @@ function normalizeInteger(value, { min, max } = {}) {
 }
 
 
-function normalizeUrl(value) {
+// localhost, *.localhost, the whole 127.0.0.0/8 range, and IPv6 ::1.
+function isLoopbackHostname(hostname) {
+  const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || h.startsWith('127.');
+}
+
+// `loopbackOnly`  — reject any non-loopback host (for inherently-local services
+//                   like Ollama; stops a renderer from pointing it off-box).
+// `httpsForRemote`— reject cleartext http:// to a remote host (so a bearer API
+//                   key is never sent in plaintext); https to any host and any
+//                   scheme to loopback stay allowed (self-host friendly).
+function normalizeUrl(value, { loopbackOnly = false, httpsForRemote = false } = {}) {
   const normalized = normalizeString(value, { maxLength: 1000 });
   if (!normalized.ok) return normalized;
   if (!normalized.value) return ok('');
@@ -93,6 +104,13 @@ function normalizeUrl(value) {
   try {
     const parsed = new URL(normalized.value);
     if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return invalid();
+    }
+    const loopback = isLoopbackHostname(parsed.hostname);
+    if (loopbackOnly && !loopback) {
+      return invalid();
+    }
+    if (httpsForRemote && !loopback && parsed.protocol !== 'https:') {
       return invalid();
     }
     return ok(parsed.toString().replace(/\/$/, ''));
@@ -214,8 +232,14 @@ function normalizeSettingValue(key, value) {
     case 'windowOpacity':
       return normalizeInteger(value, { min: 70, max: 100 });
     case 'ollamaUrl':
+      // Ollama is a local service — pin it to loopback so a compromised
+      // renderer can't redirect model traffic to an attacker host.
+      return normalizeUrl(value, { loopbackOnly: true });
     case 'nockccUrl':
-      return normalizeUrl(value);
+      // Carries the X-API-Key — never let it be sent over cleartext http to a
+      // remote host. (Allowlisting remote hosts / confirm-on-change is a
+      // separate product decision; https-to-any-host stays allowed for self-host.)
+      return normalizeUrl(value, { httpsForRemote: true });
     case 'terminalFontSize':
     case 'editorFontSize':
       return normalizeInteger(value, { min: 10, max: 24 });
