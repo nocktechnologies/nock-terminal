@@ -10,6 +10,8 @@ const {
   buildDirectDispatchCommand,
   collectDispatchThreadEntries,
   createDispatchPayloadFile,
+  isLoopbackHostname,
+  isSecureTransport,
   sanitizeDispatchText,
 } = require('../electron/agent-dispatch');
 
@@ -336,4 +338,39 @@ test('dispatch thread fetch rejects oversized NockCC responses', async () => {
 test('sanitizes dispatch text while preserving useful newlines', () => {
   assert.equal(sanitizeDispatchText(' one\u0000\n\ttwo '), 'one\n\ttwo');
   assert.equal(sanitizeDispatchText(12345, 3), '123');
+});
+
+// --- N8309: never send the X-API-Key over cleartext http to a remote host ---
+
+test('isLoopbackHostname recognizes loopback hosts', () => {
+  assert.equal(isLoopbackHostname('localhost'), true);
+  assert.equal(isLoopbackHostname('app.localhost'), true);
+  assert.equal(isLoopbackHostname('127.0.0.1'), true);
+  assert.equal(isLoopbackHostname('127.5.5.5'), true);
+  assert.equal(isLoopbackHostname('::1'), true);
+  assert.equal(isLoopbackHostname('[::1]'), true);
+});
+
+test('isLoopbackHostname rejects remote hosts', () => {
+  assert.equal(isLoopbackHostname('cc.nocktechnologies.io'), false);
+  assert.equal(isLoopbackHostname('evil.example.com'), false);
+  assert.equal(isLoopbackHostname('10.0.0.5'), false);
+  assert.equal(isLoopbackHostname(''), false);
+});
+
+test('isSecureTransport allows https to any host', () => {
+  assert.equal(isSecureTransport(new URL('https://cc.nocktechnologies.io/api/')), true);
+  assert.equal(isSecureTransport(new URL('https://anything.example.com/x')), true);
+});
+
+test('isSecureTransport allows http only to loopback (self-host)', () => {
+  assert.equal(isSecureTransport(new URL('http://127.0.0.1:8080/api/')), true);
+  assert.equal(isSecureTransport(new URL('http://localhost:9000/x')), true);
+});
+
+test('isSecureTransport rejects cleartext http to a remote host (the vuln)', () => {
+  // The file-config api_url bypass: http://<remote> would have leaked the key.
+  assert.equal(isSecureTransport(new URL('http://cc.nocktechnologies.io/api/')), false);
+  assert.equal(isSecureTransport(new URL('http://attacker.example.com/collect')), false);
+  assert.equal(isSecureTransport(new URL('http://10.0.0.5/x')), false);
 });

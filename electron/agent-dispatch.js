@@ -428,6 +428,22 @@ async function readNockCCConfig(store) {
   };
 }
 
+// Mirrors settings-utils.isLoopbackHostname (not exported there). Used to decide
+// whether the X-API-Key may travel over cleartext http.
+function isLoopbackHostname(hostname) {
+  const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || h.startsWith('127.');
+}
+
+// True when it is safe to send the bearer API key over this transport: https to
+// any host, or any scheme to a loopback host (self-host friendly). Mirrors the
+// `httpsForRemote` rule the settings normalizer applies to nockccUrl — but the
+// dispatch fallback reads ~/.nockcc/config.json api_url WITHOUT that normalizer,
+// so this guard at the single send chokepoint covers every caller.
+function isSecureTransport(parsed) {
+  return parsed.protocol === 'https:' || isLoopbackHostname(parsed.hostname);
+}
+
 function requestJson({ baseUrl, apiKey }, method, apiPath, body) {
   if (!apiKey) {
     return Promise.reject(new Error('NockCC API key is not configured'));
@@ -438,6 +454,14 @@ function requestJson({ baseUrl, apiKey }, method, apiPath, body) {
     parsed = buildNockCCUrl(baseUrl, apiPath);
   } catch {
     return Promise.reject(new Error('NockCC URL is invalid'));
+  }
+
+  // Never transmit the API key in plaintext to a remote host (a file-config
+  // api_url bypasses the settings normalizer). Reject BEFORE building the request.
+  if (!isSecureTransport(parsed)) {
+    return Promise.reject(
+      new Error('Refusing to send NockCC API key over cleartext http to a remote host; use https:// or a loopback URL'),
+    );
   }
 
   const payload = body === undefined ? '' : JSON.stringify(body);
@@ -601,5 +625,7 @@ module.exports = {
   collectDispatchThreadEntries,
   collectDispatchStatusUpdates,
   createDispatchPayloadFile,
+  isLoopbackHostname,
+  isSecureTransport,
   sanitizeDispatchText,
 };
