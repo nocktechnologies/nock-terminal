@@ -94,3 +94,29 @@ test('a cyclic ppid graph terminates (visited guard)', () => {
   ];
   assert.deepEqual(d._agentsInTree(200, processes), ['claude']);
 });
+
+// --- event-loop safety: detection must never run synchronously ---------------
+
+test('_detect emits status asynchronously, off the event loop', { skip: process.platform === 'win32' }, async () => {
+  const detector = new ProcessDetector({
+    terminals: new Map([['tab1', { pid: process.pid }]]),
+  });
+  const events = [];
+  detector.on('status', (e) => events.push(e));
+
+  detector._detect();
+  // A synchronous (execSync-style) implementation has already emitted by now,
+  // having blocked the event loop for the whole `ps` run.
+  assert.equal(events.length, 0, 'status was emitted synchronously');
+
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('no status emitted')), 6000);
+    detector.once('status', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  assert.equal(events[0].tabId, 'tab1');
+  assert.ok(Array.isArray(events[0].activeAgents));
+  assert.equal(typeof events[0].hasClaude, 'boolean');
+});

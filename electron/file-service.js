@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync, execFile } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
@@ -226,11 +226,11 @@ class FileService {
     }
   }
 
-  gitStatus(dirPath) {
+  async gitStatus(dirPath) {
     if (!this.isAllowedPath(dirPath)) return {};
 
     try {
-      const output = execSync('git status --porcelain', {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain'], {
         cwd: dirPath,
         encoding: 'utf-8',
         timeout: 5000,
@@ -238,7 +238,7 @@ class FileService {
       });
 
       const status = {};
-      for (const line of output.split('\n')) {
+      for (const line of stdout.split('\n')) {
         if (!line.trim()) continue;
         const code = line.substring(0, 2).trim();
         const file = line.substring(3).trim();
@@ -246,9 +246,9 @@ class FileService {
       }
       return status;
     } catch (err) {
-      const msg = err.message || '';
+      const msg = `${err.message || ''} ${err.stderr || ''}`;
       if (!msg.includes('not a git repository')) {
-        console.warn(`FileService.gitStatus error for ${dirPath}:`, msg);
+        console.warn(`FileService.gitStatus error for ${dirPath}:`, msg.trim());
       }
       return {};
     }

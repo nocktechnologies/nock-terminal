@@ -17,7 +17,7 @@ Nock Terminal is a cross-platform Electron cockpit for local agentic coding work
 - xterm.js plus `node-pty` for shell sessions
 - Monaco Editor for file editing
 - electron-store for persisted settings
-- chokidar for file watching
+- Node `fs.watch` (recursive; FSEvents-backed on macOS) for file watching
 - Ollama and Claude Code subprocess integrations for AI chat flows
 - electron-builder for macOS, Windows, and Linux packaging
 

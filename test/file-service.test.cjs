@@ -140,3 +140,28 @@ test('read rejects symlinked files outside the allowed root', { skip: process.pl
 
   assert.equal(result.error, 'Path not allowed');
 });
+
+// --- gitStatus: async, event-loop safe ---------------------------------------
+
+test('gitStatus is async and reports untracked files', async () => {
+  const sandbox = makeSandbox();
+  const root = path.join(sandbox, 'repo');
+  fs.mkdirSync(root, { recursive: true });
+  require('child_process').execFileSync('git', ['init', '-q'], { cwd: root });
+  fs.writeFileSync(path.join(root, 'new.txt'), 'hi');
+
+  const fileService = new FileService(createStore([root]));
+  const pending = fileService.gitStatus(root);
+  // A sync (execSync) implementation returns the object directly, blocking
+  // the main process event loop for the whole `git status` run.
+  assert.equal(typeof pending?.then, 'function', 'gitStatus must return a promise');
+
+  const status = await pending;
+  assert.equal(status['new.txt'], '??');
+});
+
+test('gitStatus resolves to {} for a disallowed path', async () => {
+  const fileService = new FileService(createStore([]));
+  const status = await fileService.gitStatus('/definitely/not/allowed');
+  assert.deepEqual(status, {});
+});

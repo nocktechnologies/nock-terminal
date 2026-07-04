@@ -347,11 +347,11 @@ async function readPackagedSmokeRendererState() {
   `, true);
 }
 
-// app.exit() skips before-quit/will-quit, so the chokidar watcher started by
-// the renderer (FileTree → files:watch) would still be live during Electron's
-// Node teardown. On macOS, fsevents 2.3.x then deadlocks in its napi finalizer
-// (fse_instance_destroy → napi_release_threadsafe_function) and the process
-// never exits. Run the will-quit teardown first, then exit.
+// app.exit() skips before-quit/will-quit, so the file watcher started by the
+// renderer (FileTree → files:watch) would still be live during Electron's
+// Node teardown. Historically (fsevents 2.3.x) that deadlocked the exit; the
+// fs.watch-based watcher closes synchronously, but the teardown-before-exit
+// ordering is kept so no service outlives will-quit. Run it first, then exit.
 let packagedSmokeExitStarted = false;
 async function exitPackagedSmoke(code) {
   if (packagedSmokeExitStarted) return;

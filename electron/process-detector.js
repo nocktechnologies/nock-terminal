@@ -1,6 +1,10 @@
-const { execSync, execFileSync } = require('child_process');
+const { exec, execFile } = require('child_process');
+const { promisify } = require('util');
 const EventEmitter = require('events');
 const { matchAgentProcesses } = require('./agent-adapters');
+
+const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // Parse a `ps -axo pid=,ppid=,command=` table into {pid, ppid, name} rows.
 // `name` is the FULL command line (not just comm) so script/arg-based agents
@@ -25,6 +29,7 @@ class ProcessDetector extends EventEmitter {
     super();
     this.terminalManager = terminalManager;
     this.pollInterval = null;
+    this.polling = false;
   }
 
   start() {
@@ -38,20 +43,33 @@ class ProcessDetector extends EventEmitter {
     }
   }
 
-  _detect() {
-    if (process.platform !== 'win32') {
-      this._detectUnix();
-      return;
-    }
-
+  // Detection runs async (never execSync): a slow `ps`/powershell must not
+  // block the main-process event loop, which freezes every window. The
+  // `polling` guard keeps a stalled snapshot from piling up behind the 2s
+  // timer.
+  async _detect() {
+    if (this.polling) return;
+    this.polling = true;
     try {
-      const output = execSync(
+      if (process.platform !== 'win32') {
+        await this._detectUnix();
+      } else {
+        await this._detectWindows();
+      }
+    } finally {
+      this.polling = false;
+    }
+  }
+
+  async _detectWindows() {
+    try {
+      const { stdout } = await execAsync(
         'powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name | ConvertTo-Csv -NoTypeInformation"',
         { encoding: 'utf-8', timeout: 5000, windowsHide: true }
       );
 
       const processes = [];
-      const lines = output.split('\n').slice(1);
+      const lines = stdout.split('\n').slice(1);
       for (const line of lines) {
         const match = line.match(/"(\d+)","(\d+)","([^"]*)"/);
         if (match) {
@@ -99,19 +117,19 @@ class ProcessDetector extends EventEmitter {
     return [...matched];
   }
 
-  _detectUnix() {
+  async _detectUnix() {
     // Snapshot the whole process table once, then walk each PTY's full subtree
     // with the same BFS the Windows path uses. The old `pgrep -P <pid>` only
     // saw DIRECT children, so an agent launched via a wrapper/login-shell (at
     // depth >= 2 — the common case on macOS) was silently reported as inactive.
     let processes;
     try {
-      // execFileSync: no shell, no interpolation — ps args are passed directly.
-      const output = execFileSync('ps', ['-axo', 'pid=,ppid=,command='], {
+      // execFile: no shell, no interpolation — ps args are passed directly.
+      const { stdout } = await execFileAsync('ps', ['-axo', 'pid=,ppid=,command='], {
         encoding: 'utf-8',
         timeout: 5000,
       });
-      processes = parseUnixProcessTable(output);
+      processes = parseUnixProcessTable(stdout);
     } catch (err) {
       console.error('ProcessDetector: Unix detection failed:', err.message);
       // Fail closed: report no active agents rather than crash the poller.
