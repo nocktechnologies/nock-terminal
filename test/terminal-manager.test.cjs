@@ -172,6 +172,25 @@ test('reapStaleTerminals waits for the grace window before killing an orphaned t
   assert.equal(processes[0].killed, false);
 });
 
+test('exit event carries the terminal cwd as trailing metadata (for notifications)', () => {
+  const { manager, processes } = createManagerWithFakePty();
+  const exits = [];
+  manager.on('exit', (id, code, details, meta) => exits.push({ id, code, details, meta }));
+
+  manager.create('tab-1', '/tmp/project');
+  processes[0].emitExit(0);
+
+  assert.deepEqual(exits, [
+    {
+      id: 'tab-1',
+      code: 0,
+      // details keeps its existing shape; cwd rides alongside as a 4th arg.
+      details: { reason: 'process-exit' },
+      meta: { cwd: '/tmp/project' },
+    },
+  ]);
+});
+
 test('reapStaleTerminals kills orphaned terminals after the grace window', () => {
   let now = 20_000;
   const { manager, processes } = createManagerWithFakePty({ now: () => now });

@@ -44,6 +44,7 @@ test('SecureSettingsStore migrates legacy plaintext secrets into encrypted blobs
   const store = createMemoryStore({
     telegramBotToken: '123:secret',
     nockccApiKey: 'nock-secret',
+    githubToken: 'gh-secret',
   });
   const secureSettings = new SecureSettingsStore({
     store,
@@ -55,8 +56,10 @@ test('SecureSettingsStore migrates legacy plaintext secrets into encrypted blobs
   assert.deepEqual(result.migratedKeys.sort(), [...SECURE_SETTING_KEYS].sort());
   assert.equal(store.store.telegramBotToken, '');
   assert.equal(store.store.nockccApiKey, '');
+  assert.equal(store.store.githubToken, '');
   assert.equal(secureSettings.get('telegramBotToken'), '123:secret');
   assert.equal(secureSettings.get('nockccApiKey'), 'nock-secret');
+  assert.equal(secureSettings.get('githubToken'), 'gh-secret');
   assert.notEqual(store.store[SECURE_SETTINGS_STORE_KEY].telegramBotToken.value, '123:secret');
   assert.equal(store.store[SECURE_SETTINGS_STORE_KEY].telegramBotToken.encoding, 'base64');
   assert.deepEqual(secureSettings.getStatus('telegramBotToken'), {

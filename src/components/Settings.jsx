@@ -152,6 +152,7 @@ export default function Settings() {
   const [devRootsDraft, setDevRootsDraft] = useState('');
   const [skipListDraft, setSkipListDraft] = useState('');
   const [shellArgsDraft, setShellArgsDraft] = useState('');
+  const [githubReposDraft, setGithubReposDraft] = useState('');
 
   // -----------------------------------------------------------------------
   // Load settings once
@@ -162,13 +163,13 @@ export default function Settings() {
       setDevRootsDraft((all.devRoots || []).join('\n'));
       setSkipListDraft((all.projectSkipList || []).join('\n'));
       setShellArgsDraft(all.shellArgs || '');
+      setGithubReposDraft((all.githubWatchRepos || []).join('\n'));
       if (window.nockTerminal.settings.getSecureStatus) {
-        window.nockTerminal.settings.getSecureStatus('telegramBotToken').then((status) => {
-          setSecureStatus(prev => ({
-            ...prev,
-            telegramBotToken: status?.configured === true,
-          }));
-        });
+        for (const key of ['telegramBotToken', 'githubToken']) {
+          window.nockTerminal.settings.getSecureStatus(key).then((status) => {
+            setSecureStatus(prev => ({ ...prev, [key]: status?.configured === true }));
+          });
+        }
       }
     });
   }, []);
@@ -269,8 +270,9 @@ export default function Settings() {
     setDevRootsDraft((reset.devRoots || []).join('\n'));
     setSkipListDraft((reset.projectSkipList || []).join('\n'));
     setShellArgsDraft(reset.shellArgs || '');
-    setSecureStatus(prev => ({ ...prev, telegramBotToken: false }));
-    setRevealedSecureKeys(prev => ({ ...prev, telegramBotToken: false }));
+    setGithubReposDraft((reset.githubWatchRepos || []).join('\n'));
+    setSecureStatus(prev => ({ ...prev, telegramBotToken: false, githubToken: false }));
+    setRevealedSecureKeys(prev => ({ ...prev, telegramBotToken: false, githubToken: false }));
     setSaved(true);
     if (savedTimer.current) clearTimeout(savedTimer.current);
     savedTimer.current = setTimeout(() => setSaved(false), 1500);
@@ -514,6 +516,8 @@ export default function Settings() {
       case 'telegram': {
         const telegramTokenConfigured = secureStatus.telegramBotToken === true;
         const telegramTokenEditing = revealedSecureKeys.telegramBotToken === true || !telegramTokenConfigured;
+        const githubTokenConfigured = secureStatus.githubToken === true;
+        const githubTokenEditing = revealedSecureKeys.githubToken === true || !githubTokenConfigured;
         return (
           <SettingsSection title="Telegram" description="Receive push notifications via Telegram bot">
             <Field label="Enable Telegram">
@@ -600,14 +604,44 @@ export default function Settings() {
                 <Toggle
                   checked={settings.telegramNotifySessionEnded ?? true}
                   onChange={(v) => updateSetting('telegramNotifySessionEnded', v)}
-                  label="Session ended"
-                />
-                <Toggle
-                  checked={settings.telegramNotifyFenceEvent ?? false}
-                  onChange={(v) => updateSetting('telegramNotifyFenceEvent', v)}
-                  label="Fence event"
+                  label="Session ended (on terminal exit)"
                 />
               </div>
+              <p className="text-xs text-nock-text-dim mt-2">
+                PR merged and Build complete are polled from GitHub — configure a token and watched repos below.
+              </p>
+            </Field>
+            <Field label="GitHub Token" description="Fine-grained or classic PAT with repo + actions:read; needed for PR-merged and Build-complete events">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="password"
+                  value={githubTokenEditing ? (settings.githubToken || '') : ''}
+                  onChange={(e) => updateSecureSetting('githubToken', e.target.value)}
+                  className="settings-input font-mono min-w-[260px] flex-1"
+                  placeholder={githubTokenConfigured && !githubTokenEditing ? 'Saved token hidden' : 'github_pat_... or ghp_...'}
+                  autoComplete="off"
+                />
+                {githubTokenConfigured && (
+                  <button
+                    type="button"
+                    onClick={() => clearSecureSetting('githubToken')}
+                    className="settings-button-danger flex items-center gap-2"
+                  >
+                    <Trash2 size={14} />
+                    Clear
+                  </button>
+                )}
+              </div>
+            </Field>
+            <Field label="Watched Repos" description="One owner/repo per line — polled for merged PRs and completed Actions runs">
+              <textarea
+                value={githubReposDraft}
+                onChange={(e) => setGithubReposDraft(e.target.value)}
+                onBlur={() => commitListSetting('githubWatchRepos', githubReposDraft)}
+                className="settings-input font-mono w-full h-24"
+                placeholder={'nocktechnologies/nock-terminal\nmy-org/my-repo'}
+                spellCheck={false}
+              />
             </Field>
           </SettingsSection>
         );

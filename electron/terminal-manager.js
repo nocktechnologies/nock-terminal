@@ -284,9 +284,13 @@ class TerminalManager extends EventEmitter {
     const hadMetadata = this.terminalMeta.has(id);
     if (!hadTerminal && !hadMetadata) return false;
 
+    // Capture cwd before deleting the metadata so listeners (e.g. the Telegram
+    // session-ended notifier) can name the project. Passed as a trailing arg so
+    // the existing (id, code, details) `details` contract is untouched.
+    const cwd = this.terminalMeta.get(id)?.cwd ?? null;
     this.terminals.delete(id);
     this.terminalMeta.delete(id);
-    this.emit('exit', id, exitCode ?? null, details);
+    this.emit('exit', id, exitCode ?? null, details, { cwd });
     return true;
   }
 

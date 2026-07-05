@@ -9,6 +9,7 @@ const FileService = require('./file-service');
 const FileWatcher = require('./file-watcher');
 const ProcessDetector = require('./process-detector');
 const TelegramNotifier = require('./telegram-notifier');
+const GitHubNotifier = require('./github-notifier');
 const ProjectProfiles = require('./project-profiles');
 const SessionHistory = require('./session-history');
 const PromptStore = require('./prompt-store');
@@ -100,6 +101,19 @@ function applySettingsRuntimeEffects(key, currentValue) {
   if (key === 'launchAtStartup') {
     app.setLoginItemSettings({ openAtLogin: !!currentValue });
   }
+  // Any change that affects whether/what the GitHub poller watches: (re)start it
+  // if it should now be running (a fresh start baselines new repos and picks up
+  // the new token/toggles immediately), otherwise stop it.
+  if ([
+    'githubToken', 'githubWatchRepos', 'telegramEnabled',
+    'telegramNotifyPrMerged', 'telegramNotifyBuildComplete',
+  ].includes(key)) {
+    if (githubNotifier?.isActive?.()) {
+      githubNotifier.start();
+    } else {
+      githubNotifier?.stop();
+    }
+  }
 }
 
 function applyResetRuntimeEffects(settings) {
@@ -121,6 +135,7 @@ let fileService = null;
 let fileWatcher = null;
 let processDetector = null;
 let telegramNotifier = null;
+let githubNotifier = null;
 let projectProfiles = null;
 let sessionHistory = null;
 let promptStore = null;
@@ -469,6 +484,11 @@ function initServices() {
   fileWatcher = new FileWatcher(fileService);
   processDetector = new ProcessDetector(terminalManager);
   telegramNotifier = new TelegramNotifier(serviceSettingsStore);
+  githubNotifier = new GitHubNotifier({
+    settingsStore: serviceSettingsStore, // decrypts githubToken; reads repos/toggles
+    stateStore: store, // persists last-seen cursors (githubPollState)
+    notifier: telegramNotifier,
+  });
   projectProfiles = new ProjectProfiles();
   sessionHistory = new SessionHistory(store);
   promptStore = new PromptStore();
@@ -561,11 +581,20 @@ function wireTerminalEvents() {
       sessionHistory.appendOutput(id, data);
     }
   });
-  terminalManager.on('exit', (id, code) => {
+  terminalManager.on('exit', (id, code, details, meta) => {
     mainWindow?.webContents.send('terminal:exit', { id, code });
     // End session in history
     if (sessionHistory) {
       sessionHistory.endSession(id, code);
+    }
+    // Telegram "session ended" notification — only for a natural process exit,
+    // not a user-closed tab (reason: 'destroyed') or a reaped orphan. notify()
+    // self-gates on enablement/quiet-hours/toggle, so this is a no-op unless the
+    // user configured it. Fire-and-forget: never let it affect teardown.
+    if (details?.reason === 'process-exit') {
+      telegramNotifier
+        ?.notify('session_ended', TelegramNotifier.formatSessionEndedDetail(meta?.cwd, code))
+        ?.catch(() => {});
     }
   });
 }
@@ -611,6 +640,7 @@ app.whenReady().then(() => {
   processDetector.start();
 
   nockccActivityController?.start();
+  githubNotifier?.start();
 
   // Global shortcut: try candidates in order, take the first one that registers.
   // register() returns false if the shortcut is already claimed by another app —
@@ -654,6 +684,7 @@ function shutdownServices() {
   const watcherClosed = fileWatcher?.stop();
   processDetector?.stop();
   nockccActivityController?.stop();
+  githubNotifier?.stop();
   return watcherClosed || Promise.resolve();
 }
 

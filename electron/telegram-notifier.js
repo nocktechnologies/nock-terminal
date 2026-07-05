@@ -164,4 +164,14 @@ class TelegramNotifier {
   }
 }
 
+// Build the human detail for a session-ended notification from the terminal's
+// working directory and exit code (e.g. "my-project (exit 1)").
+function formatSessionEndedDetail(cwd, exitCode) {
+  const project = cwd
+    ? (String(cwd).split(/[\\/]/).filter(Boolean).pop() || 'terminal')
+    : 'terminal';
+  return exitCode == null ? project : `${project} (exit ${exitCode})`;
+}
+
 module.exports = TelegramNotifier;
+module.exports.formatSessionEndedDetail = formatSessionEndedDetail;
