@@ -36,7 +36,6 @@ const DEFAULT_SETTINGS = {
   telegramNotifyPrMerged: true,
   telegramNotifyBuildComplete: true,
   telegramNotifySessionEnded: true,
-  telegramNotifyFenceEvent: false,
   // Session
   autoCaptureSessions: false,
   // Layout
@@ -45,6 +44,10 @@ const DEFAULT_SETTINGS = {
   // Projects
   devRoots: process.platform === 'win32' ? ['C:\\Dev'] : [],
   projectSkipList: ['Gym-App', 'github.com-kkwills13-nock-technologies-site'],
+  // GitHub notifications (poll api.github.com for merged PRs / completed Actions
+  // runs on the watched repos and forward them to Telegram).
+  githubToken: '',
+  githubWatchRepos: [],
   // NockCC integration
   nockccApiKey: '',
   nockccUrl: 'https://cc.nocktechnologies.io',
@@ -202,7 +205,6 @@ const BOOLEAN_KEYS = new Set([
   'telegramNotifyPrMerged',
   'telegramNotifyBuildComplete',
   'telegramNotifySessionEnded',
-  'telegramNotifyFenceEvent',
   'autoCaptureSessions',
   'sidebarCollapsed',
   'onboardingComplete',
@@ -215,7 +217,33 @@ const STRING_KEYS = {
   telegramBotToken: { maxLength: 500 },
   telegramChatId: { maxLength: 200 },
   nockccApiKey: { maxLength: 500 },
+  githubToken: { maxLength: 500 },
 };
+
+// A GitHub "owner/repo" slug — the segments GitHub itself allows (alphanumerics,
+// hyphen, underscore, dot), exactly one slash. Used to validate the explicit
+// watch list so the poller only ever builds api.github.com/repos/<slug> URLs.
+const GITHUB_REPO_SLUG = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
+
+function normalizeWatchRepos(value) {
+  if (!Array.isArray(value)) return invalid();
+  const seen = new Set();
+  const result = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue;
+    const trimmed = entry.trim();
+    if (!GITHUB_REPO_SLUG.test(trimmed)) continue;
+    // Reject dot-only segments ('.', '..') that would path-traverse a URL.
+    const [owner, repo] = trimmed.split('/');
+    if (/^\.+$/.test(owner) || /^\.+$/.test(repo)) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+    if (result.length >= 50) break;
+  }
+  return ok(result);
+}
 
 function normalizeSettingValue(key, value) {
   if (!Object.prototype.hasOwnProperty.call(DEFAULT_SETTINGS, key)) {
@@ -268,6 +296,8 @@ function normalizeSettingValue(key, value) {
       return ok(sanitizeDevRoots(value));
     case 'projectSkipList':
       return ok(sanitizeStringList(value, { maxItems: 200, maxLength: 120 }));
+    case 'githubWatchRepos':
+      return normalizeWatchRepos(value);
     default:
       return invalid();
   }
@@ -399,7 +429,7 @@ function getSettingForRenderer(settings = {}, key) {
   return sanitizeStoredSettings(settings)[key];
 }
 
-const SECURE_SETTING_KEYS = new Set(['telegramBotToken', 'nockccApiKey']);
+const SECURE_SETTING_KEYS = new Set(['telegramBotToken', 'nockccApiKey', 'githubToken']);
 
 function getSecureSettingStatus(settings = {}, key) {
   if (!SECURE_SETTING_KEYS.has(key)) return null;

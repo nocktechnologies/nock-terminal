@@ -1,7 +1,7 @@
 'use strict';
 
 const SECURE_SETTINGS_STORE_KEY = 'secureSettings';
-const SECURE_SETTING_KEYS = new Set(['telegramBotToken', 'nockccApiKey']);
+const SECURE_SETTING_KEYS = new Set(['telegramBotToken', 'nockccApiKey', 'githubToken']);
 
 function safeObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};

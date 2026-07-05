@@ -116,6 +116,36 @@ test('nockccUrl rejects cleartext http to a remote host (it carries the API key)
   assert.equal(normalizeSettingValue('nockccUrl', 'http://127.0.0.1:8000').ok, true);
 });
 
+test('githubWatchRepos keeps only valid owner/repo slugs, deduped', () => {
+  const result = normalizeSettingValue('githubWatchRepos', [
+    'nocktechnologies/nock-terminal',
+    'NockTechnologies/Nock-Terminal', // dupe (case-insensitive)
+    'no-slash',
+    'too/many/slashes',
+    '  spaced/repo  ',
+    'bad repo/name',
+    '../etc',
+    'owner/..',
+    42,
+    '',
+  ]);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.value, ['nocktechnologies/nock-terminal', 'spaced/repo']);
+});
+
+test('githubWatchRepos rejects a non-array', () => {
+  assert.equal(normalizeSettingValue('githubWatchRepos', 'owner/repo').ok, false);
+});
+
+test('githubToken is a length-bounded string setting', () => {
+  assert.equal(normalizeSettingValue('githubToken', 'ghp_' + 'x'.repeat(36)).ok, true);
+  assert.equal(normalizeSettingValue('githubToken', 'x'.repeat(501)).ok, false);
+});
+
+test('telegramNotifyFenceEvent is a removed setting (no in-app event source)', () => {
+  assert.equal(normalizeSettingValue('telegramNotifyFenceEvent', true).ok, false);
+});
+
 test('sanitizeStoredSettings falls back to defaults for invalid persisted values', () => {
   const sanitized = sanitizeStoredSettings({
     windowOpacity: 'loud',
