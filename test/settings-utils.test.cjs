@@ -8,11 +8,40 @@ const {
   createSettingsResetSnapshot,
   getSecureSettingStatus,
   getSettingForRenderer,
+  isLoopbackHostname,
   migrateSettingsStore,
   normalizeSettingValue,
   sanitizeSettingsForExport,
   sanitizeStoredSettings,
 } = require('../electron/settings-utils');
+
+test('isLoopbackHostname accepts only genuine loopback hosts, not spoofs', () => {
+  for (const h of [
+    'localhost', 'LOCALHOST', 'foo.localhost',
+    '127.0.0.1', '127.1.2.3', '127.255.255.255', '::1', '[::1]',
+  ]) {
+    assert.equal(isLoopbackHostname(h), true, `expected loopback: ${h}`);
+  }
+  // The old prefix test (startsWith('127.')) wrongly accepted all of these —
+  // URL.hostname of http://127.0.0.1.evil.com is literally '127.0.0.1.evil.com'.
+  for (const h of [
+    '127.0.0.1.evil.com', '127.evil.com', '127.1.2.3.evil.com',
+    '1270.0.0.1', '127.0.0.256', 'localhost.evil.com', 'notlocalhost',
+    '169.254.169.254', 'evil.example', '', null, undefined,
+  ]) {
+    assert.equal(isLoopbackHostname(h), false, `expected NOT loopback: ${h}`);
+  }
+});
+
+test('loopback pins reject 127.x-prefixed spoof hosts (ollama SSRF + nockcc key guard)', () => {
+  assert.equal(normalizeSettingValue('ollamaUrl', 'http://127.0.0.1.evil.com:11434').ok, false);
+  assert.equal(normalizeSettingValue('ollamaUrl', 'http://127.evil.com:11434').ok, false);
+  assert.equal(normalizeSettingValue('nockccUrl', 'http://127.0.0.1.evil.com').ok, false);
+  assert.equal(normalizeSettingValue('nockccUrl', 'http://127.evil.com').ok, false);
+  // Real loopback still works (no regression).
+  assert.equal(normalizeSettingValue('ollamaUrl', 'http://127.0.0.1:11434').ok, true);
+  assert.equal(normalizeSettingValue('nockccUrl', 'http://127.0.0.1:8000').ok, true);
+});
 
 test('normalizeSettingValue rejects invalid types for known settings', () => {
   assert.equal(normalizeSettingValue('windowOpacity', '100').ok, false);

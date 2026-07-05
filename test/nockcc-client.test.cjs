@@ -65,6 +65,28 @@ test('_request sends canonical X-API-Key header casing', async () => {
   });
 });
 
+test('_request refuses to send the API key over cleartext http to a non-loopback host', async () => {
+  const https = require('https');
+  const origHttp = http.request;
+  const origHttps = https.request;
+  let attempted = 0;
+  const trap = () => { attempted += 1; throw new Error('request must not be attempted'); };
+  http.request = trap;
+  https.request = trap;
+  try {
+    // A 127.x-prefixed spoof host must be treated as remote, not loopback.
+    for (const baseUrl of ['http://127.0.0.1.evil.com', 'http://198.51.100.10']) {
+      const client = createClient(baseUrl);
+      await client._request('POST', '/api/test/', {});
+      client.startSession({ machine: 'test' });
+    }
+    assert.equal(attempted, 0, 'no request should be attempted over cleartext to a remote host');
+  } finally {
+    http.request = origHttp;
+    https.request = origHttps;
+  }
+});
+
 test('_request rejects oversized NockCC responses', async () => {
   await withHttpServer((req, res) => {
     req.resume();
