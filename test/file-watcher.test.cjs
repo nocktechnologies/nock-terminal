@@ -79,6 +79,22 @@ test('stop() without an active watcher still returns a promise', async () => {
   await closed;
 });
 
+test('_pollGitStatus stops polling when the project root has been deleted', async () => {
+  let gitStatusCalls = 0;
+  const watcher = new FileWatcher({
+    isAllowedPath: () => true, // still "allowed" (a configured devRoot), just gone from disk
+    gitStatus: async () => { gitStatusCalls += 1; return {}; },
+  });
+  watcher.currentRoot = path.join(os.tmpdir(), 'nock-terminal-does-not-exist-' + process.pid);
+  watcher.gitPollInterval = setInterval(() => {}, 1_000_000);
+
+  await watcher._pollGitStatus();
+
+  assert.equal(gitStatusCalls, 0, 'should not run git on a deleted root');
+  assert.equal(watcher.currentRoot, null, 'watcher stops when the root is gone');
+  assert.equal(watcher.gitPollInterval, null, 'poll interval cleared');
+});
+
 // --- fd-exhaustion regression (kqueue held one fd per watched file) ----------
 
 const FD_DIR = process.platform === 'linux' ? '/proc/self/fd' : '/dev/fd';

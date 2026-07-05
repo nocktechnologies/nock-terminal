@@ -169,6 +169,19 @@ class FileWatcher extends EventEmitter {
     }
 
     const root = this.currentRoot;
+    // Root deleted/moved mid-session: stop rather than spam git-status errors
+    // every 10s against a path that no longer exists. isAllowedPath still
+    // passes (it's a configured devRoot) so we check the filesystem directly.
+    try {
+      await fsp.stat(root);
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        this.stop();
+        return;
+      }
+    }
+    if (this.currentRoot !== root) return; // project switched while we stat'd
+
     const status = await this.fileService.gitStatus(root);
     if (this.currentRoot !== root) return; // project switched while git ran
     this.emit('gitStatus', status);

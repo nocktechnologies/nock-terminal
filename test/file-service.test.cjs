@@ -23,6 +23,33 @@ function createStore(devRoots) {
   };
 }
 
+test('tree() surfaces a meta.error when the project folder no longer exists', () => {
+  const sandbox = makeSandbox();
+  // The configured devRoot exists; the opened project (a subdir) was deleted —
+  // this is the real "vanished worktree" case observed live.
+  const deletedProject = path.join(sandbox, 'worktrees', 'gone');
+  const fileService = new FileService(createStore([sandbox]));
+
+  const result = fileService.tree(deletedProject);
+
+  assert.deepEqual(result.entries, []);
+  assert.ok(result.meta.error, 'expected a meta.error for a missing folder');
+  assert.match(result.meta.error, /no longer exists|Cannot open/);
+});
+
+test('tree() still lists a real directory without a meta.error', () => {
+  const sandbox = makeSandbox();
+  const root = path.join(sandbox, 'workspace');
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(path.join(root, 'a.txt'), 'hi');
+
+  const fileService = new FileService(createStore([root]));
+  const result = fileService.tree(root);
+
+  assert.equal(result.meta.error, undefined);
+  assert.ok(result.entries.some((e) => e.name === 'a.txt'));
+});
+
 test('write rejects non-string content', () => {
   const sandbox = makeSandbox();
   const root = path.join(sandbox, 'workspace');

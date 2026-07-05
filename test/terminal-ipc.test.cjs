@@ -78,6 +78,14 @@ function registerHarness({
     destroy(id) {
       calls.push({ method: 'destroy', id });
     },
+    listTerminals() {
+      calls.push({ method: 'listTerminals' });
+      return [{ id: 'tab-1', pid: 1234 }];
+    },
+    reapStaleTerminals(options) {
+      calls.push({ method: 'reapStaleTerminals', options });
+      return [{ id: 'orphan-1', pid: 9, reason: 'dead-root-pid' }];
+    },
   };
   const profileLookups = [];
   const projectProfiles = {
@@ -101,12 +109,45 @@ function registerHarness({
 test('registerTerminalIPC registers the renderer terminal command contract', () => {
   const ipc = registerHarness();
 
-  assert.deepEqual(ipc.registeredHandleChannels(), ['terminal:create']);
+  assert.deepEqual(ipc.registeredHandleChannels(), [
+    'terminal:create',
+    'terminal:list',
+    'terminal:reapStale',
+  ]);
   assert.deepEqual(ipc.registeredEventChannels(), [
     'terminal:destroy',
     'terminal:resize',
     'terminal:write',
   ]);
+});
+
+test('terminal:list returns the terminal manager inventory', () => {
+  const ipc = registerHarness();
+  const result = ipc.invoke('terminal:list');
+  assert.deepEqual(result, [{ id: 'tab-1', pid: 1234 }]);
+});
+
+test('terminal:reapStale sanitizes options before delegating', () => {
+  const ipc = registerHarness();
+  const result = ipc.invoke('terminal:reapStale', {
+    liveTerminalIds: ['tab-1', '', 42, 'tab-2'],
+    graceMs: -5,
+    rendererStartedAt: 1000,
+    bogus: 'ignored',
+  });
+  assert.deepEqual(result, [{ id: 'orphan-1', pid: 9, reason: 'dead-root-pid' }]);
+  const reap = ipc.calls.find((c) => c.method === 'reapStaleTerminals');
+  // Non-string ids and the negative graceMs are dropped; only valid options pass.
+  assert.deepEqual(reap.options.liveTerminalIds, ['tab-1', 'tab-2']);
+  assert.equal('graceMs' in reap.options, false);
+  assert.equal(reap.options.rendererStartedAt, 1000);
+});
+
+test('terminal:reapStale tolerates a missing/garbage payload', () => {
+  const ipc = registerHarness();
+  ipc.invoke('terminal:reapStale', undefined);
+  const reap = ipc.calls.find((c) => c.method === 'reapStaleTerminals');
+  assert.deepEqual(reap.options, { liveTerminalIds: [] });
 });
 
 test('terminal:create validates payloads and delegates trusted launch options', async () => {

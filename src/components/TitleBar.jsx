@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function TitleBar({ sessionCount = 0, activeCount = 0 }) {
+export default function TitleBar({ sessionCount = 0, activeCount = 0, onRequestClose }) {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
@@ -12,7 +12,9 @@ export default function TitleBar({ sessionCount = 0, activeCount = 0 }) {
     window.nockTerminal.window.maximize();
     setIsMaximized(await window.nockTerminal.window.isMaximized());
   };
-  const handleClose = () => window.nockTerminal.window.close();
+  // Prefer the app-level guard (warns about unsaved editor buffers); fall back
+  // to a direct close if no handler was provided.
+  const handleClose = () => (onRequestClose ? onRequestClose() : window.nockTerminal.window.close());
 
   return (
     <div className="titlebar-drag h-10 bg-nock-bg border-b border-nock-border flex items-center justify-between px-3 select-none shrink-0 relative">

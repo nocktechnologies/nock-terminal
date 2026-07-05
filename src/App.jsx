@@ -18,6 +18,7 @@ import {
   sanitizeStagedTerminalInput,
 } from './utils/agentLaunchers.mjs';
 import { createTabId } from './utils/tabOps.mjs';
+import { buildUnsavedFilesMessage, collectUnsavedFiles } from './utils/unsavedFiles.mjs';
 import useTabs from './hooks/useTabs.js';
 import useTabSplits from './hooks/useTabSplits.js';
 import useKeyboardShortcuts from './hooks/useKeyboardShortcuts.js';
@@ -76,6 +77,9 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const queuedPromptIdRef = useRef(0);
   const ctrlPFocusRef = useRef(null);
+  // When the renderer started — the reaper uses this to avoid killing PTYs
+  // created before this renderer that a fresh renderer hasn't adopted yet.
+  const rendererStartedAtRef = useRef(Date.now());
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -90,6 +94,28 @@ export default function App() {
       message,
     });
   }, []);
+
+  const cleanupStaleTerminals = useCallback(async () => {
+    try {
+      const liveTerminalIds = tabs.map((tab) => tab.id);
+      await window.nockTerminal.terminal.reapStale({
+        liveTerminalIds,
+        rendererStartedAt: rendererStartedAtRef.current,
+      });
+    } catch (err) {
+      console.error('Failed to reap stale terminals:', err);
+    } finally {
+      refreshSessions();
+    }
+  }, [tabs, refreshSessions]);
+
+  // Closing the window destroys every Monaco model, so guard it with the same
+  // unsaved-changes confirm the per-tab/split close paths use.
+  const requestCloseWindow = useCallback(() => {
+    const message = buildUnsavedFilesMessage(collectUnsavedFiles(tabs));
+    if (message && !window.confirm(message)) return;
+    window.nockTerminal.window.close();
+  }, [tabs]);
 
   const openCommandPalette = useCallback((preset = null) => {
     const safePreset = preset && typeof preset === 'object' && !preset.nativeEvent && !preset.currentTarget ? preset : null;
@@ -272,6 +298,7 @@ export default function App() {
       <TitleBar
         sessionCount={sessions.length}
         activeCount={sessions.filter(s => s.status === 'active').length}
+        onRequestClose={requestCloseWindow}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -313,6 +340,7 @@ export default function App() {
               dispatchRuns={dispatchRuns}
               onOpenCommandPalette={openCommandPalette}
               onLaunchSessionWithAgent={launchSessionWithAgent}
+              onCleanupStaleTerminals={cleanupStaleTerminals}
             />
           </div>
 

@@ -77,7 +77,6 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     get: (key) => ipcRenderer.invoke('settings:get', key),
     getAll: () => ipcRenderer.invoke('settings:getAll'),
     getExport: () => ipcRenderer.invoke('settings:export'),
-    getSecure: (key) => ipcRenderer.invoke('settings:getSecure', key),
     getSecureStatus: (key) => ipcRenderer.invoke('settings:getSecureStatus', key),
     reset: (options) => ipcRenderer.invoke('settings:reset', options),
     set: (key, value) => ipcRenderer.invoke('settings:set', { key, value }),
@@ -98,7 +97,6 @@ contextBridge.exposeInMainWorld('nockTerminal', {
   // Telegram notifications
   telegram: {
     test: () => ipcRenderer.invoke('telegram:test'),
-    notify: (eventType, details) => ipcRenderer.invoke('telegram:notify', { eventType, details }),
   },
 
   // NockCC activity heartbeat
