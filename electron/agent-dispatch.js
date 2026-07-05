@@ -13,6 +13,7 @@ const {
   safeRuntime,
   sanitizeDispatchText: sanitizeDispatchTextValue,
 } = require('./ipc-validators');
+const { isLoopbackHostname } = require('./settings-utils');
 
 const DEFAULT_BROKER_AGENT = 'mira-nockos';
 const DEFAULT_STATUS_POLL_AGENT = 'nock-terminal';
@@ -426,13 +427,6 @@ async function readNockCCConfig(store) {
     apiKey: safeString(fileConfig.api_key || fileConfig.apiKey, 500),
     baseUrl: safeString(fileConfig.api_url || fileConfig.apiUrl, 1000) || configured.baseUrl,
   };
-}
-
-// Mirrors settings-utils.isLoopbackHostname (not exported there). Used to decide
-// whether the X-API-Key may travel over cleartext http.
-function isLoopbackHostname(hostname) {
-  const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
-  return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || h.startsWith('127.');
 }
 
 // True when it is safe to send the bearer API key over this transport: https to

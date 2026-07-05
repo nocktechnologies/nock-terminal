@@ -85,10 +85,20 @@ function normalizeInteger(value, { min, max } = {}) {
 }
 
 
+// A real dotted-quad in 127.0.0.0/8 — each octet 0-255, first octet exactly 127.
+const LOOPBACK_IPV4 = /^127\.(?:25[0-5]|2[0-4]\d|1?\d?\d)\.(?:25[0-5]|2[0-4]\d|1?\d?\d)\.(?:25[0-5]|2[0-4]\d|1?\d?\d)$/;
+
 // localhost, *.localhost, the whole 127.0.0.0/8 range, and IPv6 ::1.
+//
+// A prefix test like startsWith('127.') is WRONG: URL.hostname of
+// http://127.0.0.1.evil.com is the literal string '127.0.0.1.evil.com', which
+// starts with '127.' and would be mis-classified as loopback — defeating the
+// Ollama loopback pin and the cleartext-API-key guard. Match the actual range.
 function isLoopbackHostname(hostname) {
   const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
-  return h === 'localhost' || h.endsWith('.localhost') || h === '::1' || h.startsWith('127.');
+  if (h === 'localhost' || h.endsWith('.localhost')) return true;
+  if (h === '::1') return true;
+  return LOOPBACK_IPV4.test(h);
 }
 
 // `loopbackOnly`  — reject any non-loopback host (for inherently-local services
@@ -424,6 +434,7 @@ module.exports = {
   createSettingsResetSnapshot,
   getSecureSettingStatus,
   getSettingForRenderer,
+  isLoopbackHostname,
   migrateSettingsStore,
   normalizeSettingValue,
   sanitizeSettingsForExport,

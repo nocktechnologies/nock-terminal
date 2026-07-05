@@ -2,6 +2,7 @@
 
 const https = require('https');
 const http = require('http');
+const { isLoopbackHostname } = require('./settings-utils');
 
 const MAX_NOCKCC_RESPONSE_BYTES = 1024 * 1024;
 
@@ -9,6 +10,14 @@ function buildNockCCUrl(baseUrl, apiPath) {
   const normalizedBase = `${String(baseUrl || '').trim().replace(/\/+$/, '')}/`;
   const relativePath = String(apiPath || '').replace(/^\/+/, '');
   return new URL(relativePath, normalizedBase);
+}
+
+// Defense in depth for the X-API-Key: this client trusts the settings normalizer
+// to keep nockccUrl on https-or-loopback, but a single chokepoint here means the
+// key can never leave over cleartext http to a non-loopback host even if the
+// stored URL is somehow tainted. Mirrors agent-dispatch's isSecureTransport.
+function isSecureTransport(parsed) {
+  return parsed.protocol === 'https:' || isLoopbackHostname(parsed.hostname);
 }
 
 function readBoundedResponse(req, res, { encoding = null } = {}) {
@@ -82,6 +91,11 @@ class NockCCClient {
       return Promise.resolve();
     }
 
+    if (!isSecureTransport(parsed)) {
+      console.warn('NockCCClient: refusing to send API key over cleartext http to a non-loopback host');
+      return Promise.resolve();
+    }
+
     const payload = JSON.stringify(body);
     const options = {
       method,
@@ -127,6 +141,11 @@ class NockCCClient {
     try {
       parsed = buildNockCCUrl(baseUrl, '/api/terminal/sessions/');
     } catch {
+      return;
+    }
+
+    if (!isSecureTransport(parsed)) {
+      console.warn('NockCCClient: refusing to send API key over cleartext http to a non-loopback host');
       return;
     }
 
