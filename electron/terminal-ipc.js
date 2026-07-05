@@ -65,6 +65,21 @@ function registerTerminalIPC({
     if (!isTerminalId(id)) return;
     terminalManager.destroy(id);
   });
+
+  ipcMain.handle('terminal:list', () => terminalManager.listTerminals());
+
+  // Reap orphaned PTYs (dead root pid, or alive-but-not-in-renderer past a grace
+  // window). Options are sanitized here; reapStaleTerminals re-validates too.
+  ipcMain.handle('terminal:reapStale', (_, payload) => {
+    const opts = safePayload(payload);
+    const liveTerminalIds = Array.isArray(opts.liveTerminalIds)
+      ? opts.liveTerminalIds.filter(isTerminalId)
+      : [];
+    const reapOptions = { liveTerminalIds };
+    if (isPositiveInteger(opts.graceMs)) reapOptions.graceMs = opts.graceMs;
+    if (Number.isFinite(opts.rendererStartedAt)) reapOptions.rendererStartedAt = opts.rendererStartedAt;
+    return terminalManager.reapStaleTerminals(reapOptions);
+  });
 }
 
 module.exports = {

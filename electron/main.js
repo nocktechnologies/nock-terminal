@@ -34,6 +34,7 @@ const { registerSystemWindowIPC } = require('./system-window-ipc');
 const { registerTelegramIPC } = require('./telegram-ipc');
 const { registerTerminalIPC } = require('./terminal-ipc');
 const { installWindowSecurity, acquireSingleInstanceLock } = require('./window-security');
+const { decideRendererRecovery } = require('./renderer-recovery');
 const { version: appVersion } = require('../package.json');
 
 const APP_NAME = 'Nock Terminal';
@@ -111,6 +112,7 @@ function applyResetRuntimeEffects(settings) {
 
 let mainWindow = null;
 let tray = null;
+let rendererCrashTimestamps = [];
 let terminalManager = null;
 let sessionDiscovery = null;
 let ollamaClient = null;
@@ -166,6 +168,56 @@ function configureAppBranding() {
   }
 }
 
+// Recover from a dead or hung renderer. A crashed render process leaves a
+// blank, frozen window (the exact "won't launch / freezes" symptom), so on an
+// unexpected exit we reload the window — but only up to a rate cap, so a
+// genuinely broken renderer can't spin in a reload loop and peg the CPU.
+function installRendererRecovery(win) {
+  const contents = win.webContents;
+
+  contents.on('render-process-gone', (_event, details) => {
+    // Smoke runs assert a clean first paint; let the smoke harness observe the
+    // failure instead of silently reloading underneath it.
+    if (IS_PACKAGED_SMOKE) return;
+    if (app.isQuitting || win.isDestroyed()) return;
+
+    const decision = decideRendererRecovery({
+      reason: details?.reason,
+      crashTimestamps: rendererCrashTimestamps,
+      now: Date.now(),
+    });
+    rendererCrashTimestamps = decision.crashTimestamps;
+
+    if (decision.action === 'reload') {
+      console.error(`[recovery] renderer gone (reason=${details?.reason}); reloading (attempt ${decision.attempt})`);
+      // Defer the reload: calling reload() synchronously inside the
+      // render-process-gone handler crashes the main process (Chromium hits a
+      // CHECK while the dead render process is still being torn down). Let the
+      // event unwind first, then re-check the window is still valid.
+      setTimeout(() => {
+        if (app.isQuitting || win.isDestroyed()) return;
+        try {
+          win.reload();
+        } catch (err) {
+          console.error('[recovery] reload failed:', err.message);
+        }
+      }, 100);
+    } else if (decision.action === 'giveup') {
+      console.error(`[recovery] renderer gone (reason=${details?.reason}); repeated crashes — not reloading`);
+      tray?.setToolTip(`${APP_NAME} — renderer crashed repeatedly; restart the app`);
+    }
+  });
+
+  // Hang (not crash) — surface it rather than auto-reloading, which would drop
+  // unsaved editor buffers. Observability now; a recovery prompt can come later.
+  contents.on('unresponsive', () => {
+    console.error('[recovery] renderer unresponsive');
+  });
+  contents.on('responsive', () => {
+    console.log('[recovery] renderer responsive again');
+  });
+}
+
 function createWindow() {
   const settings = getSettingsSnapshot();
   const { width, height, x, y } = settings.windowBounds;
@@ -196,6 +248,8 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow(windowOptions);
+  // Fresh window starts with a clean crash history.
+  rendererCrashTimestamps = [];
 
   // Renderer containment: deny in-app window-open (route real web links to the
   // OS browser) and block main-frame navigation away from the app origin, so a
@@ -205,6 +259,8 @@ function createWindow() {
     appDir: path.join(__dirname, '..', 'dist-react'),
     openExternal: (url) => shell.openExternal(url),
   });
+
+  installRendererRecovery(mainWindow);
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -347,11 +403,11 @@ async function readPackagedSmokeRendererState() {
   `, true);
 }
 
-// app.exit() skips before-quit/will-quit, so the chokidar watcher started by
-// the renderer (FileTree → files:watch) would still be live during Electron's
-// Node teardown. On macOS, fsevents 2.3.x then deadlocks in its napi finalizer
-// (fse_instance_destroy → napi_release_threadsafe_function) and the process
-// never exits. Run the will-quit teardown first, then exit.
+// app.exit() skips before-quit/will-quit, so the file watcher started by the
+// renderer (FileTree → files:watch) would still be live during Electron's
+// Node teardown. Historically (fsevents 2.3.x) that deadlocked the exit; the
+// fs.watch-based watcher closes synchronously, but the teardown-before-exit
+// ordering is kept so no service outlives will-quit. Run it first, then exit.
 let packagedSmokeExitStarted = false;
 async function exitPackagedSmoke(code) {
   if (packagedSmokeExitStarted) return;

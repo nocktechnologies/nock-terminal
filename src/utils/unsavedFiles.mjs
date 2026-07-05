@@ -29,3 +29,16 @@ export function buildUnsavedFilesMessage(files) {
   const suffix = normalized.length > 3 ? ', ...' : '';
   return `Discard unsaved changes to ${normalized.length} files? ${preview}${suffix}`;
 }
+
+// Gather the unsaved editor files across every open tab (deduped), so a
+// window-close guard can warn once for the whole app the way each tab/split
+// close already warns for itself.
+export function collectUnsavedFiles(tabs) {
+  if (!Array.isArray(tabs)) return [];
+  const all = [];
+  for (const tab of tabs) {
+    const files = tab?.splitContent?.unsavedFiles;
+    if (Array.isArray(files)) all.push(...files);
+  }
+  return normalizeUnsavedFiles(all);
+}

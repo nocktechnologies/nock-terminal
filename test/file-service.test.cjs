@@ -23,6 +23,33 @@ function createStore(devRoots) {
   };
 }
 
+test('tree() surfaces a meta.error when the project folder no longer exists', () => {
+  const sandbox = makeSandbox();
+  // The configured devRoot exists; the opened project (a subdir) was deleted —
+  // this is the real "vanished worktree" case observed live.
+  const deletedProject = path.join(sandbox, 'worktrees', 'gone');
+  const fileService = new FileService(createStore([sandbox]));
+
+  const result = fileService.tree(deletedProject);
+
+  assert.deepEqual(result.entries, []);
+  assert.ok(result.meta.error, 'expected a meta.error for a missing folder');
+  assert.match(result.meta.error, /no longer exists|Cannot open/);
+});
+
+test('tree() still lists a real directory without a meta.error', () => {
+  const sandbox = makeSandbox();
+  const root = path.join(sandbox, 'workspace');
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(path.join(root, 'a.txt'), 'hi');
+
+  const fileService = new FileService(createStore([root]));
+  const result = fileService.tree(root);
+
+  assert.equal(result.meta.error, undefined);
+  assert.ok(result.entries.some((e) => e.name === 'a.txt'));
+});
+
 test('write rejects non-string content', () => {
   const sandbox = makeSandbox();
   const root = path.join(sandbox, 'workspace');
@@ -139,4 +166,29 @@ test('read rejects symlinked files outside the allowed root', { skip: process.pl
   const result = fileService.read(linkPath);
 
   assert.equal(result.error, 'Path not allowed');
+});
+
+// --- gitStatus: async, event-loop safe ---------------------------------------
+
+test('gitStatus is async and reports untracked files', async () => {
+  const sandbox = makeSandbox();
+  const root = path.join(sandbox, 'repo');
+  fs.mkdirSync(root, { recursive: true });
+  require('child_process').execFileSync('git', ['init', '-q'], { cwd: root });
+  fs.writeFileSync(path.join(root, 'new.txt'), 'hi');
+
+  const fileService = new FileService(createStore([root]));
+  const pending = fileService.gitStatus(root);
+  // A sync (execSync) implementation returns the object directly, blocking
+  // the main process event loop for the whole `git status` run.
+  assert.equal(typeof pending?.then, 'function', 'gitStatus must return a promise');
+
+  const status = await pending;
+  assert.equal(status['new.txt'], '??');
+});
+
+test('gitStatus resolves to {} for a disallowed path', async () => {
+  const fileService = new FileService(createStore([]));
+  const status = await fileService.gitStatus('/definitely/not/allowed');
+  assert.deepEqual(status, {});
 });

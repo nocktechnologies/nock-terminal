@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ContextMenu from './ContextMenu';
+import { debounce } from '../utils/debounce.mjs';
 
 const GIT_STATUS_COLORS = {
   M: 'bg-nock-yellow',
@@ -38,10 +39,15 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
   useEffect(() => {
     loadTree();
     window.nockTerminal.files.watch(rootPath);
-    const cleanupChanged = window.nockTerminal.files.onChanged(() => loadTree());
+    // A single git checkout / branch switch fires many file events at once;
+    // debounce so the whole tree is re-scanned once the burst settles rather
+    // than once per file.
+    const debouncedReload = debounce(() => loadTree(), 250);
+    const cleanupChanged = window.nockTerminal.files.onChanged(debouncedReload);
     const cleanupGit = window.nockTerminal.files.onGitStatus((status) => setGitStatus(status));
 
     return () => {
+      debouncedReload.cancel();
       cleanupChanged();
       cleanupGit();
       window.nockTerminal.files.stopWatch();

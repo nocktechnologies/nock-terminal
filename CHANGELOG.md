@@ -4,6 +4,12 @@ This changelog is summarized from git history. The repository has no version tag
 
 ## Unreleased
 
+### 2026-07-04
+
+- Fixed the crash/freeze cycle on large projects: replaced chokidar-4 watching (one kqueue fd per file on macOS, ~20k fds on big trees) with a single recursive `fs.watch` per project root, restoring FSEvents-backed watching without the fsevents module. An fd-exhausted main process could no longer spawn terminals, `ps`/`git` polls, or renderer helpers (SIGABRT at launch).
+- Converted the agent process detector and `git status` polling from `execSync` to async `execFile` so slow snapshots no longer block the main-process event loop (periodic all-window freezes), with an overlap guard on the 2s detector timer.
+- Dropped the `chokidar` dependency; added fd-budget, atomic-save, ignored-dir, and async-poller regression tests.
+
 ### 2026-05-24
 
 - Added bounded file-tree traversal metadata, large-file preview reads, and editor cache refresh behavior for Nock `7532`.
