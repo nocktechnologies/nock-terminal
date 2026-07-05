@@ -561,11 +561,20 @@ function wireTerminalEvents() {
       sessionHistory.appendOutput(id, data);
     }
   });
-  terminalManager.on('exit', (id, code) => {
+  terminalManager.on('exit', (id, code, details, meta) => {
     mainWindow?.webContents.send('terminal:exit', { id, code });
     // End session in history
     if (sessionHistory) {
       sessionHistory.endSession(id, code);
+    }
+    // Telegram "session ended" notification — only for a natural process exit,
+    // not a user-closed tab (reason: 'destroyed') or a reaped orphan. notify()
+    // self-gates on enablement/quiet-hours/toggle, so this is a no-op unless the
+    // user configured it. Fire-and-forget: never let it affect teardown.
+    if (details?.reason === 'process-exit') {
+      telegramNotifier
+        ?.notify('session_ended', TelegramNotifier.formatSessionEndedDetail(meta?.cwd, code))
+        ?.catch(() => {});
     }
   });
 }
