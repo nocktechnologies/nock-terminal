@@ -183,6 +183,30 @@ async function hardenedPassiveGitArgs(repoPath, ...rest) {
   return passiveGitArgs(`--attr-source=${oid}`, ...rest);
 }
 
+// Defense-in-depth flags for a git fetch/pull/push the user TRIGGERED (via the
+// git panel) on a repo they have already TRUSTED by opening a terminal in it
+// (Nock #8663). Unlike the passive path we do NOT disable the repo's hooks,
+// filters, or core.sshCommand — on a repo the user trusts those are legitimate
+// (their own pre-push/post-merge hooks, smudge filters, custom ssh key). We only:
+//   core.fsmonitor=false       — never run the repo-controlled fsmonitor command
+//   protocol.ext.allow=never   — refuse the `ext::` transport, i.e. an
+//                                arbitrary-command "remote" (remote.<n>.url=ext::
+//                                <cmd>); a repo-local `protocol.ext.allow=always`
+//                                would otherwise re-enable it and a bare
+//                                `git fetch` on an ext:: origin = code execution.
+//                                Command-line -c overrides repo-local config.
+// The UNTRUSTED case (a merely-discovered repo) is refused outright by the trust
+// gate in FileService.gitOp — no git runs at all — which also covers
+// core.sshCommand and checkout smudge filters on an untrusted repo.
+const GITOP_HARDENING_ARGS = Object.freeze([
+  '-c', 'core.fsmonitor=false',
+  '-c', 'protocol.ext.allow=never',
+]);
+
+function gitOpArgs(operation) {
+  return [...GITOP_HARDENING_ARGS, operation];
+}
+
 module.exports = {
   canonicalizePath,
   isPathWithinRoots,
@@ -193,4 +217,6 @@ module.exports = {
   EMPTY_TREE_OID,
   emptyTreeAttrSource,
   hardenedPassiveGitArgs,
+  GITOP_HARDENING_ARGS,
+  gitOpArgs,
 };

@@ -4,7 +4,13 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
-const { isPathWithinRoots, sanitizeDevRoots, hardenedPassiveGitArgs } = require('./security-utils');
+const {
+  isPathWithinRoots,
+  sanitizeDevRoots,
+  hardenedPassiveGitArgs,
+  gitOpArgs,
+  canonicalizePath,
+} = require('./security-utils');
 
 const DEFAULT_TREE_MAX_DEPTH = 8;
 const DEFAULT_TREE_MAX_ENTRIES = 2000;
@@ -24,10 +30,40 @@ class FileService {
   constructor(store) {
     this.store = store;
     this.grantedRoots = [];
+    // Repos the user has actively TRUSTED this session by opening a terminal in
+    // them (canonical paths). gitOp (pull/push/fetch) is gated on this — see
+    // gitOp() and Nock #8663. Populated via trustRepoRoot() when a terminal
+    // launches; being merely discovered/allowed is NOT trust.
+    this.trustedRepoRoots = [];
   }
 
   setGrantedRoots(roots) {
     this.grantedRoots = sanitizeDevRoots(roots || []);
+  }
+
+  // Mark a repo as trusted for gitOp because the user opened a terminal in it.
+  // Best-effort: a path that can't be canonicalized is simply not recorded.
+  trustRepoRoot(dirPath) {
+    if (typeof dirPath !== 'string' || dirPath === '') return;
+    let canon;
+    try {
+      canon = canonicalizePath(dirPath);
+    } catch {
+      return;
+    }
+    if (!this.trustedRepoRoots.includes(canon)) {
+      this.trustedRepoRoots.push(canon);
+    }
+  }
+
+  // True only if `dirPath` shares a tree with a repo the user opened a terminal
+  // in — the op path within a trusted root, or a trusted root within the op path
+  // (covers terminal-at-root/op-at-subdir and vice-versa). A merely-discovered
+  // repo the user never opened a terminal in is NOT trusted.
+  isGitOpTrusted(dirPath) {
+    if (!this.trustedRepoRoots.length) return false;
+    if (isPathWithinRoots(dirPath, this.trustedRepoRoots)) return true;
+    return this.trustedRepoRoots.some((root) => isPathWithinRoots(root, [dirPath]));
   }
 
   tree(dirPath, options = {}) {
@@ -230,12 +266,27 @@ class FileService {
     if (!ALLOWED_OPS.has(operation)) return { success: false, error: 'Unknown operation' };
     if (!this.isAllowedPath(dirPath)) return { success: false, error: 'Path not allowed' };
 
+    // TRUST GATE (Nock #8663). fetch/pull/checkout make git execute
+    // repo-controlled config — `remote.<name>.url=ext::<cmd>`, `core.sshCommand`,
+    // and checkout smudge filters — as arbitrary commands. On a repo the user
+    // has merely DISCOVERED (it appeared in the dashboard) but never opened a
+    // terminal in, that is a code-execution surface. Refuse the op outright for
+    // an untrusted repo (no git runs at all) and tell the UI trust is required;
+    // opening a terminal there is the explicit trust step.
+    if (!this.isGitOpTrusted(dirPath)) {
+      return {
+        success: false,
+        requiresTrust: true,
+        error: 'This repository has not been opened in a terminal yet. Open a terminal here first, then retry pull/push/fetch.',
+      };
+    }
+
     try {
-      // pull/push/fetch is an explicit user action, so legitimate push/merge
-      // hooks are preserved (no hooksPath override). We still neutralize the
-      // repo-controlled core.fsmonitor command, which git would run to refresh
-      // the index during these ops (same RCE vector as passive status, #8661).
-      const { stdout } = await execFileAsync('git', ['-c', 'core.fsmonitor=false', operation], {
+      // The user trusts this repo, so its own hooks / smudge filters / sshCommand
+      // are legitimate and preserved (NOT disabled — unlike the passive path).
+      // We still neutralize the repo-controlled core.fsmonitor command and refuse
+      // the `ext::` arbitrary-command transport as defense-in-depth (#8663).
+      const { stdout } = await execFileAsync('git', gitOpArgs(operation), {
         cwd: dirPath,
         encoding: 'utf-8',
         timeout: 30000,
