@@ -88,3 +88,27 @@ jobs:
 
       - name: Build and launch packaged app
         run: xvfb-run -a npm run smoke:package
+
+  packaged-smoke-macos:
+    name: Packaged smoke (macOS)
+    runs-on: macos-latest
+    needs: build-frontend
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # macOS runners have a windowserver, so no xvfb needed. The smoke script
+      # ad-hoc signs and skips notarization on darwin (no Apple creds on CI).
+      - name: Build and launch packaged app
+        run: npm run smoke:package
