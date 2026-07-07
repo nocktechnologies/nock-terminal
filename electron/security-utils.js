@@ -26,6 +26,38 @@ function canonicalizePath(targetPath) {
   }
 }
 
+// Resolve a path to the top level of the git repository that contains it — the
+// nearest ancestor holding a `.git` entry (a directory for a normal repo, a file
+// for a worktree/submodule). Returns the canonical (symlink-resolved) repo root,
+// or null if the path is not inside a git repo. This is REPO IDENTITY: used so
+// gitOp trust compares the exact repo, not mere path containment (Nock #8663 —
+// closes cross-repo trust leakage in both the nested-child and enclosing-parent
+// directions). No subprocess — a plain upward `.git` walk avoids any git exec.
+function findRepoRoot(startPath) {
+  let dir;
+  try {
+    dir = canonicalizePath(startPath);
+  } catch {
+    return null;
+  }
+  // A regular file path can't be a repo root; start from its directory.
+  try {
+    if (fs.statSync(dir).isFile()) dir = path.dirname(dir);
+  } catch {
+    return null;
+  }
+  for (;;) {
+    try {
+      if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    } catch {
+      // ignore and keep walking up
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 function isPathWithinRoots(targetPath, roots) {
   if (!Array.isArray(roots) || roots.length === 0) return false;
 
@@ -183,8 +215,33 @@ async function hardenedPassiveGitArgs(repoPath, ...rest) {
   return passiveGitArgs(`--attr-source=${oid}`, ...rest);
 }
 
+// Defense-in-depth flags for a git fetch/pull/push the user TRIGGERED (via the
+// git panel) on a repo they have already TRUSTED by opening a terminal in it
+// (Nock #8663). Unlike the passive path we do NOT disable the repo's hooks,
+// filters, or core.sshCommand — on a repo the user trusts those are legitimate
+// (their own pre-push/post-merge hooks, smudge filters, custom ssh key). We only:
+//   core.fsmonitor=false       — never run the repo-controlled fsmonitor command
+//   protocol.ext.allow=never   — refuse the `ext::` transport, i.e. an
+//                                arbitrary-command "remote" (remote.<n>.url=ext::
+//                                <cmd>); a repo-local `protocol.ext.allow=always`
+//                                would otherwise re-enable it and a bare
+//                                `git fetch` on an ext:: origin = code execution.
+//                                Command-line -c overrides repo-local config.
+// The UNTRUSTED case (a merely-discovered repo) is refused outright by the trust
+// gate in FileService.gitOp — no git runs at all — which also covers
+// core.sshCommand and checkout smudge filters on an untrusted repo.
+const GITOP_HARDENING_ARGS = Object.freeze([
+  '-c', 'core.fsmonitor=false',
+  '-c', 'protocol.ext.allow=never',
+]);
+
+function gitOpArgs(operation) {
+  return [...GITOP_HARDENING_ARGS, operation];
+}
+
 module.exports = {
   canonicalizePath,
+  findRepoRoot,
   isPathWithinRoots,
   sanitizeDevRoots,
   sanitizeStringList,
@@ -193,4 +250,6 @@ module.exports = {
   EMPTY_TREE_OID,
   emptyTreeAttrSource,
   hardenedPassiveGitArgs,
+  GITOP_HARDENING_ARGS,
+  gitOpArgs,
 };

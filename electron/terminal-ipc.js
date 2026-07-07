@@ -27,6 +27,7 @@ function registerTerminalIPC({
   projectProfiles,
   getAllowedProjectRoots,
   getSettingsSnapshot,
+  onTerminalLaunched,
 }) {
   ipcMain.handle('terminal:create', async (_, payload) => {
     const allowedRoots = sanitizeDevRoots(getAllowedProjectRoots());
@@ -41,11 +42,22 @@ function registerTerminalIPC({
     if (!validated.ok) return errorPayload(validated);
 
     const { id, cwd, shell: shellPath, shellArgs, envVars } = validated.value;
-    return terminalManager.create(id, cwd, {
+    const result = terminalManager.create(id, cwd, {
       shell: shellPath,
       shellArgs,
       envVars,
     });
+    // Opening a terminal in a repo is the explicit trust signal that enables
+    // git pull/push/fetch on it (Nock #8663). Best-effort — never block the
+    // terminal on trust bookkeeping.
+    if (result && result.success && cwd && typeof onTerminalLaunched === 'function') {
+      try {
+        onTerminalLaunched(cwd);
+      } catch {
+        // ignore: trust marking must not break terminal creation
+      }
+    }
+    return result;
   });
 
   ipcMain.on('terminal:write', (_, payload) => {

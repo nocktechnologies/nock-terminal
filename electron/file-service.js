@@ -4,7 +4,13 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
-const { isPathWithinRoots, sanitizeDevRoots, hardenedPassiveGitArgs } = require('./security-utils');
+const {
+  isPathWithinRoots,
+  sanitizeDevRoots,
+  hardenedPassiveGitArgs,
+  gitOpArgs,
+  findRepoRoot,
+} = require('./security-utils');
 
 const DEFAULT_TREE_MAX_DEPTH = 8;
 const DEFAULT_TREE_MAX_ENTRIES = 2000;
@@ -24,10 +30,43 @@ class FileService {
   constructor(store) {
     this.store = store;
     this.grantedRoots = [];
+    // Git repositories the user has actively TRUSTED this session by opening a
+    // terminal in them, stored as canonical REPO ROOTS (git top-level, symlinks
+    // resolved) — trust is REPO IDENTITY, not path containment. gitOp
+    // (pull/push/fetch) is gated on this (see gitOp() and Nock #8663). Populated
+    // via trustRepoRoot() when a terminal launches; being merely
+    // discovered/allowed is NOT trust.
+    this.trustedRepoRoots = [];
   }
 
   setGrantedRoots(roots) {
     this.grantedRoots = sanitizeDevRoots(roots || []);
+  }
+
+  // Mark the repository a terminal was opened in as trusted for gitOp. We resolve
+  // the terminal cwd to its git top-level and record THAT exact repo root — so
+  // opening a terminal in a subdir trusts the one repo, and cannot be widened to
+  // an enclosing parent repo or a nested child repo. A cwd not inside a git repo
+  // records nothing (there is no repo to trust). Best-effort — never throws.
+  trustRepoRoot(dirPath) {
+    if (typeof dirPath !== 'string' || dirPath === '') return;
+    const root = findRepoRoot(dirPath);
+    if (root && !this.trustedRepoRoots.includes(root)) {
+      this.trustedRepoRoots.push(root);
+    }
+  }
+
+  // True only if `dirPath` resolves to the EXACT git repo root of a repo the user
+  // opened a terminal in. Resolving both sides to their git top-level and
+  // requiring repo-root equality preserves the intended flex (terminal in a subdir
+  // -> gitOp on the same repo's root is allowed) while closing cross-repo trust
+  // leakage in BOTH directions: a nested child repo (own .git) and an enclosing
+  // parent repo (own .git) each resolve to a DIFFERENT root and are rejected.
+  // A path that is not inside a git repo has no identity and is untrusted.
+  isGitOpTrusted(dirPath) {
+    if (!this.trustedRepoRoots.length) return false;
+    const root = findRepoRoot(dirPath);
+    return root !== null && this.trustedRepoRoots.includes(root);
   }
 
   tree(dirPath, options = {}) {
@@ -230,12 +269,27 @@ class FileService {
     if (!ALLOWED_OPS.has(operation)) return { success: false, error: 'Unknown operation' };
     if (!this.isAllowedPath(dirPath)) return { success: false, error: 'Path not allowed' };
 
+    // TRUST GATE (Nock #8663). fetch/pull/checkout make git execute
+    // repo-controlled config — `remote.<name>.url=ext::<cmd>`, `core.sshCommand`,
+    // and checkout smudge filters — as arbitrary commands. On a repo the user
+    // has merely DISCOVERED (it appeared in the dashboard) but never opened a
+    // terminal in, that is a code-execution surface. Refuse the op outright for
+    // an untrusted repo (no git runs at all) and tell the UI trust is required;
+    // opening a terminal there is the explicit trust step.
+    if (!this.isGitOpTrusted(dirPath)) {
+      return {
+        success: false,
+        requiresTrust: true,
+        error: 'This repository has not been opened in a terminal yet. Open a terminal here first, then retry pull/push/fetch.',
+      };
+    }
+
     try {
-      // pull/push/fetch is an explicit user action, so legitimate push/merge
-      // hooks are preserved (no hooksPath override). We still neutralize the
-      // repo-controlled core.fsmonitor command, which git would run to refresh
-      // the index during these ops (same RCE vector as passive status, #8661).
-      const { stdout } = await execFileAsync('git', ['-c', 'core.fsmonitor=false', operation], {
+      // The user trusts this repo, so its own hooks / smudge filters / sshCommand
+      // are legitimate and preserved (NOT disabled — unlike the passive path).
+      // We still neutralize the repo-controlled core.fsmonitor command and refuse
+      // the `ext::` arbitrary-command transport as defense-in-depth (#8663).
+      const { stdout } = await execFileAsync('git', gitOpArgs(operation), {
         cwd: dirPath,
         encoding: 'utf-8',
         timeout: 30000,

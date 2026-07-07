@@ -514,6 +514,8 @@ function registerIPC() {
     projectProfiles,
     getAllowedProjectRoots,
     getSettingsSnapshot,
+    // Opening a terminal in a repo marks it trusted for git pull/push/fetch (#8663).
+    onTerminalLaunched: (cwd) => fileService?.trustRepoRoot(cwd),
   });
 
   // (Terminal data/exit events are wired in wireTerminalEvents() — not here)
