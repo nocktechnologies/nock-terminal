@@ -4,7 +4,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
-const { isPathWithinRoots, sanitizeDevRoots, passiveGitArgs } = require('./security-utils');
+const { isPathWithinRoots, sanitizeDevRoots, hardenedPassiveGitArgs } = require('./security-utils');
 
 const DEFAULT_TREE_MAX_DEPTH = 8;
 const DEFAULT_TREE_MAX_ENTRIES = 2000;
@@ -252,9 +252,11 @@ class FileService {
 
     try {
       // PASSIVE status poll (editor git-status watcher) over a discovered repo.
-      // Harden against repo-controlled hook/config execution — a repo-local
-      // core.fsmonitor would otherwise run as a command here (Nock #8661).
-      const { stdout } = await execFileAsync('git', passiveGitArgs('status', '--porcelain'), {
+      // Harden against repo-controlled execution — a repo-local core.fsmonitor
+      // OR an attribute-bound filter.<name>.clean would otherwise run as a
+      // command here (Nock #8661); --attr-source=<empty tree> kills the latter.
+      const args = await hardenedPassiveGitArgs(dirPath, 'status', '--porcelain');
+      const { stdout } = await execFileAsync('git', args, {
         cwd: dirPath,
         encoding: 'utf-8',
         timeout: 5000,

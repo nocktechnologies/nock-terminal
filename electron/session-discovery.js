@@ -4,7 +4,7 @@ const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { getAgentSessionContract } = require('./agent-adapters');
-const { passiveGitArgs } = require('./security-utils');
+const { hardenedPassiveGitArgs } = require('./security-utils');
 
 const execFileAsync = promisify(execFile);
 const UNTRUSTED_AGENT_LAUNCH_REASON = 'Agent launch command requires confirmation before it can run.';
@@ -1632,10 +1632,11 @@ class SessionDiscovery {
 
     // Get dirty status via async exec. PASSIVE read of a discovered repo that
     // the user has NOT opened a terminal in — use execFile (no shell) with
-    // hardened flags so a repo-local core.fsmonitor / hook cannot execute
-    // during discovery (Nock #8661).
+    // hardened flags so neither a repo-local core.fsmonitor/hook NOR an
+    // attribute-bound filter/diff driver can execute during discovery (#8661).
     try {
-      const { stdout } = await execFileAsync('git', passiveGitArgs('status', '--porcelain'), {
+      const args = await hardenedPassiveGitArgs(projectPath, 'status', '--porcelain');
+      const { stdout } = await execFileAsync('git', args, {
         cwd: projectPath,
         timeout: 3000,
         windowsHide: true,
