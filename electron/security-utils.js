@@ -101,9 +101,36 @@ function sanitizeDevRoots(value) {
   return roots;
 }
 
+// Hardening flags for PASSIVE git invocations (background dashboard discovery
+// and editor git-status polling) against discovered/untrusted repos. A cloned
+// repo can set repo-local config `core.fsmonitor` — which git treats as a hook
+// command — and Nock Terminal would otherwise EXECUTE it while merely reading
+// status, before the user ever opens a terminal there (code-execution vector,
+// Nock #8661). These flags neutralize repo-controlled execution:
+//   core.fsmonitor=false      — never run the fsmonitor hook command
+//   core.hooksPath=/dev/null  — point hooks at an empty path so NO repo hook
+//                               fires (a missing dir = no hooks, cross-platform;
+//                               git-for-windows maps /dev/null)
+//   --no-optional-locks       — don't take/refresh index locks for a read
+// Prepend to the git arg list, e.g.:
+//   execFile('git', passiveGitArgs('status', '--porcelain'), ...)
+// Only for PASSIVE reads — do NOT use for a terminal the user explicitly
+// launched (that repo is their trusted choice).
+const PASSIVE_GIT_HARDENING_ARGS = Object.freeze([
+  '-c', 'core.fsmonitor=false',
+  '-c', 'core.hooksPath=/dev/null',
+  '--no-optional-locks',
+]);
+
+function passiveGitArgs(...rest) {
+  return [...PASSIVE_GIT_HARDENING_ARGS, ...rest];
+}
+
 module.exports = {
   canonicalizePath,
   isPathWithinRoots,
   sanitizeDevRoots,
   sanitizeStringList,
+  PASSIVE_GIT_HARDENING_ARGS,
+  passiveGitArgs,
 };

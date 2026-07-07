@@ -4,7 +4,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
-const { isPathWithinRoots, sanitizeDevRoots } = require('./security-utils');
+const { isPathWithinRoots, sanitizeDevRoots, passiveGitArgs } = require('./security-utils');
 
 const DEFAULT_TREE_MAX_DEPTH = 8;
 const DEFAULT_TREE_MAX_ENTRIES = 2000;
@@ -231,7 +231,11 @@ class FileService {
     if (!this.isAllowedPath(dirPath)) return { success: false, error: 'Path not allowed' };
 
     try {
-      const { stdout } = await execFileAsync('git', [operation], {
+      // pull/push/fetch is an explicit user action, so legitimate push/merge
+      // hooks are preserved (no hooksPath override). We still neutralize the
+      // repo-controlled core.fsmonitor command, which git would run to refresh
+      // the index during these ops (same RCE vector as passive status, #8661).
+      const { stdout } = await execFileAsync('git', ['-c', 'core.fsmonitor=false', operation], {
         cwd: dirPath,
         encoding: 'utf-8',
         timeout: 30000,
@@ -247,7 +251,10 @@ class FileService {
     if (!this.isAllowedPath(dirPath)) return {};
 
     try {
-      const { stdout } = await execFileAsync('git', ['status', '--porcelain'], {
+      // PASSIVE status poll (editor git-status watcher) over a discovered repo.
+      // Harden against repo-controlled hook/config execution — a repo-local
+      // core.fsmonitor would otherwise run as a command here (Nock #8661).
+      const { stdout } = await execFileAsync('git', passiveGitArgs('status', '--porcelain'), {
         cwd: dirPath,
         encoding: 'utf-8',
         timeout: 5000,
