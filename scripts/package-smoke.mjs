@@ -268,8 +268,16 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   };
 
   if (!options.skipBuild) {
+    const builderArgs = ['electron-builder', '--dir', '--publish', 'never'];
+    if (process.platform === 'darwin') {
+      // The release build config sets mac.notarize:true, which needs Apple
+      // credentials. The smoke only needs a launchable bundle, so ad-hoc sign
+      // (CSC_IDENTITY_AUTO_DISCOVERY=false, above) and skip notarization —
+      // otherwise the build fails on CI / any machine without those secrets.
+      builderArgs.push('-c.mac.notarize=false');
+    }
     await runCommand(npx, ['vite', 'build'], { cwd: rootDir, env: buildEnv });
-    await runCommand(npx, ['electron-builder', '--dir', '--publish', 'never'], { cwd: rootDir, env: buildEnv });
+    await runCommand(npx, builderArgs, { cwd: rootDir, env: buildEnv });
   }
 
   const executablePath = await findPackagedExecutable({ distDir, platform: process.platform });
