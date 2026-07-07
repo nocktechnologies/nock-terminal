@@ -9,7 +9,7 @@ const {
   sanitizeDevRoots,
   hardenedPassiveGitArgs,
   gitOpArgs,
-  canonicalizePath,
+  findRepoRoot,
 } = require('./security-utils');
 
 const DEFAULT_TREE_MAX_DEPTH = 8;
@@ -30,10 +30,12 @@ class FileService {
   constructor(store) {
     this.store = store;
     this.grantedRoots = [];
-    // Repos the user has actively TRUSTED this session by opening a terminal in
-    // them (canonical paths). gitOp (pull/push/fetch) is gated on this — see
-    // gitOp() and Nock #8663. Populated via trustRepoRoot() when a terminal
-    // launches; being merely discovered/allowed is NOT trust.
+    // Git repositories the user has actively TRUSTED this session by opening a
+    // terminal in them, stored as canonical REPO ROOTS (git top-level, symlinks
+    // resolved) — trust is REPO IDENTITY, not path containment. gitOp
+    // (pull/push/fetch) is gated on this (see gitOp() and Nock #8663). Populated
+    // via trustRepoRoot() when a terminal launches; being merely
+    // discovered/allowed is NOT trust.
     this.trustedRepoRoots = [];
   }
 
@@ -41,29 +43,30 @@ class FileService {
     this.grantedRoots = sanitizeDevRoots(roots || []);
   }
 
-  // Mark a repo as trusted for gitOp because the user opened a terminal in it.
-  // Best-effort: a path that can't be canonicalized is simply not recorded.
+  // Mark the repository a terminal was opened in as trusted for gitOp. We resolve
+  // the terminal cwd to its git top-level and record THAT exact repo root — so
+  // opening a terminal in a subdir trusts the one repo, and cannot be widened to
+  // an enclosing parent repo or a nested child repo. A cwd not inside a git repo
+  // records nothing (there is no repo to trust). Best-effort — never throws.
   trustRepoRoot(dirPath) {
     if (typeof dirPath !== 'string' || dirPath === '') return;
-    let canon;
-    try {
-      canon = canonicalizePath(dirPath);
-    } catch {
-      return;
-    }
-    if (!this.trustedRepoRoots.includes(canon)) {
-      this.trustedRepoRoots.push(canon);
+    const root = findRepoRoot(dirPath);
+    if (root && !this.trustedRepoRoots.includes(root)) {
+      this.trustedRepoRoots.push(root);
     }
   }
 
-  // True only if `dirPath` shares a tree with a repo the user opened a terminal
-  // in — the op path within a trusted root, or a trusted root within the op path
-  // (covers terminal-at-root/op-at-subdir and vice-versa). A merely-discovered
-  // repo the user never opened a terminal in is NOT trusted.
+  // True only if `dirPath` resolves to the EXACT git repo root of a repo the user
+  // opened a terminal in. Resolving both sides to their git top-level and
+  // requiring repo-root equality preserves the intended flex (terminal in a subdir
+  // -> gitOp on the same repo's root is allowed) while closing cross-repo trust
+  // leakage in BOTH directions: a nested child repo (own .git) and an enclosing
+  // parent repo (own .git) each resolve to a DIFFERENT root and are rejected.
+  // A path that is not inside a git repo has no identity and is untrusted.
   isGitOpTrusted(dirPath) {
     if (!this.trustedRepoRoots.length) return false;
-    if (isPathWithinRoots(dirPath, this.trustedRepoRoots)) return true;
-    return this.trustedRepoRoots.some((root) => isPathWithinRoots(root, [dirPath]));
+    const root = findRepoRoot(dirPath);
+    return root !== null && this.trustedRepoRoots.includes(root);
   }
 
   tree(dirPath, options = {}) {

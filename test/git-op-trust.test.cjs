@@ -68,6 +68,28 @@ async function makeExtExploitRepo(root) {
   return { repo, sentinel };
 }
 
+// A repo whose repo-local core.sshCommand runs a sentinel-writing command, bound
+// to an ssh:// origin so a bare `git fetch` executes it. Unlike ext::, the gitOp
+// path does NOT neutralize core.sshCommand on a trusted repo (that would break a
+// user's legit ssh key), so ONLY the trust gate stops it — a genuine
+// fail-on-revert for code execution.
+async function makeSshCommandExploitRepo(root, name = 'evilssh') {
+  const repo = path.join(root, name);
+  fs.mkdirSync(repo, { recursive: true });
+  await execFileAsync('git', ['init', '-q'], { cwd: repo });
+  await execFileAsync('git', ['config', 'user.email', 't@e.com'], { cwd: repo });
+  await execFileAsync('git', ['config', 'user.name', 't'], { cwd: repo });
+
+  const sentinel = path.join(root, `SSH_PWNED_${name}`);
+  await execFileAsync('git', ['remote', 'add', 'origin', 'ssh://nobody@127.0.0.1:22/x.git'], { cwd: repo });
+  await execFileAsync(
+    'git',
+    ['config', 'core.sshCommand', `sh -c 'touch ${JSON.stringify(sentinel)}; exit 1'`],
+    { cwd: repo },
+  );
+  return { repo, sentinel };
+}
+
 test('gitOpArgs carries the fsmonitor + ext-transport hardening', () => {
   assert.deepEqual(gitOpArgs('fetch'), [
     '-c', 'core.fsmonitor=false',
@@ -77,25 +99,52 @@ test('gitOpArgs carries the fsmonitor + ext-transport hardening', () => {
   assert.ok(Object.isFrozen(GITOP_HARDENING_ARGS));
 });
 
-test('trustRepoRoot / isGitOpTrusted only trust opened repos', (t) => {
-  const root = sandbox(t);
-  const a = path.join(root, 'a');
-  const b = path.join(root, 'b');
-  fs.mkdirSync(a, { recursive: true });
-  fs.mkdirSync(b, { recursive: true });
-  const fileService = new FileService(createStore([root]));
-
-  assert.equal(fileService.isGitOpTrusted(a), false, 'nothing trusted yet');
-  fileService.trustRepoRoot(a);
-  assert.equal(fileService.isGitOpTrusted(a), true, 'opened repo is trusted');
-  assert.equal(fileService.isGitOpTrusted(path.join(a, 'sub')), true, 'subdir of opened repo is trusted');
-  assert.equal(fileService.isGitOpTrusted(b), false, 'a different discovered repo stays untrusted');
-});
-
-test('gitOp REFUSES an untrusted (merely-discovered) repo and does NOT run git (#8663)', async (t) => {
+test('trust is REPO IDENTITY (git-root equality), not path containment (#8663)', async (t) => {
   if (!(await gitAvailable())) { t.skip('git not available'); return; }
   const root = sandbox(t);
-  const { repo, sentinel } = await makeExtExploitRepo(root);
+  const gitInit = async (p) => {
+    fs.mkdirSync(p, { recursive: true });
+    await execFileAsync('git', ['init', '-q'], { cwd: p });
+  };
+
+  // legit repo (opened) with a same-repo subdir and a NESTED child repo (own .git)
+  const legit = path.join(root, 'legit');
+  await gitInit(legit);
+  const legitSub = path.join(legit, 'src', 'deep');
+  fs.mkdirSync(legitSub, { recursive: true });
+  const nestedChild = path.join(legit, 'vendor', 'evil');
+  await gitInit(nestedChild); // Probe A (downward): attacker repo nested inside
+
+  // monorepo with a nested child repo the user actually opens (Probe B upward)
+  const mono = path.join(root, 'mono');
+  await gitInit(mono);
+  const monoUi = path.join(mono, 'packages', 'ui');
+  await gitInit(monoUi);
+
+  // Terminal opened in /legit
+  const fsA = new FileService(createStore([root]));
+  assert.equal(fsA.isGitOpTrusted(legit), false, 'nothing trusted yet');
+  fsA.trustRepoRoot(legit);
+  assert.equal(fsA.isGitOpTrusted(legit), true, 'the opened repo root is trusted');
+  assert.equal(fsA.isGitOpTrusted(legitSub), true, 'a same-repo subdir resolves to the same repo (flex preserved)');
+  // Probe A — DOWNWARD leak closed: a nested child repo is a different identity.
+  assert.equal(fsA.isGitOpTrusted(nestedChild), false, 'nested child repo (own .git) must NOT inherit trust');
+  assert.equal(fsA.isGitOpTrusted(root), false, 'a non-repo parent path is untrusted');
+
+  // Terminal opened in the nested /mono/packages/ui
+  const fsB = new FileService(createStore([root]));
+  fsB.trustRepoRoot(monoUi);
+  assert.equal(fsB.isGitOpTrusted(monoUi), true, 'the opened nested repo is trusted');
+  // Probe B — UPWARD leak closed: the enclosing parent repo is a different identity.
+  assert.equal(fsB.isGitOpTrusted(mono), false, 'enclosing parent repo (own .git) must NOT be trusted');
+});
+
+test('gitOp REFUSES an untrusted repo and does NOT execute core.sshCommand (#8663)', async (t) => {
+  if (!(await gitAvailable())) { t.skip('git not available'); return; }
+  const root = sandbox(t);
+  // core.sshCommand is NOT neutralized on the trusted path, so this proves the
+  // GATE (not the ext flag) prevents execution — reverting the gate lets it fire.
+  const { repo, sentinel } = await makeSshCommandExploitRepo(root);
 
   const fileService = new FileService(createStore([root]));
   // repo is allowed (under devRoot) but the user never opened a terminal in it.
@@ -103,7 +152,7 @@ test('gitOp REFUSES an untrusted (merely-discovered) repo and does NOT run git (
 
   assert.equal(result.success, false);
   assert.equal(result.requiresTrust, true, 'untrusted repo must require trust');
-  assert.equal(fs.existsSync(sentinel), false, 'gitOp executed repo-controlled ext:: transport on an untrusted repo');
+  assert.equal(fs.existsSync(sentinel), false, 'gitOp executed repo-controlled core.sshCommand on an untrusted repo');
 });
 
 test('gitOp on a TRUSTED repo still refuses the ext:: transport (defense-in-depth, #8663)', async (t) => {

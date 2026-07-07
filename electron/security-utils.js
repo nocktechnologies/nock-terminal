@@ -26,6 +26,38 @@ function canonicalizePath(targetPath) {
   }
 }
 
+// Resolve a path to the top level of the git repository that contains it — the
+// nearest ancestor holding a `.git` entry (a directory for a normal repo, a file
+// for a worktree/submodule). Returns the canonical (symlink-resolved) repo root,
+// or null if the path is not inside a git repo. This is REPO IDENTITY: used so
+// gitOp trust compares the exact repo, not mere path containment (Nock #8663 —
+// closes cross-repo trust leakage in both the nested-child and enclosing-parent
+// directions). No subprocess — a plain upward `.git` walk avoids any git exec.
+function findRepoRoot(startPath) {
+  let dir;
+  try {
+    dir = canonicalizePath(startPath);
+  } catch {
+    return null;
+  }
+  // A regular file path can't be a repo root; start from its directory.
+  try {
+    if (fs.statSync(dir).isFile()) dir = path.dirname(dir);
+  } catch {
+    return null;
+  }
+  for (;;) {
+    try {
+      if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    } catch {
+      // ignore and keep walking up
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 function isPathWithinRoots(targetPath, roots) {
   if (!Array.isArray(roots) || roots.length === 0) return false;
 
@@ -209,6 +241,7 @@ function gitOpArgs(operation) {
 
 module.exports = {
   canonicalizePath,
+  findRepoRoot,
   isPathWithinRoots,
   sanitizeDevRoots,
   sanitizeStringList,
