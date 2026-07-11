@@ -13,8 +13,8 @@ current run instead of being persisted as plaintext. Renderer settings reads and
 exports only expose blank/status values; `settings:getSecure` is retained as a
 compatibility channel but returns `null` for allowlisted secret keys.
 
-`sandbox: false` remains in `BrowserWindow.webPreferences` for now because the
-current Electron 28 preload is a CommonJS bridge that still needs a dedicated
-smoke pass before switching to `sandbox: true`. `node-pty` is only loaded in the
-main process, not in the renderer or preload. Revisit this after migrating or
-verifying the preload under Electron's sandboxed-preload constraints.
+`sandbox: true` is set in `BrowserWindow.webPreferences` (`electron/main.js`).
+The preload bridge only requires the sandbox-safe `electron` renderer APIs
+(`contextBridge` + `ipcRenderer`), so the renderer runs fully sandboxed on the
+current Electron 41 runtime. `node-pty` is only loaded in the main process, not
+in the renderer or preload.

@@ -1,7 +1,7 @@
 # Product Audit And GTM Readiness
 
 Audit date: 2026-05-15
-Latest product update: 2026-06-12
+Latest product update: 2026-07-07
 
 Scope: repository documentation, Electron/React implementation, local verification commands, browser smoke checks with the mocked preload bridge, and a current market read of agentic development tools.
 
@@ -11,7 +11,7 @@ Nock Terminal is not ready for public GTM or paid launch.
 
 After the May 15 remediation pass, it is ready for renewed internal dogfood and a controlled private alpha. The previous launch blockers around dependency audit, terminal settings, unsaved editor protection, NockCC placeholder activity, first-run onboarding, and release gates have been fixed or materially reduced.
 
-The remaining public-GTM blockers are product depth and distribution proof: broader reconnect/attach for live agents beyond the proven CRM tmux path, Codex resume/attach adapters, Gemini full transcript/replay semantics, worktree lanes, full session replay, signed installer smoke coverage on every target OS, a public support/feedback route, crash/error reporting privacy posture, and a crisp public demo path.
+The remaining public-GTM blockers are product depth and distribution proof: broader reconnect/attach for live agents beyond the proven CRM tmux path (including Codex/Gemini live attach), Gemini full transcript/replay semantics, worktree lanes, full session replay, signed installer smoke coverage on every target OS, a public support/feedback route, crash/error reporting privacy posture, and a crisp public demo path.
 
 The product has useful bones: a real PTY-backed terminal, Claude transcript discovery, agent-folder discovery, project cards, file tree, Monaco editing, local model chat, prompt/session history, git controls, port awareness, and notifications. The main problem is not lack of product surface. The problem is that the surface is not yet formed into a sharp promise people can immediately understand and trust.
 
@@ -50,9 +50,9 @@ Wave 3 closed the first Codex transcript-discovery adapter:
 - Discovery reads only bounded file heads: default 45-day recency window, newest 500 rollout files, and the first 16 KiB per candidate.
 - Project cwd is recovered from `session_meta.payload.cwd`, with `turn_context.payload.cwd` as a fallback.
 - Malformed or empty rollout files are skipped with opt-in discovery debug logging.
-- Codex `AGENT_SESSION_CONTRACTS.transcriptDiscovery` now honestly reports `supported` with source `codex-rollout-jsonl`; Codex live attach and resume command remain future work.
+- Codex `AGENT_SESSION_CONTRACTS.transcriptDiscovery` now honestly reports `supported` with source `codex-rollout-jsonl`; Codex live attach remains future work (one-keystroke `codex resume <id>` later shipped in the June 13 Wave 6 resume pass below).
 
-Readiness impact: this removes the "Claude-only transcript discovery" truth gap for recent Codex CLI sessions. It does not make Codex fully first-class yet because resume/attach semantics, full transcript replay, worktree lanes, signed installer smoke, auto-update, crash reporting, public support, and demo material still need proof.
+Readiness impact: this removes the "Claude-only transcript discovery" truth gap for recent Codex CLI sessions. It does not make Codex fully first-class yet because live attach semantics, full transcript replay, worktree lanes, signed installer smoke, auto-update, crash reporting, public support, and demo material still need proof (resume shipped in the June 13 Wave 6 resume pass below).
 
 ## June 12 Wave 4 Progress
 
@@ -62,7 +62,7 @@ Wave 4 closed request-level dispatch thread rendering:
 - The main process fetches the same live inbox family used for dispatch status updates, keeps the response bounded, filters foreign request ids, and caps body text before IPC.
 - The renderer presents the thread as request evidence with quiet loading, empty, and offline states. It deliberately does not claim launched-agent terminal transcript replay.
 
-Readiness impact: this improves operational observability for dispatched work and removes the "no visible request thread" gap. It still does not make full session replay, Codex resume/attach, Gemini full transcript replay, signed installer smoke, auto-update, crash reporting, public support, or demo material ready.
+Readiness impact: this improves operational observability for dispatched work and removes the "no visible request thread" gap. It still does not make full session replay, Codex live attach, Gemini full transcript replay, signed installer smoke, auto-update, crash reporting, public support, or demo material ready (Codex resume later shipped in the June 13 Wave 6 resume pass below).
 
 ## June 12 Wave 5 Progress
 
@@ -73,7 +73,24 @@ Wave 5 added conditional Gemini session-presence discovery:
 - The Gemini adapter contract now reports `transcriptDiscovery.state: conditional` with evidence `gemini-prompt-logs`.
 - This is deliberately not transcript replay: Gemini CLI prompt logs expose user prompt events, session ids, project paths, and last activity, but not assistant/tool output.
 
-Readiness impact: this removes the "Gemini has no local session signal" gap while preserving the public promise boundary. Gemini full transcript replay, live attach, resume commands, signed installer smoke, auto-update, crash reporting, public support, and demo material remain future work.
+Readiness impact: this removes the "Gemini has no local session signal" gap while preserving the public promise boundary. Gemini full transcript replay, live attach, signed installer smoke, auto-update, crash reporting, public support, and demo material remain future work (latest-session resume later shipped in the June 13 Wave 6 resume pass below).
+
+## June 12-13 Wave 5-6 Resume Progress
+
+Waves 5 (Lane A) and 6 closed one-keystroke session resume across the fleet, honest to each CLI's actual resume model:
+
+- Claude: transcript-derived project rows whose newest transcript filename is a safe session id expose a "Resume Claude Session" action running `claude --resume <id>` in the project cwd. The claude contract `resumeCommand` moved from `future` to `conditional` with evidence `claude-jsonl-session-id`.
+- Codex: rollout rows with a safe session id resume via `codex resume <id>` at the same per-session fidelity as Claude. Contract `resumeCommand` moved to `conditional` with evidence `codex-rollout-session-id`.
+- Gemini: `gemini --resume` accepts `latest` or an ephemeral per-project index, not the recovered session id, so Nock honestly offers `gemini --resume latest` — the most recent session in the project, which is the session the row already represents. Nock does not claim arbitrary-session Gemini resume. Contract `resumeCommand` moved to `conditional` with evidence `gemini-latest-session`.
+- Resume never fires from a plain row click; ids that fail the safe charset check produce no launch at all.
+
+Readiness impact: this closes the "discovery without recovery" gap — discovered Claude/Codex/Gemini sessions are now resumable, not just visible. Live attach, Gemini full transcript replay, signed installer smoke, auto-update, crash reporting, public support, and demo material remain future work.
+
+## July 7 Packaged Smoke Progress
+
+CI now runs the unpacked packaged-app smoke on macOS in addition to Linux (`packaged-smoke-macos` in `.github/workflows/ci.yml`). The macOS job builds with `electron-builder --dir` and launches the packaged binary on the runner's real windowserver; it would have caught two shipped darwin packaging regressions — a broken node-pty `pty.node` rebuild (main-process SIGABRT at launch) and a missing transitive `conf` dependency.
+
+Readiness impact: packaged renderer/load regressions are now caught pre-merge on both Linux and macOS. Signed installer smoke on clean target OS machines remains the release gate for public beta.
 
 ## Verification Summary
 
@@ -101,12 +118,12 @@ Readiness impact: this removes the "Gemini has no local session signal" gap whil
 
 | Dimension | Score | Readiness |
 | --- | --- | --- |
-| Product clarity | 3/5 | Docs now lead with local agent observability; Claude and recent Codex transcript discovery are supported, while resume/attach claims remain deliberately narrow. |
+| Product clarity | 3/5 | Docs now lead with local agent observability; Claude/Codex transcript discovery and Claude/Codex/Gemini one-keystroke resume are supported, while attach claims remain deliberately narrow. |
 | Differentiation | 2/5 | "Agent cockpit" is promising, but OpenAI, Cursor, Warp, Claude, Windsurf, GitHub, and JetBrains now all tell multi-agent stories. |
 | Onboarding | 3/5 | First-run checklist now covers dev roots, agent binaries, context files, sessions, and Ollama status. |
-| Reliability | 3/5 | Unit/build/smoke/release checks pass; Linux unpacked packaged smoke is automated; no signed artifact or auto-update validation. |
+| Reliability | 3/5 | Unit/build/smoke/release checks pass; Linux and macOS unpacked packaged smoke is automated; no signed artifact or auto-update validation. |
 | Security | 3/5 | Good Electron boundaries and zero moderate+ audit findings; public launch still needs signed installer smoke on each target OS and support process. |
-| Packaging/distribution | 3/5 | Release workflow enforces signing/notarization secrets, Linux artifacts, checksums, and Linux unpacked packaged smoke; signed installer smoke coverage is still manual. |
+| Packaging/distribution | 3/5 | Release workflow enforces signing/notarization secrets, Linux artifacts, checksums, and Linux/macOS unpacked packaged smoke; signed installer smoke coverage is still manual. |
 | Feedback/analytics | 3/5 | NockCC heartbeat now receives active project and agent session data from renderer state. |
 | Docs/sales readiness | 3/5 | Repo docs now explain state, roadmap, and release gates; public site, beta guide, support path, and release-note flow remain. |
 | **Overall** | **24/40** | **Controlled private alpha only.** |
@@ -156,7 +173,7 @@ Status: Improved, still not public-GTM complete.
 
 The docs now lead with "local cockpit for terminal coding agents" rather than a Codex-only promise. The code has an adapter registry for Claude/Codex/Gemini process detection and project context checks, first-class local agent-folder discovery from existing `config.json` files, profile-driven launches for Claude/Codex/Gemini/custom agents, Claude transcript discovery, recent Codex rollout transcript discovery, conditional Gemini prompt-log session-presence discovery, Codex/DeepSeek dispatch discovery, brokered dispatch through Mira, request-level dispatch AgentMessage thread rendering, and a command launcher that can stage tasks into fresh agent terminals or dispatch requests. True reconnect/attach for live agents remains future work outside the proven CRM tmux path.
 
-Recommendation: keep the private alpha agent-agnostic in launch/profile posture, while staying explicit that Codex transcript discovery covers recent rollout JSONL files only. Do not market Codex as fully first-class until Codex resume/attach, transcript history/replay, and settings are all backed by code.
+Recommendation: keep the private alpha agent-agnostic in launch/profile posture, while staying explicit that Codex transcript discovery covers recent rollout JSONL files only. Rollout transcript discovery and `codex resume <id>` are now backed by code; do not market Codex as fully first-class until live attach, full transcript history/replay, and settings are as well.
 
 ### P1 - Settings Promise More Than The Terminal Applies
 
@@ -287,8 +304,8 @@ Do not launch broadly as "Nock Terminal for Codex" yet.
 Launch path:
 
 1. Private dogfood: continue exercising the remediated shell settings, unsaved editor protection, onboarding, context checks, and NockCC heartbeat.
-2. Private alpha: position as "local cockpit for terminal coding agents" while staying honest that Claude and recent Codex have transcript discovery, while Gemini currently exposes only prompt-log session presence.
-3. Public beta: add Codex resume/attach adapters, Gemini full transcript/replay semantics if the CLI exposes them, worktree lanes, session replay, crash/error reporting, signed artifact smoke coverage, update distribution, and a clear support path.
+2. Private alpha: position as "local cockpit for terminal coding agents" while staying honest that Claude and recent Codex have transcript discovery, Gemini exposes only prompt-log session presence, and all three carry honest one-keystroke resume.
+3. Public beta: add Codex/Gemini live attach adapters, Gemini full transcript/replay semantics if the CLI exposes them, worktree lanes, session replay, crash/error reporting, signed artifact smoke coverage, update distribution, and a clear support path.
 
 ## What Would Make People Want It
 
@@ -312,7 +329,7 @@ That is more compelling than "a terminal with AI chat."
 ## Remaining Fixes
 
 1. Implement broader reconnect/attach for live local agents beyond the proven CRM tmux path.
-2. Implement Codex resume/attach semantics; real rollout transcript discovery and launch/profile settings now exist.
+2. Implement Codex/Gemini live attach semantics; rollout/prompt-log transcript discovery, one-keystroke resume, and launch/profile settings now exist.
 3. Add worktree lanes for parallel agent attempts.
 4. Add session replay and handoff export from terminal output, diff, commands, and test results.
 5. Extend packaged-app smoke coverage to signed macOS, Windows, and Linux release artifacts.
