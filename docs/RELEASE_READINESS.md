@@ -1,6 +1,6 @@
 # Release Readiness
 
-Updated: 2026-06-12
+Updated: 2026-07-11
 
 Nock Terminal has a release pipeline, but public distribution should stay gated until the checks below pass on a tagged release and the signed installers are smoked on each target OS.
 
@@ -13,7 +13,7 @@ Nock Terminal is private-alpha distributable only. The automated release gates a
 What is automated today:
 
 - Local release preflight through `npm run release:check`.
-- Pull-request and `main` CI coverage for tests, Vite build, bundle budgets, and Linux unpacked packaged smoke.
+- Pull-request and `main` CI coverage for tests, Vite build, bundle budgets, and unpacked packaged smoke on Linux and macOS.
 - Tag-triggered release workflow that requires signing secrets, builds macOS/Windows/Linux artifacts, emits checksums, and uploads release assets.
 
 What is still manual or externally blocked:
@@ -46,7 +46,7 @@ For packaged launch coverage, run:
 npm run smoke:package
 ```
 
-The packaged smoke builds an unpacked app with `electron-builder --dir`, launches the packaged binary with an isolated user-data directory, waits for the renderer-ready smoke marker, verifies the packaged renderer rendered the Nock Terminal shell, and exits cleanly. CI runs this on Linux under `xvfb`.
+The packaged smoke builds an unpacked app with `electron-builder --dir`, launches the packaged binary with an isolated user-data directory, waits for the renderer-ready smoke marker, verifies the packaged renderer rendered the Nock Terminal shell, and exits cleanly. CI runs this on Linux under `xvfb` and on macOS directly (macOS runners have a real windowserver).
 
 ## GitHub Release Gate
 
@@ -59,7 +59,7 @@ The packaged smoke builds an unpacked app with `electron-builder --dir`, launche
 - SHA-256 checksum files for every platform artifact.
 - GitHub Release upload of macOS, Windows, Linux, and checksum artifacts.
 
-`.github/workflows/ci.yml` also runs an unpacked packaged-app smoke on Linux for pull requests and `main` pushes. This catches packaged renderer/load regressions before a tagged release, while signed installer verification remains a release-machine/manual target-OS check.
+`.github/workflows/ci.yml` also runs an unpacked packaged-app smoke on Linux and macOS for pull requests and `main` pushes. The macOS job catches darwin packaging regressions — broken node-pty rebuilds, missing transitive dependencies — before a tagged release, while signed installer verification remains a release-machine/manual target-OS check.
 
 Required GitHub secrets:
 
@@ -106,7 +106,7 @@ Record real release evidence here. Do not fill this table from CI-only unpacked 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | macOS | Not run | Not recorded | Blocked pending signing/notarization credentials | Clean macOS machine or VM required | TBD | TBD | Blocked | Must verify notarized DMG install plus `spctl --assess --type execute --verbose /Applications/Nock\ Terminal.app`. |
 | Windows | Not run | Not recorded | Blocked pending Windows signing credentials | Clean Windows machine or VM required | TBD | TBD | Blocked | Must verify publisher identity and SmartScreen behavior for the signed NSIS installer. |
-| Linux AppImage | Not run | Not recorded | Release artifact required | Clean Linux machine or VM required | TBD | TBD | Blocked | CI runs unpacked Linux smoke, but public beta still needs AppImage launch evidence. |
+| Linux AppImage | Not run | Not recorded | Release artifact required | Clean Linux machine or VM required | TBD | TBD | Blocked | CI runs unpacked Linux and macOS smoke, but public beta still needs AppImage launch evidence. |
 | Linux deb | Not run | Not recorded | Release artifact required | Clean Linux machine or VM required | TBD | TBD | Blocked | Must verify install, launch, and uninstall behavior on a clean Debian/Ubuntu-family target. |
 
 ## Manual Smoke Protocol
@@ -144,7 +144,7 @@ Record Phase H decisions here as they are made:
 | Crash/error reporting | No silent third-party crash/error reporting before public beta. Use direct user reports and user-initiated diagnostics until a privacy posture and provider are chosen. | Kevin / Mira | Nock #123, this document |
 | Support path | Private alpha support is direct through Kevin/Mira/NockCC coordination. Public beta is blocked until a public support route exists, such as GitHub Issues or a support mailbox. | Kevin / Mira | Nock #123, this document |
 | Beta feedback channel | Private alpha feedback is direct/NockCC. Public beta needs a published feedback route linked from release notes or onboarding. | Kevin / Mira | Nock #123, this document |
-| Signed artifact smoke | Blocked pending real signing credentials and clean target OS machines/VMs. CI unpacked Linux smoke is useful but not a substitute. | Kevin / release operator | Evidence ledger above |
+| Signed artifact smoke | Blocked pending real signing credentials and clean target OS machines/VMs. CI unpacked Linux/macOS smoke is useful but not a substitute. | Kevin / release operator | Evidence ledger above |
 
 ## Rollback
 
