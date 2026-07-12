@@ -200,3 +200,116 @@ test('stays silent for writes inside ignored dirs', { skip: process.platform ===
     await watcher.stop();
   }
 });
+
+// --- silent fs.watch fallback (fseventsd can wedge and deliver zero events) --
+
+function deadFsWatch() {
+  return { close() {}, on() {} };
+}
+
+test('falls back to polling when fs.watch never delivers events', { skip: process.platform === 'win32' }, async () => {
+  const dir = makeTree('file-watcher-fallback-');
+  const target = path.join(dir, 'a.txt');
+  fs.writeFileSync(target, 'one');
+
+  const realWatch = fs.watch;
+  fs.watch = deadFsWatch;
+  const watcher = new FileWatcher(createFileService(), { verifyTimeoutMs: 250, pollIntervalMs: 150 });
+  try {
+    watcher.watch(dir);
+    await settle(50);
+    const pending = waitForEvent(watcher);
+    fs.appendFileSync(target, 'two');
+    const event = await pending;
+    assert.equal(watcher.mode, 'poll', 'watcher should have detected the dead fs.watch');
+    assert.equal(event.type, 'change');
+    assert.equal(fs.realpathSync(event.path), fs.realpathSync(target));
+    const leftovers = fs.readdirSync(dir).filter((n) => n.startsWith(FileWatcher.PROBE_PREFIX));
+    assert.deepEqual(leftovers, [], 'probe file should be cleaned up');
+  } finally {
+    fs.watch = realWatch;
+    await watcher.stop();
+  }
+});
+
+test('keeps the native watcher when the probe event arrives', async () => {
+  const dir = makeTree('file-watcher-probe-ok-');
+
+  const realWatch = fs.watch;
+  let rawListener = null;
+  fs.watch = (root, opts, cb) => {
+    rawListener = cb;
+    return deadFsWatch();
+  };
+  const watcher = new FileWatcher(createFileService(), { verifyTimeoutMs: 250, pollIntervalMs: 150 });
+  try {
+    watcher.watch(dir);
+    assert.equal(typeof rawListener, 'function');
+    rawListener('rename', FileWatcher.PROBE_PREFIX + 'x');
+    await settle(500); // past the verification window
+    assert.equal(watcher.mode, 'native', 'probe event seen, no fallback expected');
+    const leftovers = fs.readdirSync(dir).filter((n) => n.startsWith(FileWatcher.PROBE_PREFIX));
+    assert.deepEqual(leftovers, [], 'probe file should be cleaned up');
+  } finally {
+    fs.watch = realWatch;
+    await watcher.stop();
+  }
+});
+
+test('forced polling emits change then unlink for a modified and deleted file', { skip: process.platform === 'win32' }, async () => {
+  const dir = makeTree('file-watcher-poll-');
+  const target = path.join(dir, 'a.txt');
+  fs.writeFileSync(target, 'one');
+
+  const watcher = new FileWatcher(createFileService(), { forcePolling: true, pollIntervalMs: 150 });
+  try {
+    watcher.watch(dir);
+    assert.equal(watcher.mode, 'poll');
+    await settle(50);
+
+    const pendingChange = waitForEvent(watcher);
+    fs.appendFileSync(target, 'two');
+    const changeEvent = await pendingChange;
+    assert.equal(changeEvent.type, 'change');
+    assert.equal(fs.realpathSync(changeEvent.path), fs.realpathSync(target));
+
+    const pendingUnlink = waitForEvent(watcher);
+    fs.rmSync(target);
+    const unlinkEvent = await pendingUnlink;
+    assert.equal(unlinkEvent.type, 'unlink');
+  } finally {
+    await watcher.stop();
+  }
+});
+
+test('forced polling stays silent for ignored dirs and holds O(1) fds', { skip: process.platform === 'win32' }, async () => {
+  const dir = makeTree('file-watcher-poll-ignored-');
+  fs.mkdirSync(path.join(dir, 'node_modules'));
+  fs.writeFileSync(path.join(dir, 'node_modules', 'x.js'), 'x');
+  for (let i = 0; i < 300; i++) {
+    fs.writeFileSync(path.join(dir, `f${i}.txt`), 'x');
+  }
+  fs.writeFileSync(path.join(dir, 'src.txt'), 'one');
+
+  const watcher = new FileWatcher(createFileService(), { forcePolling: true, pollIntervalMs: 150 });
+  const events = [];
+  const before = fdCount();
+  try {
+    watcher.watch(dir);
+    watcher.on('changed', (event) => events.push(event));
+    await settle(500); // several poll ticks over the 300-file tree
+    const held = fdCount() - before;
+    assert.ok(held < 50, `polling watcher held ${held} fds for 300 files`);
+
+    fs.appendFileSync(path.join(dir, 'node_modules', 'x.js'), 'y');
+    const pending = waitForEvent(watcher);
+    fs.appendFileSync(path.join(dir, 'src.txt'), 'two');
+    await pending;
+    assert.ok(
+      events.every((e) => !e.path.includes('node_modules')),
+      `ignored-dir event leaked: ${JSON.stringify(events)}`
+    );
+  } finally {
+    await watcher.stop();
+  }
+});
