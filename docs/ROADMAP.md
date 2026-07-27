@@ -59,7 +59,9 @@ Current execution posture:
 - June 12 Wave 2 hardening: PR #65 closed loader-injection env var blocking and project lookup IPC validation; PR #72 closed discovery fallback debug logging and refreshed the esbuild lockfile to keep `npm run release:check` green. PR #71 is open and green for dispatch validation helper dedupe, awaiting explicit merge approval.
 - June 12 Wave 3 Codex transcript discovery: Codex rollout JSONL files under `~/.codex/sessions/**/rollout-*.jsonl` are now a supported transcript source. Discovery recovers cwd from `session_meta` with `turn_context` fallback, skips malformed files with debug logging, and keeps startup bounded with a 45-day recency window, newest-500 file scan cap, and first-16 KiB read cap.
 - June 12 Wave 4 dispatch thread rendering: brokered dispatch rows can expand into an on-demand NockCC AgentMessage thread keyed by `context.request_id`. This is intentionally request-level evidence, not launched-agent transcript replay.
-- June 12 Wave 5 Gemini session presence: Gemini projects can now surface from `~/.gemini/projects.json` plus bounded prompt logs under `~/.gemini/tmp/<slug>/logs.json`. This is conditional session evidence from user prompt events, not full transcript replay; live attach and resume remain future work.
+- June 12 Wave 5 Gemini session presence: Gemini projects can now surface from `~/.gemini/projects.json` plus bounded prompt logs under `~/.gemini/tmp/<slug>/logs.json`. This is conditional session evidence from user prompt events, not full transcript replay; live attach and resume remained future work at that point (resume closed in Waves 5-6 below).
+- June 12-13 Waves 5-6 session resume: transcript-derived rows now carry honest one-keystroke resume — `claude --resume <id>` and `codex resume <id>` for rows with safe session ids, `gemini --resume latest` for the newest session in a project (Gemini's CLI cannot resume an arbitrary recovered session id). Resume never fires from a plain row click; live attach remains future work.
+- July 7 macOS packaged smoke: CI now runs the unpacked packaged-app smoke on macOS as well as Linux, catching darwin packaging regressions such as broken node-pty rebuilds and missing transitive dependencies before merge.
 - Nock `123` is active on `codex/phase-h-release-truth`: release readiness now has an explicit decision log and evidence ledger for signed installer smoke, real credential setup, update distribution, crash/error reporting, support path, and beta feedback. The Nock remains open until signed target-OS smoke evidence exists.
 
 ### May 24 Phase H Execution Plan
@@ -112,7 +114,7 @@ Completed in the May 15 remediation pass:
 
 Still required before public beta:
 
-- Extend packaged app smoke automation from Linux unpacked CI coverage to signed macOS, Windows, and Linux release artifacts.
+- Extend packaged app smoke automation from Linux and macOS unpacked CI coverage to signed macOS, Windows, and Linux release artifacts.
 - Keep update distribution manual until a signed and tested auto-update channel exists.
 - Choose or deliberately defer crash/error reporting with a privacy posture.
 - Publish a public support path and beta feedback channel.
@@ -151,12 +153,12 @@ Extend the adapter contract for:
 
 Current adapter posture:
 
-- Claude Code: current transcript discovery and launch behavior remain preserved.
+- Claude Code: current transcript discovery and launch behavior remain preserved, plus one-keystroke `claude --resume <id>` resume from transcript rows with safe session ids; live attach remains future work.
 - Local agent folders: discovered from config and file-bus state; CRM persistent agents expose attach/resume metadata when Nock derives the deterministic `tmux attach -t crm-<instance>-<agent>` target; arbitrary folder launch/reconnect remains future work until a trust/confirmation path exists.
-- Codex CLI: context/process detection, profile-driven terminal launch, and recent rollout transcript discovery are implemented; resume/attach remain future work.
+- Codex CLI: context/process detection, profile-driven terminal launch, recent rollout transcript discovery, and one-keystroke `codex resume <id>` resume for rows with safe session ids are implemented; live attach remains future work.
 - Codex dispatch agents: CRM brokered/direct dispatch is implemented for allowlisted agents; local dispatch-run history has a shared status normalizer, brokered runs poll live NockCC `status_update` messages by `context.request_id`, and operators can expand a brokered run to inspect its request-level AgentMessage thread. Full dispatched-agent transcript replay remains future work.
 - DeepSeek dispatch agents: API-backed CRM brokered/direct dispatch is implemented for allowlisted agents; there is no standalone DeepSeek CLI launcher.
-- Gemini CLI: process detection, `GEMINI.md` context checks, profile-driven terminal launch, and conditional prompt-log session-presence discovery are implemented; full transcript replay, live attach, and resume remain future work.
+- Gemini CLI: process detection, `GEMINI.md` context checks, profile-driven terminal launch, conditional prompt-log session-presence discovery, and latest-session resume (`gemini --resume latest`) are implemented; full transcript replay, arbitrary-session resume, and live attach remain future work.
 
 Gemini context reference: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md
 

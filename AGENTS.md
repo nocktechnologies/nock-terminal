@@ -1,11 +1,11 @@
 # Nock Terminal
 
-Nock Terminal is a cross-platform Electron cockpit for local agentic coding work. The current implementation is Claude Code and Ollama oriented; the product direction is an agent-agnostic cockpit that can also support Codex CLI and other terminal-first coding agents.
+Nock Terminal is a cross-platform Electron cockpit for local agentic coding work. The current implementation discovers and resumes Claude Code, Codex, and Gemini sessions and provides Ollama chat; the product direction is a fully agent-agnostic cockpit for terminal-first coding agents, including live attach/reconnect beyond the proven CRM tmux path.
 
 ## Product Posture
 
-- Be honest about current capabilities: Claude Code transcript discovery, local agent-folder discovery from existing `config.json` files, local NockCC file-bus state checks, Claude/Codex/Gemini process and context adapters, Claude/Codex/Gemini/custom terminal launch profiles, Codex/DeepSeek dispatch-agent discovery and Mira-brokered/direct dispatch requests, Ollama chat, Monaco editing, git/file controls, prompt library, session history, Telegram, NockCC heartbeats, and first-run onboarding.
-- Treat Codex transcript discovery, Codex resume/attach, and dispatch completion-thread tracking as strategic direction until the code has real adapters for those flows.
+- Be honest about current capabilities: Claude Code transcript discovery, recent Codex rollout transcript discovery, conditional Gemini prompt-log session presence, one-keystroke Claude/Codex/Gemini session resume, local agent-folder discovery from existing `config.json` files, local NockCC file-bus state checks, Claude/Codex/Gemini process and context adapters, Claude/Codex/Gemini/custom terminal launch profiles, Codex/DeepSeek dispatch-agent discovery, Mira-brokered/direct dispatch requests with request-level completion-thread rendering, Ollama chat, Monaco editing, git/file controls, prompt library, session history, Telegram, NockCC heartbeats, and first-run onboarding.
+- Treat live attach/reconnect beyond the proven CRM tmux path, full Gemini transcript replay, and dispatched-agent transcript replay as strategic direction until the code has real adapters for those flows.
 - The best product wedge is local-first agent observability and orchestration, not a generic AI IDE clone.
 - Maintain a quiet, dense, cockpit-like UI for repeated developer work.
 
@@ -57,7 +57,8 @@ Nock Terminal is a cross-platform Electron cockpit for local agentic coding work
 
 ## What The App Does Today
 
-- Discovers Claude Code sessions, local agent folders, dispatch-agent configs, and git projects, then presents agents separately from repos in dashboard cards and sidebar entries.
+- Discovers Claude Code sessions, recent Codex rollout transcripts, conditional Gemini prompt-log session presence, local agent folders, dispatch-agent configs, and git projects, then presents agents separately from repos in dashboard cards and sidebar entries.
+- Resumes discovered sessions with one keystroke: `claude --resume <id>` and `codex resume <id>` for rows with safe session ids, `gemini --resume latest` for the newest session in a project.
 - Opens PTY-backed terminal tabs, applies global/project shell settings, supports splits, keeps terminals mounted across view switches, reconciles stale/orphaned PTYs, and launches `claude` from a new tab.
 - Sends brokered Codex/DeepSeek dispatch requests to Mira via NockCC AgentMessage, or launches direct CRM dispatch scripts with generated payload files.
 - Provides sidebar file browsing, git status markers, Monaco editing with unsaved-change protection, and project context checks for `CLAUDE.md`, `AGENTS.md`, Codex config, and `.nock/config.toml`.
@@ -74,7 +75,8 @@ The May 15, 2026 audit/remediation pass found that the repo is dogfoodable and p
 - `npm run release:check` passes.
 - `python3 test/monaco.smoke.py` passes when Vite is running.
 - Dependency audit blockers are fixed.
-- Remaining launch gaps: Codex/Gemini transcript discovery, resume/attach support, dispatch completion-thread tracking, packaged smoke automation, update distribution, crash/error reporting, and a sharper public demo.
+- Closed since the May audit: Codex rollout and Gemini prompt-log transcript discovery, one-keystroke Claude/Codex/Gemini session resume, request-level dispatch completion-thread rendering, and unpacked packaged-smoke CI on Linux and macOS.
+- Remaining launch gaps: live attach/reconnect beyond the proven CRM tmux path, full Gemini and dispatched-agent transcript replay, signed installer smoke on clean target OSes, update distribution, crash/error reporting, and a sharper public demo.
 
 Start with `docs/PRODUCT_AUDIT_GTM_READINESS.md`, `docs/ROADMAP.md`, `docs/AGENT_DISPATCH.md`, and `docs/RELEASE_READINESS.md` before major product work.
 

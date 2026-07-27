@@ -1,6 +1,6 @@
 # Nock Terminal
 
-Nock Terminal is a cross-platform Electron cockpit for local agentic coding work. The current build is strongest as a local-first cockpit: it discovers Claude Code activity, local agent folders, Codex/DeepSeek dispatch agents, and git repos; opens PTY-backed terminal tabs; shows project/file context; embeds Monaco editing; tracks prompts/history; and exposes git, port, notification, and NockCC controls from one desktop shell.
+Nock Terminal is a cross-platform Electron cockpit for local agentic coding work. The current build is strongest as a local-first cockpit: it discovers Claude Code, Codex, and Gemini session activity, local agent folders, Codex/DeepSeek dispatch agents, and git repos; opens PTY-backed terminal tabs; shows project/file context; embeds Monaco editing; tracks prompts/history; and exposes git, port, notification, and NockCC controls from one desktop shell.
 
 The product direction is broader than a Claude-only launcher: Nock should become a local-first command center for supervising coding agents across terminals, worktrees, projects, and eventually Codex-compatible flows.
 
@@ -8,7 +8,7 @@ Built by [Nock Technologies](https://nocktechnologies.io).
 
 ## Current Status
 
-As of the May 16, 2026 agent-agnostic cockpit pass, this repo is ready for renewed dogfooding and a controlled private alpha, but not yet ready for a public GTM launch.
+As of the June 2026 discovery/resume waves and the July 2026 macOS packaged-smoke CI pass, this repo is ready for renewed dogfooding and a controlled private alpha, but not yet ready for a public GTM launch.
 
 - Passing: `npm test`, `npm audit --audit-level=moderate`, `npx vite build`, `npm run check:bundle`, and the Monaco browser smoke test.
 - Fixed in the remediation pass: dependency audit blockers, shell/profile settings application, unsaved editor protection, agent context/process adapters, NockCC heartbeat activity, first-run onboarding, hit-target/accessibility polish, and release gate scripts.
@@ -18,14 +18,16 @@ As of the May 16, 2026 agent-agnostic cockpit pass, this repo is ready for renew
 - New dispatch support: Codex and DeepSeek dispatch agents with `agent_runtime` configs are visible even when intentionally `enabled:false`; allowlisted agents can be sent brokered tasks through Mira or launched through the local dispatch script.
 - New stale-session cleanup: the app reconciles renderer tab state with main-process PTYs on startup and every minute, and the dashboard can manually clean orphaned or dead terminal sessions.
 - Secret posture: Telegram and NockCC credentials are main-process-only, migrated out of plaintext settings into Electron `safeStorage` when available, and exposed to the renderer only as configured/not-configured status.
-- Strategic gap: Claude Code remains the only transcript-discovery source. Codex/Gemini support now has context/process/profile launch foundations, and CRM Codex/DeepSeek dispatch is implemented, but Codex/Gemini transcript discovery and resume/attach behavior are still roadmap work.
-- Launch gap: release workflows now enforce signing/notarization secrets and checksums, but packaged-app smoke tests, update distribution, crash/error reporting, and support flow still need a release pass.
+- Session discovery and resume: transcript discovery covers Claude Code (full JSONL transcripts), recent Codex rollout files, and conditional Gemini prompt-log session presence. All three expose honest one-keystroke resume — `claude --resume <id>` and `codex resume <id>` for specific sessions, `gemini --resume latest` for the newest session in a project.
+- Strategic gap: live attach/reconnect beyond the proven CRM tmux path, full Gemini transcript replay, and dispatched-agent transcript replay are still roadmap work.
+- Launch gap: release workflows enforce signing/notarization secrets and checksums, and CI smokes the unpacked packaged app on Linux and macOS; signed installer smoke on clean target OSes, update distribution, crash/error reporting, and support flow still need a release pass.
 
 Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_GTM_READINESS.md).
 
 ## What It Does Today
 
-- Discovers Claude Code session transcripts from `~/.claude/projects`.
+- Discovers Claude Code session transcripts from `~/.claude/projects`, recent Codex rollout transcripts from `~/.codex/sessions`, and conditional Gemini prompt-log session presence from `~/.gemini`.
+- Resumes discovered sessions with one keystroke: `claude --resume <id>` and `codex resume <id>` for rows with safe session ids, `gemini --resume latest` for the newest session in a project.
 - Scans configured development roots for git repositories, falling back to common local roots like `~/Dev` when no roots are configured yet.
 - Discovers local agent folders from existing `config.json` files and shows enabled/running/stale/offline state from the NockCC file bus.
 - Discovers dispatch-and-die Codex/DeepSeek agents from `agent_runtime` configs, parses dispatcher allowlists, and dedupes copied worktree configs.
