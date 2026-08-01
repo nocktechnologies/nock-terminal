@@ -1,4 +1,5 @@
 const { sanitizeDevRoots, sanitizeStringList } = require('./security-utils');
+const { normalizeHarnessSeats } = require('./harness-seat-utils');
 
 const SETTINGS_SCHEMA_KEY = 'schemaVersion';
 const SETTINGS_SCHEMA_VERSION = 1;
@@ -51,6 +52,9 @@ const DEFAULT_SETTINGS = {
   // NockCC integration
   nockccApiKey: '',
   nockccUrl: 'https://cc.nocktechnologies.io',
+  // Remote persistent-agent harness seats. Credentials stay in the operator's
+  // SSH agent/config; Nock Terminal stores only bounded connection coordinates.
+  harnessSeats: [],
 };
 
 function ok(value) {
@@ -298,6 +302,10 @@ function normalizeSettingValue(key, value) {
       return ok(sanitizeStringList(value, { maxItems: 200, maxLength: 120 }));
     case 'githubWatchRepos':
       return normalizeWatchRepos(value);
+    case 'harnessSeats': {
+      const seats = normalizeHarnessSeats(value);
+      return seats ? ok(seats) : invalid();
+    }
     default:
       return invalid();
   }

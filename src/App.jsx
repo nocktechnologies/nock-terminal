@@ -12,6 +12,7 @@ import EditorPane from './components/EditorPane';
 import Settings from './components/Settings';
 import StatusBar from './components/StatusBar';
 import CommandPalette from './components/CommandPalette';
+import AgentConsole from './components/AgentConsole';
 import {
   canRunResolvedLaunch,
   resolveSessionLaunch,
@@ -33,7 +34,7 @@ function projectNameFromPath(projectPath) {
 }
 
 export default function App() {
-  const [view, setView] = useState('dashboard'); // dashboard | terminal | settings
+  const [view, setView] = useState('dashboard'); // dashboard | agent-console | terminal | settings
   const {
     tabs,
     setTabs,
@@ -92,6 +93,14 @@ export default function App() {
     setNotice({
       id: createTabId('notice'),
       title: 'Dispatch failed',
+      message,
+    });
+  }, []);
+
+  const showHarnessError = useCallback((message) => {
+    setNotice({
+      id: createTabId('notice'),
+      title: 'Harness connection failed',
       message,
     });
   }, []);
@@ -266,6 +275,36 @@ export default function App() {
     });
   }, [getProfileForPath, openTab, openTerminalTab, recordDispatchRun, showDispatchError]);
 
+  const openHarnessTerminal = useCallback(async (seat, mode) => {
+    if (!seat?.id) return;
+    try {
+      const launch = await window.nockTerminal.harness.launch(seat.id, mode);
+      if (!launch?.success || !launch.command) {
+        showHarnessError(launch?.error || `Nock Terminal could not open ${seat.label}.`);
+        return;
+      }
+      openTab({
+        id: createTabId(),
+        sessionId: `harness:${seat.id}`,
+        title: launch.title,
+        branch: null,
+        status: 'active',
+        cwd: undefined,
+        splitContent: null,
+        splitRatio: 0.5,
+        launchCommand: launch.command,
+        harnessSeatId: seat.id,
+        harnessMode: mode,
+        agentId: seat.agent,
+      }, {
+        project: launch.title,
+        shell: launch.command,
+      });
+    } catch {
+      showHarnessError(`Nock Terminal could not open ${seat.label}. Check the saved SSH connection.`);
+    }
+  }, [openTab, showHarnessError]);
+
   const executePrompt = useCallback((promptText) => {
     const text = typeof promptText === 'string' ? promptText.trim() : '';
     if (!text) return;
@@ -420,6 +459,11 @@ export default function App() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Persistent agent console */}
+          <div className={`absolute inset-0 ${view === 'agent-console' ? 'z-10' : 'invisible pointer-events-none z-0'}`}>
+            <AgentConsole active={view === 'agent-console'} onOpenTerminal={openHarnessTerminal} />
           </div>
 
           {/* Settings */}

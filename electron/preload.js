@@ -53,6 +53,14 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     thread: (requestId) => ipcRenderer.invoke('dispatch:thread', { requestId }),
   },
 
+  // Persistent-agent harness consoles. SSH credentials remain owned by the
+  // operator's SSH agent/config; renderer requests resolve only configured ids.
+  harness: {
+    list: () => ipcRenderer.invoke('harness:list'),
+    snapshot: (seatId) => ipcRenderer.invoke('harness:snapshot', { seatId }),
+    launch: (seatId, mode) => ipcRenderer.invoke('harness:launch', { seatId, mode }),
+  },
+
   // AI Chat
   ai: {
     ollama: {
