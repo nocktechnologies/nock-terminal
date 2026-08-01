@@ -25,6 +25,8 @@ const {
 const NockCCClient = require('./nockcc-client');
 const { AgentDispatchService } = require('./agent-dispatch');
 const { registerDispatchIPC } = require('./dispatch-ipc');
+const { HarnessSeatService } = require('./harness-seat-service');
+const { registerHarnessIPC } = require('./harness-ipc');
 const { registerFileIPC } = require('./file-ipc');
 const { registerLocalDataIPC } = require('./local-data-ipc');
 const { createNockCCActivityIPC } = require('./nockcc-activity-ipc');
@@ -141,6 +143,7 @@ let sessionHistory = null;
 let promptStore = null;
 let nockccClient = null;
 let agentDispatchService = null;
+let harnessSeatService = null;
 let nockccActivityController = null;
 
 const isDev = !app.isPackaged;
@@ -494,6 +497,7 @@ function initServices() {
   promptStore = new PromptStore();
   nockccClient = new NockCCClient(serviceSettingsStore);
   agentDispatchService = new AgentDispatchService(serviceSettingsStore);
+  harnessSeatService = new HarnessSeatService();
 }
 
 function registerIPC() {
@@ -531,6 +535,12 @@ function registerIPC() {
   registerDispatchIPC({
     ipcMain,
     agentDispatchService,
+  });
+
+  registerHarnessIPC({
+    ipcMain,
+    service: harnessSeatService,
+    getSettingsSnapshot,
   });
 
   registerOllamaIPC({

@@ -137,6 +137,51 @@ test('githubWatchRepos rejects a non-array', () => {
   assert.equal(normalizeSettingValue('githubWatchRepos', 'owner/repo').ok, false);
 });
 
+test('harnessSeats accepts bounded standalone SSH seat definitions', () => {
+  assert.deepEqual(normalizeSettingValue('harnessSeats', [{
+    label: 'Mira',
+    agent: 'mira',
+    host: 'nock-fleet-02',
+    user: 'nock',
+    port: 22,
+    enginePath: '/home/nock/Dev/nock-agent-harness',
+  }]), {
+    ok: true,
+    value: [{
+      id: 'nock@nock-fleet-02:22/mira',
+      label: 'Mira',
+      agent: 'mira',
+      host: 'nock-fleet-02',
+      user: 'nock',
+      port: 22,
+      enginePath: '/home/nock/Dev/nock-agent-harness',
+      transport: 'ssh',
+    }],
+  });
+});
+
+test('harnessSeats rejects shell injection and malformed remote coordinates', () => {
+  const base = {
+    label: 'Mira',
+    agent: 'mira',
+    host: 'nock-fleet-02',
+    user: 'nock',
+    port: 22,
+    enginePath: '/home/nock/Dev/nock-agent-harness',
+  };
+
+  for (const seat of [
+    { ...base, host: 'nock-fleet-02; reboot' },
+    { ...base, user: 'nock root' },
+    { ...base, agent: '../mira' },
+    { ...base, enginePath: 'relative/harness' },
+    { ...base, enginePath: '/home/nock\nwhoami' },
+    { ...base, port: 70000 },
+  ]) {
+    assert.equal(normalizeSettingValue('harnessSeats', [seat]).ok, false);
+  }
+});
+
 test('githubToken is a length-bounded string setting', () => {
   assert.equal(normalizeSettingValue('githubToken', 'ghp_' + 'x'.repeat(36)).ok, true);
   assert.equal(normalizeSettingValue('githubToken', 'x'.repeat(501)).ok, false);

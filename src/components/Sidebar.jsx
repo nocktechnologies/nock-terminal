@@ -49,6 +49,7 @@ export default function Sidebar({
       <div className="flex flex-col gap-1 p-2 border-b border-nock-border">
         <NavButton icon={<GridIcon />} label="Dashboard" collapsed={collapsed} active={activeView === 'dashboard'} onClick={() => onViewChange('dashboard')} />
         <NavButton icon={<CommandIcon />} label="Launcher" collapsed={collapsed} active={false} onClick={onOpenCommandPalette} />
+        <NavButton icon={<AgentConsoleIcon />} label="Agent Console" collapsed={collapsed} active={activeView === 'agent-console'} tone="signal" onClick={() => onViewChange('agent-console')} />
         <NavButton icon={<TerminalIcon />} label="Terminal" collapsed={collapsed} active={activeView === 'terminal'} onClick={() => onViewChange('terminal')} />
         <NavButton icon={<GearIcon />} label="Settings" collapsed={collapsed} active={activeView === 'settings'} onClick={() => onViewChange('settings')} />
       </div>
@@ -294,14 +295,17 @@ function SidebarSessionSection({ label, sectionKey, sessions, onSessionClick, de
   );
 }
 
-function NavButton({ icon, label, collapsed, active, onClick }) {
+function NavButton({ icon, label, collapsed, active, tone = 'default', onClick }) {
+  const activeClass = tone === 'signal'
+    ? 'bg-[#17140d] text-[#f59a23] border border-[#68400f] shadow-[0_0_18px_rgba(245,154,35,0.08)]'
+    : 'bg-nock-card text-nock-text border border-nock-border-bright shadow-glow-blue';
   return (
     <button
       type="button"
       onClick={onClick}
       className={`flex items-center gap-2.5 px-2.5 py-2 rounded transition-all ${
         active
-          ? 'bg-nock-card text-nock-text border border-nock-border-bright shadow-glow-blue'
+          ? activeClass
           : 'text-nock-text-dim hover:text-nock-text hover:bg-nock-card/50 border border-transparent'
       } ${collapsed ? 'justify-center' : ''}`}
       title={collapsed ? label : undefined}
@@ -330,6 +334,14 @@ function TerminalIcon() {
   return (
     <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+function AgentConsoleIcon() {
+  return (
+    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3" />
+      <path strokeLinecap="round" d="M4.9 4.9a10 10 0 0 1 14.2 0M7.8 7.8a6 6 0 0 1 8.4 0M4.9 19.1a10 10 0 0 0 14.2 0M7.8 16.2a6 6 0 0 0 8.4 0" />
     </svg>
   );
 }
