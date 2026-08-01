@@ -74,9 +74,23 @@ test('builds quoted console, watch, and shell launches only from normalized seat
   assert.match(consoleLaunch.command, /^ssh -t /);
   assert.match(consoleLaunch.command, /scripts\/console/);
   assert.match(watchLaunch.command, /scripts\/watch/);
-  assert.match(shellLaunch.command, /exec "\$\{SHELL:-\/bin\/bash\}" -l/);
+  assert.match(shellLaunch.command, /exec \$\{SHELL:-\/bin\/bash\} -l/);
   assert.equal(buildHarnessLaunchDescriptor({ ...seat, host: 'bad;host' }, 'console').success, false);
   assert.equal(buildHarnessLaunchDescriptor(seat, 'restart').success, false);
+});
+
+test('quotes harness launch commands for the configured local PTY shell', () => {
+  const posix = buildHarnessLaunchDescriptor(seat, 'console', { shell: '/bin/zsh' });
+  const powershell = buildHarnessLaunchDescriptor(seat, 'console', { shell: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe' });
+  const commandPrompt = buildHarnessLaunchDescriptor(seat, 'console', { shell: 'C:\\Windows\\System32\\cmd.exe' });
+  const windowsDefault = buildHarnessLaunchDescriptor(seat, 'console', { platform: 'win32' });
+
+  assert.match(posix.command, /'nock@nock-fleet-02'/);
+  assert.match(powershell.command, /'nock@nock-fleet-02'/);
+  assert.match(powershell.command, /''\/home\/nock\/Dev\/nock-agent-harness''/);
+  assert.match(commandPrompt.command, /"nock@nock-fleet-02"/);
+  assert.match(commandPrompt.command, /"cd -- '\/home\/nock\/Dev\/nock-agent-harness'/);
+  assert.match(windowsDefault.command, /"nock@nock-fleet-02"/);
 });
 
 test('fetches a snapshot through non-interactive bounded SSH', async () => {
@@ -101,7 +115,26 @@ test('fetches a snapshot through non-interactive bounded SSH', async () => {
   assert.equal(calls[0].args[7], '22');
   assert.equal(calls[0].args[8], '--');
   assert.equal(calls[0].args[9], 'nock@nock-fleet-02');
+  assert.match(calls[0].args[10], /cd -- '\/home\/nock\/Dev\/nock-agent-harness'/);
+  assert.match(calls[0].args[10], /\.\/scripts\/status 'mira'/);
+  assert.match(calls[0].args[10], /cat -- 'seats\/mira\.json'/);
   assert.equal(calls[0].options.timeout, 8000);
+});
+
+test('returns a timeout result when SSH is killed by the deadline', async () => {
+  const service = new HarnessSeatService({
+    runSsh: async () => {
+      const error = new Error('timeout');
+      error.killed = true;
+      error.signal = 'SIGTERM';
+      throw error;
+    },
+  });
+
+  const result = await service.snapshot(seat);
+
+  assert.equal(result.success, false);
+  assert.equal(result.code, 'HARNESS_SSH_TIMEOUT');
 });
 
 test('returns a helpful offline result without exposing raw SSH stderr', async () => {

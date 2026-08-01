@@ -463,7 +463,7 @@ export default function App() {
 
           {/* Persistent agent console */}
           <div className={`absolute inset-0 ${view === 'agent-console' ? 'z-10' : 'invisible pointer-events-none z-0'}`}>
-            <AgentConsole onOpenTerminal={openHarnessTerminal} />
+            <AgentConsole active={view === 'agent-console'} onOpenTerminal={openHarnessTerminal} />
           </div>
 
           {/* Settings */}

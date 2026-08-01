@@ -8,3 +8,8 @@ export function upsertHarnessSeat(seats, nextSeat) {
 export function removeHarnessSeat(seats, seatId) {
   return (Array.isArray(seats) ? seats : []).filter((seat) => seat?.id !== seatId);
 }
+
+export function findHarnessSeatCollision(seats, candidateId, editingSeatId = '') {
+  const current = Array.isArray(seats) ? seats : [];
+  return current.find((seat) => seat?.id === candidateId && seat.id !== editingSeatId) || null;
+}

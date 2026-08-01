@@ -58,12 +58,12 @@ test('resolves renderer requests only against configured seats', async () => {
         calls.push(['snapshot', configuredSeat]);
         return { success: true, snapshot: { daemonStatus: 'active' } };
       },
-      launch: (configuredSeat, mode) => {
-        calls.push(['launch', configuredSeat, mode]);
+      launch: (configuredSeat, mode, options) => {
+        calls.push(['launch', configuredSeat, mode, options]);
         return { success: true, command: 'trusted command' };
       },
     },
-    getSettingsSnapshot: () => ({ harnessSeats: [seat] }),
+    getSettingsSnapshot: () => ({ harnessSeats: [seat], defaultShell: '/bin/zsh' }),
   });
 
   assert.deepEqual(await ipc.invoke('harness:list'), [seat]);
@@ -72,4 +72,44 @@ test('resolves renderer requests only against configured seats', async () => {
   assert.equal((await ipc.invoke('harness:snapshot', { seatId: 'unknown' })).code, 'HARNESS_SEAT_NOT_FOUND');
   assert.equal((await ipc.invoke('harness:launch', { seatId: seat.id, mode: 'restart' })).code, 'IPC_VALIDATION_ERROR');
   assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1][3], { shell: '/bin/zsh' });
+});
+
+test('rejects malformed harness request payloads before calling the service', async () => {
+  const ipc = createIpcHarness();
+  registerHarnessIPC({
+    ipcMain: ipc.ipcMain,
+    service: {
+      snapshot: async () => assert.fail('service must not run for invalid payloads'),
+      launch: () => assert.fail('service must not run for invalid payloads'),
+    },
+    getSettingsSnapshot: () => ({ harnessSeats: [seat] }),
+  });
+
+  for (const payload of [undefined, null, 'seat', [seat.id], {}, { seatId: 42 }, { seatId: '' }, { seatId: 'x'.repeat(401) }]) {
+    assert.equal((await ipc.invoke('harness:snapshot', payload)).code, 'IPC_VALIDATION_ERROR');
+  }
+});
+
+test('coalesces concurrent snapshot requests for the same seat', async () => {
+  const ipc = createIpcHarness();
+  let resolveSnapshot;
+  let calls = 0;
+  const pendingSnapshot = new Promise((resolve) => { resolveSnapshot = resolve; });
+  registerHarnessIPC({
+    ipcMain: ipc.ipcMain,
+    service: {
+      snapshot: () => {
+        calls += 1;
+        return pendingSnapshot;
+      },
+    },
+    getSettingsSnapshot: () => ({ harnessSeats: [seat] }),
+  });
+
+  const first = ipc.invoke('harness:snapshot', { seatId: seat.id });
+  const second = ipc.invoke('harness:snapshot', { seatId: seat.id });
+  assert.equal(calls, 1);
+  resolveSnapshot({ success: true, snapshot: { daemonStatus: 'active' } });
+  assert.deepEqual(await first, await second);
 });

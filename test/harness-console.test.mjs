@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  findHarnessSeatCollision,
   removeHarnessSeat,
   upsertHarnessSeat,
 } from '../src/utils/harnessConsole.mjs';
@@ -28,4 +29,11 @@ test('removeHarnessSeat removes only the requested connection', () => {
   const crane = { ...mira, id: 'kevin@mac:22/crane', label: 'Crane', agent: 'crane', host: 'mac', user: 'kevin' };
 
   assert.deepEqual(removeHarnessSeat([mira, crane], mira.id), [crane]);
+});
+
+test('findHarnessSeatCollision ignores the edited seat but protects another seat', () => {
+  const crane = { ...mira, id: 'kevin@mac:22/crane', label: 'Crane', agent: 'crane', host: 'mac', user: 'kevin' };
+
+  assert.equal(findHarnessSeatCollision([mira, crane], mira.id, mira.id), null);
+  assert.equal(findHarnessSeatCollision([mira, crane], crane.id, mira.id), crane);
 });

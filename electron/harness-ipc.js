@@ -20,15 +20,26 @@ function requestSeat(payload, getSettingsSnapshot) {
 }
 
 function registerHarnessIPC({ ipcMain, service, getSettingsSnapshot }) {
+  const snapshotInFlight = new Map();
+
   ipcMain.handle('harness:list', () => {
     const seats = getSettingsSnapshot()?.harnessSeats;
     return Array.isArray(seats) ? seats.map((seat) => ({ ...seat })) : [];
   });
 
-  ipcMain.handle('harness:snapshot', async (_, payload) => {
+  ipcMain.handle('harness:snapshot', (_, payload) => {
     const resolved = requestSeat(payload, getSettingsSnapshot);
     if (resolved.error) return resolved.error;
-    return service.snapshot(resolved.seat);
+    const existing = snapshotInFlight.get(resolved.seat.id);
+    if (existing) return existing;
+
+    const pending = Promise.resolve(service.snapshot(resolved.seat)).finally(() => {
+      if (snapshotInFlight.get(resolved.seat.id) === pending) {
+        snapshotInFlight.delete(resolved.seat.id);
+      }
+    });
+    snapshotInFlight.set(resolved.seat.id, pending);
+    return pending;
   });
 
   ipcMain.handle('harness:launch', (_, payload) => {
@@ -37,7 +48,9 @@ function registerHarnessIPC({ ipcMain, service, getSettingsSnapshot }) {
     if (!HARNESS_MODES.has(payload.mode)) {
       return error('IPC_VALIDATION_ERROR', 'Harness launch mode must be console, watch, or shell.');
     }
-    return service.launch(resolved.seat, payload.mode);
+    return service.launch(resolved.seat, payload.mode, {
+      shell: getSettingsSnapshot()?.defaultShell,
+    });
   });
 }
 

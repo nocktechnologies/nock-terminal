@@ -297,7 +297,7 @@ function SidebarSessionSection({ label, sectionKey, sessions, onSessionClick, de
 
 function NavButton({ icon, label, collapsed, active, tone = 'default', onClick }) {
   const activeClass = tone === 'signal'
-    ? 'bg-[#17140d] text-[#f59a23] border border-[#68400f] shadow-[0_0_18px_rgba(245,154,35,0.08)]'
+    ? 'bg-[var(--nock-agent-signal-bg)] text-[var(--nock-agent-signal)] border border-[var(--nock-agent-signal-dark)] shadow-[0_0_18px_rgba(245,154,35,0.08)]'
     : 'bg-nock-card text-nock-text border border-nock-border-bright shadow-glow-blue';
   return (
     <button

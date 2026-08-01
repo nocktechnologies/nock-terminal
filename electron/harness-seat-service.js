@@ -11,6 +11,21 @@ function quotePosix(value) {
   return `'${String(value).replace(/'/g, `'"'"'`)}'`;
 }
 
+function localShellKind(shell, platform) {
+  const executable = String(shell || '').split(/[\\/]/).pop().toLowerCase();
+  if (['powershell', 'powershell.exe', 'pwsh', 'pwsh.exe'].includes(executable)) return 'powershell';
+  if (['cmd', 'cmd.exe'].includes(executable)) return 'cmd';
+  if (!executable && platform === 'win32') return 'cmd';
+  return 'posix';
+}
+
+function quoteForLocalShell(value, shell, platform) {
+  const kind = localShellKind(shell, platform);
+  if (kind === 'powershell') return `'${String(value).replace(/'/g, "''")}'`;
+  if (kind === 'cmd') return `"${String(value).replace(/"/g, '""')}"`;
+  return quotePosix(value);
+}
+
 function sshDestination(seat) {
   return `${seat.user}@${seat.host}`;
 }
@@ -136,7 +151,7 @@ function parseHarnessSnapshot(output, seat) {
   };
 }
 
-function buildHarnessLaunchDescriptor(input, mode) {
+function buildHarnessLaunchDescriptor(input, mode, { shell = '', platform = process.platform } = {}) {
   const seat = normalizeHarnessSeat(input);
   if (!seat || !LAUNCH_MODES.has(mode)) {
     return {
@@ -149,7 +164,7 @@ function buildHarnessLaunchDescriptor(input, mode) {
   const remoteCommands = {
     console: `cd -- ${quotePosix(seat.enginePath)} && exec ./scripts/console ${quotePosix(seat.agent)}`,
     watch: `cd -- ${quotePosix(seat.enginePath)} && exec ./scripts/watch ${quotePosix(seat.agent)}`,
-    shell: `cd -- ${quotePosix(seat.enginePath)} && exec "\${SHELL:-/bin/bash}" -l`,
+    shell: `cd -- ${quotePosix(seat.enginePath)} && exec \${SHELL:-/bin/bash} -l`,
   };
   const command = [
     'ssh -t',
@@ -158,8 +173,8 @@ function buildHarnessLaunchDescriptor(input, mode) {
     '-o ServerAliveCountMax=3',
     `-p ${seat.port}`,
     '--',
-    quotePosix(sshDestination(seat)),
-    quotePosix(remoteCommands[mode]),
+    quoteForLocalShell(sshDestination(seat), shell, platform),
+    quoteForLocalShell(remoteCommands[mode], shell, platform),
   ].join(' ');
   const labels = {
     console: 'Console',
@@ -220,8 +235,8 @@ class HarnessSeatService {
     }
   }
 
-  launch(input, mode) {
-    return buildHarnessLaunchDescriptor(input, mode);
+  launch(input, mode, options) {
+    return buildHarnessLaunchDescriptor(input, mode, options);
   }
 }
 

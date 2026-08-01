@@ -176,10 +176,16 @@ test('harnessSeats rejects shell injection and malformed remote coordinates', ()
     { ...base, agent: '../mira' },
     { ...base, enginePath: 'relative/harness' },
     { ...base, enginePath: '/home/nock\nwhoami' },
+    { ...base, port: '22' },
+    { ...base, port: Number.NaN },
     { ...base, port: 70000 },
   ]) {
     assert.equal(normalizeSettingValue('harnessSeats', [seat]).ok, false);
   }
+
+  const withoutPort = { ...base };
+  delete withoutPort.port;
+  assert.equal(normalizeSettingValue('harnessSeats', [withoutPort]).value[0].port, 22);
 });
 
 test('githubToken is a length-bounded string setting', () => {

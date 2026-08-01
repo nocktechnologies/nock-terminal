@@ -18,7 +18,11 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
-import { removeHarnessSeat, upsertHarnessSeat } from '../utils/harnessConsole.mjs';
+import {
+  findHarnessSeatCollision,
+  removeHarnessSeat,
+  upsertHarnessSeat,
+} from '../utils/harnessConsole.mjs';
 
 const EMPTY_FORM = {
   label: '',
@@ -74,7 +78,7 @@ function formatCount(value) {
   return Number(value || 0).toLocaleString();
 }
 
-export default function AgentConsole({ onOpenTerminal }) {
+export default function AgentConsole({ active, onOpenTerminal }) {
   const [seats, setSeats] = useState([]);
   const [selectedSeatId, setSelectedSeatId] = useState('');
   const [snapshots, setSnapshots] = useState({});
@@ -142,11 +146,11 @@ export default function AgentConsole({ onOpenTerminal }) {
   }, [loadSeats]);
 
   useEffect(() => {
-    if (!selectedSeat?.id) return undefined;
+    if (!active || !selectedSeat?.id) return undefined;
     refreshSeat(selectedSeat.id);
     const interval = setInterval(() => refreshSeat(selectedSeat.id), 12_000);
     return () => clearInterval(interval);
-  }, [refreshSeat, selectedSeat?.id]);
+  }, [active, refreshSeat, selectedSeat?.id]);
 
   const beginAdd = () => {
     setEditingSeatId('');
@@ -206,6 +210,11 @@ export default function AgentConsole({ onOpenTerminal }) {
       enginePath: form.enginePath,
       transport: 'ssh',
     };
+    const collision = findHarnessSeatCollision(seats, candidate.id, editingSeatId);
+    if (collision) {
+      setFormError(`Another seat (${collision.label}) already uses this SSH host, user, port, and agent.`);
+      return;
+    }
     const withoutPrevious = editingSeatId && editingSeatId !== candidate.id
       ? removeHarnessSeat(seats, editingSeatId)
       : seats;

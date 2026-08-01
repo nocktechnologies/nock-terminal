@@ -21,12 +21,12 @@ function normalizeHarnessSeat(value) {
   const host = cleanString(value.host, 255);
   const user = cleanString(value.user, 64);
   const rawEnginePath = cleanString(value.enginePath, 1000);
-  const port = Number.isInteger(value.port) ? value.port : 22;
+  const port = value.port === undefined ? 22 : value.port;
 
   if (!label || !AGENT_NAME.test(agent) || !SSH_HOST.test(host) || !SSH_USER.test(user)) {
     return null;
   }
-  if (!rawEnginePath.startsWith('/') || port < 1 || port > 65535) return null;
+  if (!rawEnginePath.startsWith('/') || !Number.isInteger(port) || port < 1 || port > 65535) return null;
 
   const enginePath = path.posix.normalize(rawEnginePath);
   if (enginePath === '/' || path.posix.basename(enginePath) !== 'nock-agent-harness') return null;

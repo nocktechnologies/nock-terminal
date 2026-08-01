@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --nock-agent-signal-bg: #17140d;
+  --nock-agent-signal: #f59a23;
+  --nock-agent-signal-dark: #68400f;
+}
+
 /* ---------- Resets ---------- */
 * {
   margin: 0;
@@ -255,12 +261,13 @@ kbd {
   --ac-text-strong: oklch(94% 0.025 88);
   --ac-muted: oklch(57% 0.025 100);
   --ac-muted-strong: oklch(70% 0.025 96);
-  --ac-signal: oklch(69% 0.17 52);
-  --ac-signal-dark: oklch(35% 0.08 52);
+  --ac-signal: var(--nock-agent-signal);
+  --ac-signal-dark: var(--nock-agent-signal-dark);
   --ac-live: oklch(76% 0.13 145);
   --ac-danger: oklch(68% 0.18 27);
+
   container-type: inline-size;
-  font-family: 'Sora', system-ui, sans-serif;
+  font-family: Sora, system-ui, sans-serif;
 }
 
 .agent-console-layout {
@@ -344,7 +351,7 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid currentColor;
+  border: 1px solid currentcolor;
   padding: 4px 7px;
   font-size: 9px;
   font-weight: 700;
