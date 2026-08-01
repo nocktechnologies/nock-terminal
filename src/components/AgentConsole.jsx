@@ -103,6 +103,7 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const [acknowledgingWakeId, setAcknowledgingWakeId] = useState(null);
   const [ackNote, setAckNote] = useState('');
   const selectedSeatIdRef = useRef(selectedSeatId);
+  const controlInFlightSeatsRef = useRef(new Set());
 
   const selectedSeat = useMemo(
     () => seats.find((seat) => seat.id === selectedSeatId) || seats[0] || null,
@@ -116,8 +117,12 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const selectedSeatLaunchPending = isHarnessLaunchPending(pendingLaunch, selectedSeat?.id);
   const launchingMode = selectedSeatLaunchPending ? pendingLaunch.mode : '';
   const controlState = harnessControlState(snapshot);
-  const controlCapabilities = snapshot?.control?.capabilities || {};
-  const selectedSeatControlPending = pendingControl?.seatId === selectedSeat?.id;
+  const controlCapabilities = {
+    queueRetry: controlState.canQueueRetry,
+    queueAcknowledge: controlState.canQueueAcknowledge,
+  };
+  const selectedSeatControlPending = Boolean(selectedSeat?.id)
+    && pendingControl?.seatId === selectedSeat.id;
 
   const loadSeats = useCallback(async () => {
     try {
@@ -232,7 +237,8 @@ export default function AgentConsole({ active, onOpenTerminal }) {
 
   const runHarnessControl = useCallback(async (action, options = {}) => {
     const seat = selectedSeat;
-    if (!seat?.id || pendingControl) return;
+    if (!seat?.id || controlInFlightSeatsRef.current.has(seat.id)) return;
+    controlInFlightSeatsRef.current.add(seat.id);
     setPendingControl({ seatId: seat.id, action, wakeId: options.wakeId });
     setControlFeedback(null);
     try {
@@ -252,9 +258,10 @@ export default function AgentConsole({ active, onOpenTerminal }) {
         setControlFeedback({ tone: 'error', message: 'The harness control link failed. No action was confirmed.' });
       }
     } finally {
+      controlInFlightSeatsRef.current.delete(seat.id);
       setPendingControl((current) => current?.seatId === seat.id ? null : current);
     }
-  }, [pendingControl, refreshSeat, selectedSeat]);
+  }, [refreshSeat, selectedSeat]);
 
   const beginAdd = () => {
     setEditingSeatId('');
@@ -490,7 +497,7 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                       )}
                     </div>
 
-                    <div className="ac-control-deck" aria-label="Harness operator controls">
+                    <div className="ac-control-deck" role="group" aria-label="Harness operator controls">
                       <div className="ac-control-identity">
                         <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
                         <div>
@@ -503,7 +510,7 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                       <ControlReadout
                         label="Intake"
                         value={!controlState.available ? 'Unknown' : (controlState.paused ? 'Paused' : 'Open')}
-                        tone={controlState.paused ? 'warning' : 'live'}
+                        tone={!controlState.available ? 'quiet' : (controlState.paused ? 'warning' : 'live')}
                       />
                       <ControlReadout
                         label="Turn"
@@ -593,30 +600,34 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                           {(actions.canRetry || actions.canAcknowledge) && (
                             <div className="ac-wake-actions">
                               <span className="mr-auto text-[9px] text-[var(--ac-muted)]">Dead-letter review required</span>
-                              <button
-                                type="button"
-                                className="ac-wake-button"
-                                disabled={selectedSeatControlPending}
-                                onClick={() => runHarnessControl('queue-retry', { wakeId: wake.id })}
-                              >
-                                <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                                {pendingThisWake && pendingControl?.action === 'queue-retry' ? 'Retrying…' : 'Retry'}
-                              </button>
-                              <button
-                                type="button"
-                                className={`ac-wake-button ${acknowledging ? 'ac-wake-button-active' : ''}`}
-                                disabled={selectedSeatControlPending}
-                                onClick={() => {
-                                  setAcknowledgingWakeId(acknowledging ? null : wake.id);
-                                  setAckNote('');
-                                }}
-                              >
-                                <Check className="h-3 w-3" aria-hidden="true" />
-                                Acknowledge
-                              </button>
+                              {actions.canRetry && (
+                                <button
+                                  type="button"
+                                  className="ac-wake-button"
+                                  disabled={selectedSeatControlPending}
+                                  onClick={() => runHarnessControl('queue-retry', { wakeId: wake.id })}
+                                >
+                                  <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                                  {pendingThisWake && pendingControl?.action === 'queue-retry' ? 'Retrying…' : 'Retry'}
+                                </button>
+                              )}
+                              {actions.canAcknowledge && (
+                                <button
+                                  type="button"
+                                  className={`ac-wake-button ${acknowledging ? 'ac-wake-button-active' : ''}`}
+                                  disabled={selectedSeatControlPending}
+                                  onClick={() => {
+                                    setAcknowledgingWakeId(acknowledging ? null : wake.id);
+                                    setAckNote('');
+                                  }}
+                                >
+                                  <Check className="h-3 w-3" aria-hidden="true" />
+                                  Acknowledge
+                                </button>
+                              )}
                             </div>
                           )}
-                          {acknowledging && (
+                          {acknowledging && actions.canAcknowledge && (
                             <form
                               className="ac-wake-ack"
                               onSubmit={(event) => {

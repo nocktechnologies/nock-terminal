@@ -53,13 +53,7 @@ function snapshotSshArgs(seat) {
     `cat -- ${manifestPath} 2>/dev/null || true`,
   ].join('; ');
 
-  return [
-    '-o', 'BatchMode=yes',
-    '-o', 'ConnectTimeout=5',
-    '-o', 'LogLevel=ERROR',
-    '-p', String(seat.port),
-    '--', sshDestination(seat), remoteCommand,
-  ];
+  return baseSshArgs(seat, remoteCommand);
 }
 
 function baseSshArgs(seat, remoteCommand) {
@@ -186,8 +180,10 @@ function sanitizeControlPayloadState(state) {
 function parseControlResponse(text) {
   const lines = String(text || '').trim().split(/\r?\n/).reverse();
   for (const line of lines) {
+    const candidate = line.trim();
+    if (!candidate.startsWith('{')) continue;
     try {
-      const response = JSON.parse(line);
+      const response = JSON.parse(candidate);
       if (response?.schemaVersion !== 1 || typeof response?.ok !== 'boolean') continue;
       return {
         schemaVersion: 1,
@@ -290,6 +286,7 @@ function buildHarnessControlDescriptor(input, action, options = {}) {
   return {
     success: true,
     seatId: seat.id,
+    destination: sshDestination(seat),
     action,
     remoteCommand,
     sshArgs: baseSshArgs(seat, remoteCommand),
@@ -383,7 +380,6 @@ class HarnessSeatService {
   async control(input, action, options = {}) {
     const descriptor = buildHarnessControlDescriptor(input, action, options);
     if (!descriptor.success) return descriptor;
-    const seat = normalizeHarnessSeat(input);
 
     try {
       const { stdout = '' } = await this.runSsh(descriptor.sshArgs, {
@@ -409,18 +405,17 @@ class HarnessSeatService {
       }
       return { success: true, control };
     } catch (error) {
-      const destination = sshDestination(seat);
       if (error?.killed || error?.signal === 'SIGTERM' || error?.code === 'ETIMEDOUT') {
         return {
           success: false,
           code: 'HARNESS_SSH_TIMEOUT',
-          error: `Timed out connecting to ${destination}. The control action was not confirmed.`,
+          error: `Timed out connecting to ${descriptor.destination}. The control action was not confirmed.`,
         };
       }
       return {
         success: false,
         code: 'HARNESS_SSH_UNREACHABLE',
-        error: `SSH could not reach ${destination}. The control action was not confirmed.`,
+        error: `SSH could not reach ${descriptor.destination}. The control action was not confirmed.`,
       };
     }
   }
@@ -431,6 +426,7 @@ class HarnessSeatService {
 }
 
 module.exports = {
+  CONTROL_ACTIONS,
   HarnessSeatService,
   buildHarnessControlDescriptor,
   buildHarnessLaunchDescriptor,

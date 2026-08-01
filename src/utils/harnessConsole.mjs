@@ -42,6 +42,8 @@ export function harnessControlState(snapshot) {
     canPause: available && capabilities.pause === true,
     canResume: available && capabilities.resume === true,
     canCancelTurn: available && capabilities.cancelTurn === true,
+    canQueueRetry: available && capabilities.queueRetry === true,
+    canQueueAcknowledge: available && capabilities.queueAcknowledge === true,
   };
 }
 

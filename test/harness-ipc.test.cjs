@@ -79,7 +79,7 @@ test('resolves renderer requests only against configured seats', async () => {
   assert.equal((await ipc.invoke('harness:launch', { seatId: seat.id, mode: 'restart' })).code, 'IPC_VALIDATION_ERROR');
   assert.equal(calls.length, 3);
   assert.deepEqual(calls[1][3], { shell: '/bin/zsh' });
-  assert.deepEqual(calls[2], ['control', seat, 'pause', { operator: 'nock-terminal' }]);
+  assert.deepEqual(calls[2], ['control', seat, 'pause', {}]);
 });
 
 test('rejects malformed harness request payloads before calling the service', async () => {
@@ -133,9 +133,37 @@ test('passes only validated queue control fields to the service', async () => {
   });
 
   assert.deepEqual(calls, [
-    [seat, 'queue-retry', { wakeId: 42, operator: 'nock-terminal' }],
-    [seat, 'queue-acknowledge', { wakeId: 43, note: 'Reviewed and dispositioned as terminal.', operator: 'nock-terminal' }],
+    [seat, 'queue-retry', { wakeId: 42 }],
+    [seat, 'queue-acknowledge', { wakeId: 43, note: 'Reviewed and dispositioned as terminal.' }],
   ]);
+});
+
+test('rejects a second mutating control while one is in flight for the seat', async () => {
+  const ipc = createIpcHarness();
+  let resolveControl;
+  let calls = 0;
+  const pendingControl = new Promise((resolve) => { resolveControl = resolve; });
+  registerHarnessIPC({
+    ipcMain: ipc.ipcMain,
+    service: {
+      control: () => {
+        calls += 1;
+        return pendingControl;
+      },
+    },
+    getSettingsSnapshot: () => ({ harnessSeats: [seat] }),
+  });
+
+  const first = ipc.invoke('harness:control', { seatId: seat.id, action: 'pause' });
+  const secondPending = ipc.invoke('harness:control', { seatId: seat.id, action: 'resume' });
+  await Promise.resolve();
+  const observedCalls = calls;
+  resolveControl({ success: true, control: { action: 'pause' } });
+  const second = await secondPending;
+
+  assert.equal(observedCalls, 1);
+  assert.equal(second.code, 'HARNESS_CONTROL_IN_FLIGHT');
+  assert.equal((await first).success, true);
 });
 
 test('coalesces concurrent snapshot requests for the same seat', async () => {

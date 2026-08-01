@@ -74,6 +74,35 @@ test('control state stays unavailable until the engine publishes typed capabilit
     canPause: false,
     canResume: false,
     canCancelTurn: false,
+    canQueueRetry: false,
+    canQueueAcknowledge: false,
+  });
+
+  assert.deepEqual(harnessControlState({
+    control: {
+      available: false,
+      seatState: 'working:message',
+      paused: true,
+      turn: { active: true, steerable: true },
+      capabilities: {
+        pause: true,
+        resume: true,
+        cancelTurn: true,
+        queueRetry: true,
+        queueAcknowledge: true,
+      },
+    },
+  }), {
+    available: false,
+    seatState: 'unknown',
+    paused: false,
+    turnActive: false,
+    steerable: false,
+    canPause: false,
+    canResume: false,
+    canCancelTurn: false,
+    canQueueRetry: false,
+    canQueueAcknowledge: false,
   });
 
   assert.deepEqual(harnessControlState({
@@ -93,6 +122,8 @@ test('control state stays unavailable until the engine publishes typed capabilit
     canPause: true,
     canResume: false,
     canCancelTurn: true,
+    canQueueRetry: false,
+    canQueueAcknowledge: false,
   });
 });
 

@@ -199,6 +199,32 @@ test('returns typed daemon refusals without exposing remote output', async () =>
   assert.doesNotMatch(JSON.stringify(result), /private remote detail/);
 });
 
+test('reports an unavailable typed-control protocol for unparseable output', async () => {
+  const service = new HarnessSeatService({
+    runSsh: async () => ({ stdout: 'legacy harness output\n', stderr: '' }),
+  });
+
+  const result = await service.control(seat, 'pause');
+
+  assert.equal(result.success, false);
+  assert.equal(result.code, 'HARNESS_CONTROL_UNAVAILABLE');
+});
+
+test('reports an unconfirmed control when bounded SSH times out', async () => {
+  const service = new HarnessSeatService({
+    runSsh: async () => {
+      const error = new Error('timeout');
+      error.killed = true;
+      throw error;
+    },
+  });
+
+  const result = await service.control(seat, 'pause');
+
+  assert.equal(result.success, false);
+  assert.equal(result.code, 'HARNESS_SSH_TIMEOUT');
+});
+
 test('returns a timeout result when SSH is killed by the deadline', async () => {
   const service = new HarnessSeatService({
     runSsh: async () => {
