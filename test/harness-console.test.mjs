@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   harnessAccessSurface,
   findHarnessSeatCollision,
+  isCurrentHarnessSeat,
   isHarnessLaunchPending,
   removeHarnessSeat,
   upsertHarnessSeat,
@@ -54,4 +55,9 @@ test('pending harness launches are scoped to their seat and optional mode', () =
   assert.equal(isHarnessLaunchPending(pending, mira.id, 'watch'), false);
   assert.equal(isHarnessLaunchPending(pending, 'kevin@mac:22/crane'), false);
   assert.equal(isHarnessLaunchPending(null, mira.id), false);
+});
+
+test('stale harness launch results do not belong to the newly selected seat', () => {
+  assert.equal(isCurrentHarnessSeat(mira.id, mira.id), true);
+  assert.equal(isCurrentHarnessSeat('kevin@mac:22/crane', mira.id), false);
 });

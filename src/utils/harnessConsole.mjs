@@ -22,3 +22,7 @@ export function isHarnessLaunchPending(pendingLaunch, seatId, mode = '') {
   if (!pendingLaunch || pendingLaunch.seatId !== seatId) return false;
   return !mode || pendingLaunch.mode === mode;
 }
+
+export function isCurrentHarnessSeat(selectedSeatId, launchSeatId) {
+  return Boolean(selectedSeatId) && selectedSeatId === launchSeatId;
+}

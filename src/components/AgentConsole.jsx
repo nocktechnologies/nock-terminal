@@ -21,6 +21,7 @@ import {
 import {
   findHarnessSeatCollision,
   harnessAccessSurface,
+  isCurrentHarnessSeat,
   isHarnessLaunchPending,
   removeHarnessSeat,
   upsertHarnessSeat,
@@ -178,11 +179,11 @@ export default function AgentConsole({ active, onOpenTerminal }) {
     setLaunchError('');
     try {
       const launch = await window.nockTerminal.harness.launch(seat.id, mode);
+      if (!isCurrentHarnessSeat(selectedSeatIdRef.current, seat.id)) return;
       if (!launch?.success || !launch.command) {
         setLaunchError(launch?.error || `Nock Terminal could not open ${seat.label}.`);
         return;
       }
-      if (selectedSeatIdRef.current !== seat.id) return;
       setEmbeddedSession({
         id: createTabId('harness-live'),
         seatId: seat.id,
@@ -193,7 +194,9 @@ export default function AgentConsole({ active, onOpenTerminal }) {
         cwd: launch.cwd,
       });
     } catch {
-      setLaunchError(`Nock Terminal could not open ${seat.label}. Check the saved SSH connection.`);
+      if (isCurrentHarnessSeat(selectedSeatIdRef.current, seat.id)) {
+        setLaunchError(`Nock Terminal could not open ${seat.label}. Check the saved SSH connection.`);
+      }
     } finally {
       setPendingLaunch((current) => (
         isHarnessLaunchPending(current, seat.id, mode) ? null : current
