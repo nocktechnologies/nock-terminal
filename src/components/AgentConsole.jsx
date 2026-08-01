@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
+  ArrowRight,
   ArrowUpRight,
   Check,
+  CircleDotDashed,
   Clock3,
   Eye,
   Gauge,
@@ -17,7 +19,9 @@ import {
   Server,
   Settings2,
   ShieldCheck,
+  Target,
   Terminal,
+  TriangleAlert,
   Trash2,
   Wifi,
   WifiOff,
@@ -26,6 +30,7 @@ import {
 import {
   findHarnessSeatCollision,
   harnessAccessSurface,
+  harnessAgentPulse,
   harnessControlState,
   harnessQueueActions,
   isCurrentHarnessSeat,
@@ -83,6 +88,24 @@ function formatCount(value) {
   return Number(value || 0).toLocaleString();
 }
 
+function formatPulseTime(value, fallback = 'not scheduled') {
+  if (!Number.isFinite(value)) return fallback;
+  return new Date(value * 1000).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function pulseTone(disposition) {
+  if (disposition === 'working') return 'live';
+  if (disposition === 'ready') return 'signal';
+  if (['blocked', 'degraded', 'stalled'].includes(disposition)) return 'danger';
+  if (['paused', 'held'].includes(disposition)) return 'warning';
+  return 'quiet';
+}
+
 export default function AgentConsole({ active, onOpenTerminal }) {
   const [seats, setSeats] = useState([]);
   const [selectedSeatId, setSelectedSeatId] = useState('');
@@ -117,6 +140,7 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const selectedSeatLaunchPending = isHarnessLaunchPending(pendingLaunch, selectedSeat?.id);
   const launchingMode = selectedSeatLaunchPending ? pendingLaunch.mode : '';
   const controlState = harnessControlState(snapshot);
+  const agentPulse = harnessAgentPulse(snapshot);
   const controlCapabilities = {
     queueRetry: controlState.canQueueRetry,
     queueAcknowledge: controlState.canQueueAcknowledge,
@@ -434,8 +458,10 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                   </div>
                 </div>
 
+                <AgentPulsePanel pulse={agentPulse} />
+
                 <div className="px-7 py-7">
-                  <SectionLabel number="01" title="Live channel" detail="Speak and watch without leaving Agent Console." />
+                  <SectionLabel number="02" title="Live channel" detail="Speak and watch without leaving Agent Console." />
                   <div className="ac-live-frame mt-4">
                     <div className="ac-live-toolbar">
                       <div className="flex min-w-0 items-center gap-3">
@@ -578,7 +604,7 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                 </div>
 
                 <div className="border-t border-[var(--ac-line)] px-7 py-7">
-                  <SectionLabel number="02" title="Wake queue" detail="Read directly from the harness ledger; no inferred activity." />
+                  <SectionLabel number="03" title="Wake queue" detail="Read directly from the harness ledger; no inferred activity." />
                   <div className="mt-4 grid grid-cols-3 border border-[var(--ac-line)]">
                     <Metric label="Working" value={queueCounts.working} tone="signal" />
                     <Metric label="Queued" value={queueCounts.queued} />
@@ -707,6 +733,129 @@ export default function AgentConsole({ active, onOpenTerminal }) {
         </div>
       )}
     </main>
+  );
+}
+
+function AgentPulsePanel({ pulse }) {
+  const tone = pulseTone(pulse.disposition);
+  const initiativeLabel = pulse.initiative.state.replaceAll('_', ' ');
+  const CurrentIcon = pulse.currentAction ? Activity : CircleDotDashed;
+  const NextIcon = pulse.nextAction ? Target : CircleDotDashed;
+  const outcome = pulse.lastOutcome;
+
+  return (
+    <section className={`ac-pulse ac-pulse-${tone}`} aria-labelledby="agent-pulse-title">
+      <div className="ac-pulse-heading">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="font-mono text-[9px] text-[var(--ac-signal)]">01</span>
+          <h3 id="agent-pulse-title" className="font-display text-lg font-semibold text-[var(--ac-text-strong)]">Agent Pulse</h3>
+          <p className="text-[11px] text-[var(--ac-muted)]">Engine-authored work state. No inferred activity.</p>
+        </div>
+        <span className={`ac-pulse-disposition ac-pulse-disposition-${tone}`}>
+          <span className="ac-pulse-beacon" aria-hidden="true" />
+          {pulse.available ? pulse.disposition : 'unavailable'}
+        </span>
+      </div>
+
+      {!pulse.available ? (
+        <div className="ac-pulse-unavailable">
+          <CircleDotDashed className="h-5 w-5 shrink-0 text-[var(--ac-muted)]" aria-hidden="true" />
+          <div>
+            <div className="text-sm font-semibold text-[var(--ac-text-strong)]">Agent Pulse is not published by this engine.</div>
+            <p className="mt-1 text-[11px] leading-5 text-[var(--ac-muted)]">The live terminal and typed controls still work. Update the harness engine to expose objective, action, and initiative evidence here.</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="ac-pulse-reason">
+            {pulse.initiative.attentionRequired
+              ? <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+              : <Activity className="h-4 w-4 shrink-0" aria-hidden="true" />}
+            <div className="min-w-0">
+              <div className="ac-pulse-kicker">Why this state · {pulse.reasonCode}</div>
+              <div className="ac-pulse-reason-copy">{pulse.reasonSummary || 'The engine did not provide a summary.'}</div>
+            </div>
+            <time className="ac-pulse-updated" dateTime={pulse.updatedAt ? new Date(pulse.updatedAt * 1000).toISOString() : undefined}>
+              {formatPulseTime(pulse.updatedAt, 'time unavailable')}
+            </time>
+          </div>
+
+          <div className="ac-pulse-work">
+            <div className="ac-pulse-objective">
+              <div className="ac-pulse-kicker">Owned objective</div>
+              <p>{pulse.objective || 'No durable objective is recorded.'}</p>
+            </div>
+
+            <div className="ac-pulse-chain" aria-label="Current and next work">
+              <PulseAction
+                Icon={CurrentIcon}
+                label="Now"
+                action={pulse.currentAction}
+                empty="No turn is active"
+              />
+              <ArrowRight className="ac-pulse-arrow" aria-hidden="true" />
+              <PulseAction
+                Icon={NextIcon}
+                label="Next"
+                action={pulse.nextAction}
+                empty="No executable next action"
+              />
+            </div>
+          </div>
+
+          <div className="ac-pulse-ledger">
+            <div className="ac-pulse-ledger-item">
+              <span>Initiative</span>
+              <strong className={pulse.initiative.attentionRequired ? 'text-[var(--ac-danger)]' : ''}>{initiativeLabel}</strong>
+              <small>{pulse.initiative.reasonCode || 'No initiative reason'}</small>
+            </div>
+            <div className="ac-pulse-ledger-item">
+              <span>Next judgment</span>
+              <strong>{formatPulseTime(pulse.initiative.nextJudgmentAt)}</strong>
+              <small>{pulse.initiative.wakeId ? `wake #${pulse.initiative.wakeId}` : 'durable schedule'}</small>
+            </div>
+            <div className="ac-pulse-outcome">
+              <div className="flex min-w-0 items-center gap-2">
+                {outcome?.verified ? (
+                  <Check className="h-3.5 w-3.5 shrink-0 text-[var(--ac-live)]" aria-hidden="true" />
+                ) : (
+                  <CircleDotDashed className="h-3.5 w-3.5 shrink-0 text-[var(--ac-muted)]" aria-hidden="true" />
+                )}
+                <div className="min-w-0">
+                  <div className="ac-pulse-kicker">{outcome?.verified ? 'Last verified outcome' : 'Last recorded outcome'}</div>
+                  <div className="ac-pulse-outcome-copy">
+                    {outcome ? `${outcome.transition} · ${outcome.summary || 'No summary published.'}` : 'No drive outcome has been recorded yet.'}
+                  </div>
+                </div>
+              </div>
+              {outcome?.evidence?.length > 0 && (
+                <details className="ac-pulse-evidence">
+                  <summary>{outcome.evidence.length} evidence {outcome.evidence.length === 1 ? 'item' : 'items'}</summary>
+                  <ul>
+                    {outcome.evidence.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}
+                  </ul>
+                </details>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function PulseAction({ Icon, label, action, empty }) {
+  return (
+    <div className={`ac-pulse-action ${action ? '' : 'ac-pulse-action-empty'}`}>
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <div className="min-w-0">
+        <div className="ac-pulse-kicker">{label}</div>
+        <div className="ac-pulse-action-title">{action?.title || empty}</div>
+        <div className="ac-pulse-action-meta">
+          {action ? [action.source, action.status, action.id].filter(Boolean).join(' · ') : 'engine idle'}
+        </div>
+      </div>
+    </div>
   );
 }
 

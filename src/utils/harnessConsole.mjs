@@ -47,6 +47,47 @@ export function harnessControlState(snapshot) {
   };
 }
 
+const EMPTY_AGENT_PULSE = Object.freeze({
+  available: false,
+  disposition: 'unknown',
+  reasonCode: 'PULSE_UNAVAILABLE',
+  reasonSummary: 'This engine has not published Agent Pulse yet.',
+  objective: '',
+  currentAction: null,
+  nextAction: null,
+  initiative: Object.freeze({
+    state: 'unknown',
+    reasonCode: '',
+    attentionRequired: false,
+    wakeId: null,
+    nextJudgmentAt: null,
+  }),
+  lastOutcome: null,
+  updatedAt: null,
+});
+
+export function harnessAgentPulse(snapshot) {
+  const pulse = snapshot?.control?.available === true ? snapshot.control.pulse : null;
+  if (!pulse || pulse.schemaVersion !== 1) {
+    return {
+      ...EMPTY_AGENT_PULSE,
+      initiative: { ...EMPTY_AGENT_PULSE.initiative },
+    };
+  }
+  return {
+    available: true,
+    disposition: String(pulse.disposition || 'unknown'),
+    reasonCode: String(pulse.reason?.code || ''),
+    reasonSummary: String(pulse.reason?.summary || ''),
+    objective: String(pulse.objective || ''),
+    currentAction: pulse.currentAction || null,
+    nextAction: pulse.nextAction || null,
+    initiative: pulse.initiative || { ...EMPTY_AGENT_PULSE.initiative },
+    lastOutcome: pulse.lastOutcome || null,
+    updatedAt: Number.isFinite(pulse.updatedAt) ? pulse.updatedAt : null,
+  };
+}
+
 export function harnessQueueActions(wake, capabilities = {}) {
   const dead = wake?.state === 'dead';
   return {

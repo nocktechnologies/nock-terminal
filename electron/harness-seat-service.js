@@ -14,6 +14,124 @@ const CONTROL_ACTIONS = new Set([
   'queue-retry',
   'queue-acknowledge',
 ]);
+const PULSE_DISPOSITIONS = new Set([
+  'working',
+  'ready',
+  'quiescent',
+  'paused',
+  'held',
+  'blocked',
+  'degraded',
+  'stalled',
+]);
+const PULSE_INITIATIVE_STATES = new Set([
+  'owed',
+  'queued',
+  'working',
+  'waiting',
+  'blocked',
+  'held',
+  'paused',
+  'clear',
+  'attention_required',
+]);
+const MAX_PULSE_EPOCH_SECONDS = 4102444800;
+
+function boundedText(value, limit) {
+  return typeof value === 'string' ? value.trim().slice(0, limit) : '';
+}
+
+function finiteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function epochSeconds(value) {
+  const number = finiteNumber(value);
+  return number !== null && number >= 0 && number <= MAX_PULSE_EPOCH_SECONDS
+    ? number
+    : null;
+}
+
+function sanitizePulseAction(action, kind) {
+  if (action === null || action === undefined) return null;
+  if (!action || typeof action !== 'object' || Array.isArray(action)) return null;
+  const clean = {
+    id: boundedText(action.id, 200),
+    source: boundedText(action.source, 80),
+    title: boundedText(action.title, 500),
+  };
+  if (!clean.id || !clean.title) return null;
+  if (kind === 'current') clean.startedAt = epochSeconds(action.startedAt);
+  if (kind === 'next') clean.status = boundedText(action.status, 80);
+  return clean;
+}
+
+function sanitizePulseOutcome(outcome) {
+  if (outcome === null || outcome === undefined) return null;
+  if (!outcome || typeof outcome !== 'object' || Array.isArray(outcome)) return null;
+  const selected = outcome.selectedCandidate
+    && typeof outcome.selectedCandidate === 'object'
+    && !Array.isArray(outcome.selectedCandidate)
+    ? {
+        id: boundedText(outcome.selectedCandidate.id, 200),
+        title: boundedText(outcome.selectedCandidate.title, 500),
+      }
+    : null;
+  const evidence = Array.isArray(outcome.evidence)
+    ? outcome.evidence.slice(0, 20).map((item) => boundedText(item, 500)).filter(Boolean)
+    : [];
+  return {
+    verified: outcome.verified === true,
+    observedAt: epochSeconds(outcome.observedAt),
+    snapshotId: boundedText(outcome.snapshotId, 200) || null,
+    transition: boundedText(outcome.transition, 80).toUpperCase(),
+    selectedCandidate: selected?.id ? selected : null,
+    summary: boundedText(outcome.summary, 1500),
+    evidence,
+  };
+}
+
+function sanitizeAgentPulse(pulse) {
+  if (!pulse || typeof pulse !== 'object' || Array.isArray(pulse)) return null;
+  const disposition = boundedText(pulse.disposition, 40).toLowerCase();
+  const reason = pulse.reason && typeof pulse.reason === 'object' && !Array.isArray(pulse.reason)
+    ? pulse.reason
+    : null;
+  const initiative = pulse.initiative
+    && typeof pulse.initiative === 'object'
+    && !Array.isArray(pulse.initiative)
+    ? pulse.initiative
+    : null;
+  if (pulse.schemaVersion !== 1 || !PULSE_DISPOSITIONS.has(disposition) || !reason || !initiative) {
+    return null;
+  }
+  const reasonCode = boundedText(reason.code, 80).toUpperCase();
+  const initiativeReason = boundedText(initiative.reasonCode, 80).toUpperCase();
+  const initiativeState = boundedText(initiative.state, 80).toLowerCase();
+  if (!reasonCode || !initiativeReason || !PULSE_INITIATIVE_STATES.has(initiativeState)) return null;
+  return {
+    schemaVersion: 1,
+    updatedAt: epochSeconds(pulse.updatedAt),
+    disposition,
+    reason: {
+      code: reasonCode,
+      summary: boundedText(reason.summary, 1500),
+    },
+    objective: boundedText(pulse.objective, 500) || null,
+    currentAction: sanitizePulseAction(pulse.currentAction, 'current'),
+    nextAction: sanitizePulseAction(pulse.nextAction, 'next'),
+    initiative: {
+      state: initiativeState,
+      reasonCode: initiativeReason,
+      attentionRequired: initiative.attentionRequired === true,
+      wakeId: Number.isSafeInteger(initiative.wakeId) && initiative.wakeId > 0
+        ? initiative.wakeId
+        : null,
+      nextJudgmentAt: epochSeconds(initiative.nextJudgmentAt),
+    },
+    lastOutcome: sanitizePulseOutcome(pulse.lastOutcome),
+  };
+}
 
 function quotePosix(value) {
   return `'${String(value).replace(/'/g, `'"'"'`)}'`;
@@ -144,6 +262,7 @@ function emptyControlState() {
       queueRetry: false,
       queueAcknowledge: false,
     },
+    pulse: null,
   };
 }
 
@@ -174,6 +293,7 @@ function sanitizeControlPayloadState(state) {
       queueRetry: capabilities.queueRetry === true,
       queueAcknowledge: capabilities.queueAcknowledge === true,
     },
+    pulse: sanitizeAgentPulse(state.pulse),
   };
 }
 
