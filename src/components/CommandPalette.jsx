@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Command, Play, Search, Send, Settings, Terminal, X } from 'lucide-react';
 import {
   AGENT_LAUNCHERS,
-  DEFAULT_AGENT_ID,
   buildLauncherTargets,
   getAgentLauncher,
   resolveSessionLaunch,
+  resolveTaskAgentId,
   sanitizeStagedTerminalInput,
+  taskTargetSelectionKey,
 } from '../utils/agentLaunchers.mjs';
 import { orderTaskTargets } from '../utils/fleetOps.mjs';
 
@@ -25,7 +26,7 @@ export default function CommandPalette({
   const [query, setQuery] = useState('');
   const [taskText, setTaskText] = useState('');
   const [taskTargetId, setTaskTargetId] = useState('');
-  const [taskAgentId, setTaskAgentId] = useState(DEFAULT_AGENT_ID);
+  const [taskAgentSelections, setTaskAgentSelections] = useState({});
   const [taskDispatchMode, setTaskDispatchMode] = useState('brokered');
   const inputRef = useRef(null);
   const taskRef = useRef(null);
@@ -54,6 +55,12 @@ export default function CommandPalette({
   }, [orderedTaskTargets, selectedTaskTarget]);
 
   const selectedTaskProfile = selectedTaskTarget ? (profilesByPath?.[selectedTaskTarget.path] || {}) : {};
+  const selectedTaskTargetKey = taskTargetSelectionKey(selectedTaskTarget);
+  const taskAgentId = resolveTaskAgentId(
+    selectedTaskTarget,
+    selectedTaskProfile,
+    taskAgentSelections
+  );
   const selectedTaskLaunch = selectedTaskTarget
     ? resolveSessionLaunch(selectedTaskTarget, selectedTaskProfile, taskAgentId)
     : null;
@@ -84,12 +91,6 @@ export default function CommandPalette({
     if (!open || !query.trim() || !firstMatch || taskTargetId === firstMatch.id) return;
     setTaskTargetId(firstMatch.id);
   }, [open, query, targets, taskTargetId]);
-
-  useEffect(() => {
-    if (!selectedTaskTarget || selectedTaskTarget.kind === 'agent') return;
-    const profile = profilesByPath?.[selectedTaskTarget.path] || {};
-    setTaskAgentId(profile.defaultAgent || DEFAULT_AGENT_ID);
-  }, [profilesByPath, selectedTaskTarget]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -286,7 +287,13 @@ export default function CommandPalette({
                 <span className="mb-1 block font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">Agent</span>
                 <select
                   value={taskAgentId}
-                  onChange={(event) => setTaskAgentId(event.target.value)}
+                  onChange={(event) => {
+                    if (!selectedTaskTargetKey) return;
+                    setTaskAgentSelections((current) => ({
+                      ...current,
+                      [selectedTaskTargetKey]: event.target.value,
+                    }));
+                  }}
                   disabled={selectedTaskTarget?.kind === 'agent'}
                   className="h-9 w-full rounded border border-nock-border bg-nock-card px-3 font-mono text-[11px] text-nock-text outline-none disabled:opacity-50 focus:border-nock-accent-blue/60"
                 >

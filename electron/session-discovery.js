@@ -849,10 +849,12 @@ class SessionDiscovery {
       const agentRuntime = this._agentRuntimeFromConfig(config);
       const dispatchLaunch = await this._resolveDispatchLaunch(agentPath, config, agentName, agentRuntime);
       const launchCwd = dispatchLaunch?.cwd || this._resolveAgentLaunchCwd(config, agentPath);
-      const crmAttachCommand = dispatchLaunch ? '' : this._resolveCrmAgentAttachCommand(agentPath, agentName);
       const crmAttachSessionName = dispatchLaunch
         ? ''
         : this._resolveCrmAgentSessionName(agentPath, agentName);
+      const crmAttachCommand = dispatchLaunch
+        ? ''
+        : this._resolveCrmAgentAttachCommand(agentPath, agentName, crmAttachSessionName);
       const crmAttachAvailable = crmAttachSessionName
         ? await this._isTmuxSessionAvailable(crmAttachSessionName)
         : false;
@@ -1137,8 +1139,8 @@ class SessionDiscovery {
     return contract;
   }
 
-  _resolveCrmAgentAttachCommand(agentPath, agentName) {
-    const sessionName = this._resolveCrmAgentSessionName(agentPath, agentName);
+  _resolveCrmAgentAttachCommand(agentPath, agentName, resolvedSessionName) {
+    const sessionName = resolvedSessionName ?? this._resolveCrmAgentSessionName(agentPath, agentName);
     return sessionName ? `tmux attach -t ${sessionName}` : '';
   }
 
