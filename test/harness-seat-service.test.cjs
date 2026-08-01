@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   HarnessSeatService,
+  buildHarnessControlDescriptor,
   buildHarnessLaunchDescriptor,
   parseHarnessSnapshot,
 } = require('../electron/harness-seat-service');
@@ -27,6 +28,8 @@ last turn   : completed [telegram] 3m ago
 __NOCK_QUEUE__
 # 886 working    message/telegram a=1  :: {"prompt": "Build the console"}
 (1 rows; counts={'completed': 884, 'purged': 1, 'working': 1})
+__NOCK_CONTROL__
+{"schemaVersion":1,"ok":true,"action":"status","message":"Operator control state is current.","state":{"seatState":"working:message","paused":false,"turn":{"active":true,"id":"turn-123","batch":886,"class":"message","steerable":true},"queueCounts":{"working":1},"capabilities":{"pause":true,"resume":false,"cancelTurn":true,"queueRetry":true,"queueAcknowledge":true}}}
 __NOCK_MANIFEST__
 {"runtime":"claude","model":"claude-opus-4-8[1m]","home":"/home/nock/Dev/mira-home","work_dir":"/home/nock/Dev/mira-home","turn_budget":{"enabled":true,"hard_s":1200}}
 `;
@@ -55,6 +58,25 @@ test('parses harness status, queue, and residence evidence into a bounded snapsh
       summary: '{"prompt": "Build the console"}',
     }],
     lastTurn: { status: 'completed', source: 'telegram', age: '3m ago' },
+    control: {
+      available: true,
+      seatState: 'working:message',
+      paused: false,
+      turn: {
+        active: true,
+        id: 'turn-123',
+        batch: 886,
+        class: 'message',
+        steerable: true,
+      },
+      capabilities: {
+        pause: true,
+        resume: false,
+        cancelTurn: true,
+        queueRetry: true,
+        queueAcknowledge: true,
+      },
+    },
     manifest: {
       runtime: 'claude',
       model: 'claude-opus-4-8[1m]',
@@ -93,6 +115,24 @@ test('quotes harness launch commands for the configured local PTY shell', () => 
   assert.match(windowsDefault.command, /"nock@nock-fleet-02"/);
 });
 
+test('builds only allowlisted typed control commands with quoted review notes', () => {
+  const pause = buildHarnessControlDescriptor(seat, 'pause');
+  const retry = buildHarnessControlDescriptor(seat, 'queue-retry', { wakeId: 91 });
+  const acknowledge = buildHarnessControlDescriptor(seat, 'queue-acknowledge', {
+    wakeId: 92,
+    note: "Reviewed Kevin's failure; safe to clear.",
+  });
+
+  assert.equal(pause.success, true);
+  assert.match(pause.remoteCommand, /\.\/scripts\/control 'mira' 'pause'/);
+  assert.match(retry.remoteCommand, /--wake-id '91'/);
+  assert.match(acknowledge.remoteCommand, /Reviewed Kevin'"'"'s failure/);
+  assert.match(acknowledge.remoteCommand, /--operator 'nock-terminal'/);
+  assert.equal(buildHarnessControlDescriptor(seat, 'restart-daemon').success, false);
+  assert.equal(buildHarnessControlDescriptor(seat, 'queue-retry', { wakeId: -4 }).success, false);
+  assert.equal(buildHarnessControlDescriptor(seat, 'queue-acknowledge', { wakeId: 4, note: 'short' }).success, false);
+});
+
 test('fetches a snapshot through non-interactive bounded SSH', async () => {
   const calls = [];
   const service = new HarnessSeatService({
@@ -117,8 +157,46 @@ test('fetches a snapshot through non-interactive bounded SSH', async () => {
   assert.equal(calls[0].args[9], 'nock@nock-fleet-02');
   assert.match(calls[0].args[10], /cd -- '\/home\/nock\/Dev\/nock-agent-harness'/);
   assert.match(calls[0].args[10], /\.\/scripts\/status 'mira'/);
+  assert.match(calls[0].args[10], /\.\/scripts\/control 'mira' 'status'/);
   assert.match(calls[0].args[10], /cat -- 'seats\/mira\.json'/);
   assert.equal(calls[0].options.timeout, 8000);
+});
+
+test('executes a typed control over bounded non-interactive SSH', async () => {
+  const calls = [];
+  const service = new HarnessSeatService({
+    runSsh: async (args, options) => {
+      calls.push({ args, options });
+      return {
+        stdout: '{"schemaVersion":1,"ok":true,"action":"pause","message":"paused","state":{"paused":true}}\n',
+        stderr: '',
+      };
+    },
+  });
+
+  const result = await service.control(seat, 'pause');
+
+  assert.equal(result.success, true);
+  assert.equal(result.control.state.paused, true);
+  assert.equal(calls[0].args[9], 'nock@nock-fleet-02');
+  assert.match(calls[0].args[10], /\.\/scripts\/control 'mira' 'pause'/);
+  assert.equal(calls[0].options.timeout, 8000);
+});
+
+test('returns typed daemon refusals without exposing remote output', async () => {
+  const service = new HarnessSeatService({
+    runSsh: async () => ({
+      stdout: '{"schemaVersion":1,"ok":false,"action":"cancel-turn","code":"NO_ACTIVE_TURN","message":"There is no active turn to stop."}\n',
+      stderr: 'private remote detail',
+    }),
+  });
+
+  const result = await service.control(seat, 'cancel-turn');
+
+  assert.equal(result.success, false);
+  assert.equal(result.code, 'NO_ACTIVE_TURN');
+  assert.equal(result.error, 'There is no active turn to stop.');
+  assert.doesNotMatch(JSON.stringify(result), /private remote detail/);
 });
 
 test('returns a timeout result when SSH is killed by the deadline', async () => {

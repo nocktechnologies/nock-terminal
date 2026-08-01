@@ -26,3 +26,29 @@ export function isHarnessLaunchPending(pendingLaunch, seatId, mode = '') {
 export function isCurrentHarnessSeat(selectedSeatId, launchSeatId) {
   return Boolean(selectedSeatId) && selectedSeatId === launchSeatId;
 }
+
+export function harnessControlState(snapshot) {
+  const control = snapshot?.control;
+  const available = control?.available === true;
+  const capabilities = available && control.capabilities && typeof control.capabilities === 'object'
+    ? control.capabilities
+    : {};
+  return {
+    available,
+    seatState: available ? String(control.seatState || 'unknown') : 'unknown',
+    paused: available && control.paused === true,
+    turnActive: available && control.turn?.active === true,
+    steerable: available && control.turn?.steerable === true,
+    canPause: available && capabilities.pause === true,
+    canResume: available && capabilities.resume === true,
+    canCancelTurn: available && capabilities.cancelTurn === true,
+  };
+}
+
+export function harnessQueueActions(wake, capabilities = {}) {
+  const dead = wake?.state === 'dead';
+  return {
+    canRetry: dead && capabilities.queueRetry === true,
+    canAcknowledge: dead && capabilities.queueAcknowledge === true,
+  };
+}

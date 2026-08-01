@@ -42,6 +42,7 @@ test('registers the harness console IPC contract', () => {
   });
 
   assert.deepEqual(ipc.channels(), [
+    'harness:control',
     'harness:launch',
     'harness:list',
     'harness:snapshot',
@@ -62,6 +63,10 @@ test('resolves renderer requests only against configured seats', async () => {
         calls.push(['launch', configuredSeat, mode, options]);
         return { success: true, command: 'trusted command' };
       },
+      control: (configuredSeat, action, options) => {
+        calls.push(['control', configuredSeat, action, options]);
+        return { success: true, control: { ok: true, action } };
+      },
     },
     getSettingsSnapshot: () => ({ harnessSeats: [seat], defaultShell: '/bin/zsh' }),
   });
@@ -69,10 +74,12 @@ test('resolves renderer requests only against configured seats', async () => {
   assert.deepEqual(await ipc.invoke('harness:list'), [seat]);
   assert.equal((await ipc.invoke('harness:snapshot', { seatId: seat.id })).success, true);
   assert.equal((await ipc.invoke('harness:launch', { seatId: seat.id, mode: 'console' })).command, 'trusted command');
+  assert.equal((await ipc.invoke('harness:control', { seatId: seat.id, action: 'pause' })).success, true);
   assert.equal((await ipc.invoke('harness:snapshot', { seatId: 'unknown' })).code, 'HARNESS_SEAT_NOT_FOUND');
   assert.equal((await ipc.invoke('harness:launch', { seatId: seat.id, mode: 'restart' })).code, 'IPC_VALIDATION_ERROR');
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.deepEqual(calls[1][3], { shell: '/bin/zsh' });
+  assert.deepEqual(calls[2], ['control', seat, 'pause', { operator: 'nock-terminal' }]);
 });
 
 test('rejects malformed harness request payloads before calling the service', async () => {
@@ -82,6 +89,7 @@ test('rejects malformed harness request payloads before calling the service', as
     service: {
       snapshot: async () => assert.fail('service must not run for invalid payloads'),
       launch: () => assert.fail('service must not run for invalid payloads'),
+      control: () => assert.fail('service must not run for invalid payloads'),
     },
     getSettingsSnapshot: () => ({ harnessSeats: [seat] }),
   });
@@ -89,6 +97,45 @@ test('rejects malformed harness request payloads before calling the service', as
   for (const payload of [undefined, null, 'seat', [seat.id], {}, { seatId: 42 }, { seatId: '' }, { seatId: 'x'.repeat(401) }]) {
     assert.equal((await ipc.invoke('harness:snapshot', payload)).code, 'IPC_VALIDATION_ERROR');
   }
+
+  for (const payload of [
+    { seatId: seat.id },
+    { seatId: seat.id, action: 'restart-daemon' },
+    { seatId: seat.id, action: 'queue-retry' },
+    { seatId: seat.id, action: 'queue-retry', wakeId: 0 },
+    { seatId: seat.id, action: 'queue-acknowledge', wakeId: 8, note: 'short' },
+    { seatId: seat.id, action: 'queue-acknowledge', wakeId: 8, note: 'x'.repeat(501) },
+  ]) {
+    assert.equal((await ipc.invoke('harness:control', payload)).code, 'IPC_VALIDATION_ERROR');
+  }
+});
+
+test('passes only validated queue control fields to the service', async () => {
+  const ipc = createIpcHarness();
+  const calls = [];
+  registerHarnessIPC({
+    ipcMain: ipc.ipcMain,
+    service: {
+      control: (...args) => {
+        calls.push(args);
+        return { success: true };
+      },
+    },
+    getSettingsSnapshot: () => ({ harnessSeats: [seat] }),
+  });
+
+  await ipc.invoke('harness:control', { seatId: seat.id, action: 'queue-retry', wakeId: 42, note: 'ignored renderer field' });
+  await ipc.invoke('harness:control', {
+    seatId: seat.id,
+    action: 'queue-acknowledge',
+    wakeId: 43,
+    note: 'Reviewed and dispositioned as terminal.',
+  });
+
+  assert.deepEqual(calls, [
+    [seat, 'queue-retry', { wakeId: 42, operator: 'nock-terminal' }],
+    [seat, 'queue-acknowledge', { wakeId: 43, note: 'Reviewed and dispositioned as terminal.', operator: 'nock-terminal' }],
+  ]);
 });
 
 test('coalesces concurrent snapshot requests for the same seat', async () => {

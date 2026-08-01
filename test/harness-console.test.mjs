@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
   harnessAccessSurface,
+  harnessControlState,
+  harnessQueueActions,
   findHarnessSeatCollision,
   isCurrentHarnessSeat,
   isHarnessLaunchPending,
@@ -60,4 +62,47 @@ test('pending harness launches are scoped to their seat and optional mode', () =
 test('stale harness launch results do not belong to the newly selected seat', () => {
   assert.equal(isCurrentHarnessSeat(mira.id, mira.id), true);
   assert.equal(isCurrentHarnessSeat('kevin@mac:22/crane', mira.id), false);
+});
+
+test('control state stays unavailable until the engine publishes typed capabilities', () => {
+  assert.deepEqual(harnessControlState(null), {
+    available: false,
+    seatState: 'unknown',
+    paused: false,
+    turnActive: false,
+    steerable: false,
+    canPause: false,
+    canResume: false,
+    canCancelTurn: false,
+  });
+
+  assert.deepEqual(harnessControlState({
+    control: {
+      available: true,
+      seatState: 'working:message',
+      paused: false,
+      turn: { active: true, steerable: true },
+      capabilities: { pause: true, resume: false, cancelTurn: true },
+    },
+  }), {
+    available: true,
+    seatState: 'working:message',
+    paused: false,
+    turnActive: true,
+    steerable: true,
+    canPause: true,
+    canResume: false,
+    canCancelTurn: true,
+  });
+});
+
+test('only dead wakes expose retry and acknowledge actions', () => {
+  assert.deepEqual(harnessQueueActions({ state: 'dead' }, { queueRetry: true, queueAcknowledge: true }), {
+    canRetry: true,
+    canAcknowledge: true,
+  });
+  assert.deepEqual(harnessQueueActions({ state: 'working' }, { queueRetry: true, queueAcknowledge: true }), {
+    canRetry: false,
+    canAcknowledge: false,
+  });
 });

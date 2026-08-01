@@ -458,6 +458,142 @@ kbd {
   background-size: 32px 32px;
 }
 
+.ac-control-deck {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) 92px 116px auto;
+  min-height: 64px;
+  align-items: center;
+  gap: 0;
+  border-top: 1px solid var(--ac-line-bright);
+  background: color-mix(in oklch, var(--ac-panel) 72%, var(--ac-bg));
+}
+
+.ac-control-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  color: var(--ac-signal);
+}
+
+.ac-control-kicker,
+.ac-control-readout > span {
+  color: var(--ac-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ac-control-state {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ac-text-strong);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-control-readout {
+  display: flex;
+  min-height: 40px;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid var(--ac-line);
+  padding: 0 12px;
+}
+
+.ac-control-readout strong {
+  margin-top: 2px;
+  color: var(--ac-muted-strong);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.ac-control-readout small {
+  margin-top: 1px;
+  color: var(--ac-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+}
+
+.ac-control-readout-live strong { color: var(--ac-live); }
+.ac-control-readout-signal strong { color: var(--ac-signal-bright); }
+.ac-control-readout-warning strong { color: var(--ac-signal); }
+
+.ac-control-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  border-left: 1px solid var(--ac-line);
+  padding: 8px 10px;
+}
+
+.ac-control-button,
+.ac-wake-button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--ac-line-bright);
+  border-radius: 5px;
+  padding: 0 9px;
+  color: var(--ac-muted-strong);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: border-color 120ms cubic-bezier(0.25, 1, 0.5, 1), color 120ms cubic-bezier(0.25, 1, 0.5, 1), background-color 120ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.ac-control-button:hover,
+.ac-wake-button:hover { border-color: var(--ac-signal); color: var(--ac-text-strong); }
+.ac-control-button:disabled,
+.ac-wake-button:disabled { cursor: not-allowed; opacity: 0.35; }
+.ac-control-button-primary { border-color: var(--ac-signal); color: var(--ac-signal-bright); }
+.ac-control-button-danger { color: var(--ac-danger); }
+.ac-control-button-armed { border-color: var(--ac-danger); background: color-mix(in oklch, var(--ac-danger) 13%, var(--ac-panel)); color: var(--ac-danger); }
+
+.ac-control-feedback {
+  border-top: 1px solid var(--ac-line);
+  padding: 7px 14px;
+  background: var(--ac-bg);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+}
+.ac-control-feedback-success { color: var(--ac-live); }
+.ac-control-feedback-error { color: var(--ac-danger); }
+
+.ac-wake-row { padding: 12px 0; }
+.ac-wake-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 10px;
+}
+.ac-wake-button-active { border-color: var(--ac-signal); color: var(--ac-signal-bright); }
+.ac-wake-ack {
+  margin-top: 10px;
+  border-left: 2px solid var(--ac-signal);
+  background: var(--ac-panel);
+  padding: 10px;
+  color: var(--ac-muted-strong);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ac-wake-ack .ac-input { min-width: 0; flex: 1; text-transform: none; }
+.ac-wake-ack .ac-control-button { min-width: 104px; }
+
 .ac-metric {
   display: flex;
   min-height: 82px;
@@ -477,6 +613,8 @@ kbd {
   .agent-console-layout > aside { border-top: 1px solid var(--ac-line); }
   .ac-live-toolbar { align-items: flex-start; flex-direction: column; }
   .ac-live-toolbar > :last-child { margin-left: 0; flex-wrap: wrap; }
+  .ac-control-deck { grid-template-columns: 1fr 92px 108px; }
+  .ac-control-actions { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--ac-line); }
 }
 
 @media (prefers-reduced-motion: reduce) {
