@@ -144,6 +144,22 @@ test('rejects an unversioned pulse and bounds every published pulse field', () =
 
   const unknownInitiative = snapshotOutput.replace('"initiative":{"state":"working"', '"initiative":{"state":"plotting"');
   assert.equal(parseHarnessSnapshot(unknownInitiative, seat).control.pulse, null);
+
+  const missingActionId = snapshotOutput.replace('"id":"wake:886"', '"id":""');
+  assert.equal(parseHarnessSnapshot(missingActionId, seat).control.pulse.currentAction, null);
+
+  const missingActionTitle = snapshotOutput.replace(
+    '"currentAction":{"id":"wake:886","source":"telegram","title":"Advance the operator console"',
+    '"currentAction":{"id":"wake:886","source":"telegram","title":""'
+  );
+  assert.equal(parseHarnessSnapshot(missingActionTitle, seat).control.pulse.currentAction, null);
+
+  const evidenceItems = Array.from({ length: 25 }, (_, index) => `"evidence-${index}"`).join(',');
+  const excessEvidence = snapshotOutput.replace(
+    '"evidence":["tests/test_agent_pulse.py"]',
+    `"evidence":[${evidenceItems}]`
+  );
+  assert.equal(parseHarnessSnapshot(excessEvidence, seat).control.pulse.lastOutcome.evidence.length, 20);
 });
 
 test('builds quoted console, watch, and shell launches only from normalized seats', () => {

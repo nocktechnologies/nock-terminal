@@ -742,6 +742,7 @@ function AgentPulsePanel({ pulse }) {
   const CurrentIcon = pulse.currentAction ? Activity : CircleDotDashed;
   const NextIcon = pulse.nextAction ? Target : CircleDotDashed;
   const outcome = pulse.lastOutcome;
+  const outcomeCandidate = outcome?.selectedCandidate?.title || outcome?.selectedCandidate?.id || '';
 
   return (
     <section className={`ac-pulse ac-pulse-${tone}`} aria-labelledby="agent-pulse-title">
@@ -826,6 +827,14 @@ function AgentPulsePanel({ pulse }) {
                   <div className="ac-pulse-outcome-copy">
                     {outcome ? `${outcome.transition} · ${outcome.summary || 'No summary published.'}` : 'No drive outcome has been recorded yet.'}
                   </div>
+                  {outcome && (outcomeCandidate || outcome.observedAt) && (
+                    <div className="ac-pulse-outcome-meta">
+                      {[
+                        outcomeCandidate ? `candidate · ${outcomeCandidate}` : '',
+                        outcome.observedAt ? `observed · ${formatPulseTime(outcome.observedAt)}` : '',
+                      ].filter(Boolean).join('  /  ')}
+                    </div>
+                  )}
                 </div>
               </div>
               {outcome?.evidence?.length > 0 && (
