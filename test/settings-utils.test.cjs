@@ -176,6 +176,7 @@ test('harnessSeats rejects shell injection and malformed remote coordinates', ()
     { ...base, agent: '../mira' },
     { ...base, enginePath: 'relative/harness' },
     { ...base, enginePath: '/home/nock\nwhoami' },
+    { ...base, enginePath: '/home/%PATH%/nock-agent-harness' },
     { ...base, port: '22' },
     { ...base, port: Number.NaN },
     { ...base, port: 70000 },

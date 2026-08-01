@@ -26,7 +26,8 @@ function normalizeHarnessSeat(value) {
   if (!label || !AGENT_NAME.test(agent) || !SSH_HOST.test(host) || !SSH_USER.test(user)) {
     return null;
   }
-  if (!rawEnginePath.startsWith('/') || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+  if (!rawEnginePath.startsWith('/') || rawEnginePath.includes('%')) return null;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
 
   const enginePath = path.posix.normalize(rawEnginePath);
   if (enginePath === '/' || path.posix.basename(enginePath) !== 'nock-agent-harness') return null;
