@@ -1,6 +1,11 @@
 const path = require('path');
 
-const { isPathWithinRoots, sanitizeDevRoots, sanitizeStringList } = require('./security-utils');
+const {
+  canonicalizePath,
+  isPathWithinRoots,
+  sanitizeDevRoots,
+  sanitizeStringList,
+} = require('./security-utils');
 const { normalizeSettingValue } = require('./settings-utils');
 
 const VALIDATION_CODE = 'IPC_VALIDATION_ERROR';
@@ -102,13 +107,27 @@ function validateTerminalCreatePayload(payload, context = {}) {
   if (!id) return invalid('terminal:create id must be a safe non-empty string');
 
   const allowedRoots = sanitizeDevRoots(context.allowedRoots || []);
-  if (allowedRoots.length === 0) return invalid('terminal:create has no configured project roots');
+  const hasRequestedCwd = payload.cwd !== undefined && payload.cwd !== null && payload.cwd !== '';
+  let defaultCwd = '';
+  const defaultCwdInput = normalizePathString(context.defaultCwd);
+  if (defaultCwdInput) {
+    try {
+      const candidate = canonicalizePath(defaultCwdInput);
+      if (candidate !== path.parse(candidate).root) defaultCwd = candidate;
+    } catch {
+      defaultCwd = '';
+    }
+  }
+  if (hasRequestedCwd && allowedRoots.length === 0) {
+    return invalid('terminal:create has no configured project roots');
+  }
 
-  const cwdInput = payload.cwd === undefined || payload.cwd === null || payload.cwd === ''
-    ? allowedRoots[0]
-    : normalizePathString(payload.cwd);
+  const cwdInput = hasRequestedCwd
+    ? normalizePathString(payload.cwd)
+    : (defaultCwd || allowedRoots[0]);
   if (!cwdInput) return invalid('terminal:create cwd must be a non-empty path string');
-  if (!isPathWithinRoots(cwdInput, allowedRoots)) {
+  const usesTrustedDefault = !hasRequestedCwd && cwdInput === defaultCwd;
+  if (!usesTrustedDefault && !isPathWithinRoots(cwdInput, allowedRoots)) {
     return invalid('terminal:create cwd is outside allowed project roots');
   }
   const cwd = path.resolve(cwdInput);

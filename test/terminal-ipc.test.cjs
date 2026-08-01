@@ -59,6 +59,7 @@ const SHELL_FIXTURES = process.platform === 'win32'
 
 function registerHarness({
   allowedRoots = [],
+  defaultTerminalCwd = '',
   settings = {},
   profiles = {},
 } = {}) {
@@ -100,6 +101,7 @@ function registerHarness({
     terminalManager,
     projectProfiles,
     getAllowedProjectRoots: () => allowedRoots,
+    getDefaultTerminalCwd: () => defaultTerminalCwd,
     getSettingsSnapshot: () => settings,
   });
 
@@ -182,7 +184,7 @@ test('terminal:create validates payloads and delegates trusted launch options', 
   }]);
 });
 
-test('terminal:create uses the default cwd profile when payload omits cwd', async () => {
+test('terminal:create falls back to the first allowed root when no standalone default exists', async () => {
   const sandbox = makeSandbox();
   const projectPath = path.join(sandbox, 'project');
   fs.mkdirSync(projectPath, { recursive: true });
@@ -190,11 +192,88 @@ test('terminal:create uses the default cwd profile when payload omits cwd', asyn
   const ipc = registerHarness({
     allowedRoots: [projectPath],
     settings: { defaultShell: SHELL_FIXTURES.settingsShell, shellArgs: '--login' },
+  });
+
+  const result = await ipc.invoke('terminal:create', { id: 'tab-1' });
+
+  assert.deepEqual(result, { success: true, id: 'tab-1', pid: 1234 });
+  assert.deepEqual(ipc.profileLookups, []);
+  assert.deepEqual(ipc.calls, [{
+    method: 'create',
+    id: 'tab-1',
+    cwd: path.resolve(effectiveProjectPath),
+    options: {
+      shell: SHELL_FIXTURES.settingsShell,
+      shellArgs: '--login',
+      envVars: '',
+    },
+  }]);
+});
+
+test('terminal:create opens a standalone shell before project discovery grants roots', async () => {
+  const sandbox = makeSandbox();
+  const homePath = path.join(sandbox, 'home');
+  fs.mkdirSync(homePath, { recursive: true });
+  const effectiveHomePath = fs.realpathSync.native(homePath);
+  const ipc = registerHarness({
+    defaultTerminalCwd: homePath,
+    settings: { defaultShell: SHELL_FIXTURES.settingsShell },
+  });
+
+  const result = await ipc.invoke('terminal:create', { id: 'tab-1' });
+
+  assert.deepEqual(result, { success: true, id: 'tab-1', pid: 1234 });
+  assert.deepEqual(ipc.profileLookups, []);
+  assert.deepEqual(ipc.calls, [{
+    method: 'create',
+    id: 'tab-1',
+    cwd: effectiveHomePath,
+    options: {
+      shell: SHELL_FIXTURES.settingsShell,
+      shellArgs: '',
+      envVars: '',
+    },
+  }]);
+});
+
+test('terminal:create accepts the trusted home directory as its standalone cwd', async () => {
+  const homePath = fs.realpathSync.native(os.homedir());
+  const ipc = registerHarness({
+    defaultTerminalCwd: homePath,
+    settings: { defaultShell: SHELL_FIXTURES.settingsShell },
+  });
+
+  const result = await ipc.invoke('terminal:create', { id: 'tab-1' });
+
+  assert.deepEqual(result, { success: true, id: 'tab-1', pid: 1234 });
+  assert.deepEqual(ipc.profileLookups, []);
+  assert.deepEqual(ipc.calls, [{
+    method: 'create',
+    id: 'tab-1',
+    cwd: homePath,
+    options: {
+      shell: SHELL_FIXTURES.settingsShell,
+      shellArgs: '',
+      envVars: '',
+    },
+  }]);
+});
+
+test('terminal:create keeps a blank terminal in the trusted default after roots are discovered', async () => {
+  const sandbox = makeSandbox();
+  const projectPath = path.join(sandbox, 'project');
+  const standalonePath = path.join(sandbox, 'standalone');
+  fs.mkdirSync(projectPath, { recursive: true });
+  fs.mkdirSync(standalonePath, { recursive: true });
+  const effectiveStandalonePath = fs.realpathSync.native(standalonePath);
+  const ipc = registerHarness({
+    allowedRoots: [projectPath],
+    defaultTerminalCwd: standalonePath,
+    settings: { defaultShell: SHELL_FIXTURES.settingsShell },
     profiles: {
-      [effectiveProjectPath]: {
+      [projectPath]: {
         defaultShell: SHELL_FIXTURES.profileShell,
-        shellArgs: '--interactive',
-        envVars: 'NODE_ENV=test',
+        envVars: 'SHOULD_NOT_LEAK=1',
       },
     },
   });
@@ -202,15 +281,15 @@ test('terminal:create uses the default cwd profile when payload omits cwd', asyn
   const result = await ipc.invoke('terminal:create', { id: 'tab-1' });
 
   assert.deepEqual(result, { success: true, id: 'tab-1', pid: 1234 });
-  assert.deepEqual(ipc.profileLookups, [effectiveProjectPath]);
+  assert.deepEqual(ipc.profileLookups, []);
   assert.deepEqual(ipc.calls, [{
     method: 'create',
     id: 'tab-1',
-    cwd: path.resolve(effectiveProjectPath),
+    cwd: effectiveStandalonePath,
     options: {
-      shell: SHELL_FIXTURES.profileShell,
-      shellArgs: '--interactive',
-      envVars: 'NODE_ENV=test',
+      shell: SHELL_FIXTURES.settingsShell,
+      shellArgs: '',
+      envVars: '',
     },
   }]);
 });

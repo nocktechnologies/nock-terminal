@@ -9,8 +9,10 @@ import {
   getProfileCommand,
   resolveDefaultAgentId,
   resolveSessionLaunch,
+  resolveTaskAgentId,
   sanitizeStagedTerminalInput,
   shouldRunSessionLaunch,
+  taskTargetSelectionKey,
 } from '../src/utils/agentLaunchers.mjs';
 
 const project = {
@@ -59,6 +61,29 @@ test('resolves profile default agents and command overrides', () => {
   assert.equal(resolveDefaultAgentId({ defaultAgent: 'bogus' }), 'claude');
   assert.equal(getProfileCommand({ codexCommand: 'codex --model gpt-5.4' }, 'codex'), 'codex --model gpt-5.4');
   assert.equal(getProfileCommand({}, 'gemini'), 'gemini');
+});
+
+test('keeps a task agent selection across refreshed target and profile objects', () => {
+  const targetKey = taskTargetSelectionKey(project);
+  const selections = { [targetKey]: 'codex' };
+  const refreshedProject = { ...project };
+
+  assert.equal(
+    resolveTaskAgentId(refreshedProject, { defaultAgent: 'gemini' }, selections),
+    'codex'
+  );
+});
+
+test('uses each task target profile default until the user selects an override', () => {
+  const secondProject = {
+    ...project,
+    id: 'dev:/Users/kevin/Dev/second-project',
+    path: '/Users/kevin/Dev/second-project',
+  };
+  const selections = { [taskTargetSelectionKey(project)]: 'codex' };
+
+  assert.equal(resolveTaskAgentId(project, { defaultAgent: 'gemini' }, selections), 'codex');
+  assert.equal(resolveTaskAgentId(secondProject, { defaultAgent: 'gemini' }, selections), 'gemini');
 });
 
 test('resolves project and agent-folder launches', () => {

@@ -60,6 +60,21 @@ export function resolveDefaultAgentId(profile = {}) {
   return normalizeAgentId(profile?.defaultAgent || DEFAULT_AGENT_ID);
 }
 
+export function taskTargetSelectionKey(session) {
+  if (!session) return '';
+  return [session.kind, session.id, session.path]
+    .map(trimString)
+    .join('\u0000');
+}
+
+export function resolveTaskAgentId(session, profile = {}, selectionsByTarget = {}) {
+  const targetKey = taskTargetSelectionKey(session);
+  if (targetKey && selectionsByTarget && Object.hasOwn(selectionsByTarget, targetKey)) {
+    return normalizeAgentId(selectionsByTarget[targetKey]);
+  }
+  return resolveDefaultAgentId(profile);
+}
+
 export function getProfileCommand(profile = {}, agentId = DEFAULT_AGENT_ID) {
   const launcher = getAgentLauncher(normalizeAgentId(agentId));
   const override = trimString(profile?.[launcher.profileCommandKey]);

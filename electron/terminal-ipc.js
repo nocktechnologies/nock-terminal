@@ -16,9 +16,9 @@ function isPositiveInteger(value) {
   return Number.isInteger(value) && value > 0;
 }
 
-function profileProjectPath(payload, allowedRoots) {
+function profileProjectPath(payload) {
   if (typeof payload?.cwd === 'string' && payload.cwd) return payload.cwd;
-  return allowedRoots[0] || '';
+  return '';
 }
 
 function registerTerminalIPC({
@@ -26,16 +26,19 @@ function registerTerminalIPC({
   terminalManager,
   projectProfiles,
   getAllowedProjectRoots,
+  getDefaultTerminalCwd,
   getSettingsSnapshot,
   onTerminalLaunched,
 }) {
   ipcMain.handle('terminal:create', async (_, payload) => {
     const allowedRoots = sanitizeDevRoots(getAllowedProjectRoots());
+    const defaultCwd = getDefaultTerminalCwd?.() || '';
     const settings = getSettingsSnapshot();
-    const projectPath = profileProjectPath(payload, allowedRoots);
+    const projectPath = profileProjectPath(payload);
     const profile = projectPath ? projectProfiles.get(projectPath) : {};
     const validated = validateTerminalCreatePayload(payload, {
       allowedRoots,
+      defaultCwd,
       settings,
       profile,
     });

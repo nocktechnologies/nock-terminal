@@ -97,6 +97,7 @@ test('discovers agent folders from existing config.json files', async () => {
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot,
+    hasTmuxSession: async () => true,
   });
 
   const sessions = await discovery.discover();
@@ -236,6 +237,7 @@ test('upgrades Claude transcript paths to agent folders even without dev roots',
     claudeDir,
     devRoots: [],
     fileBusRoot,
+    hasTmuxSession: async () => true,
   });
 
   const sessions = await discovery.discover();
@@ -868,10 +870,17 @@ test('Gemini discovery never emits a row for the home directory itself', async (
   assert.equal(sessions.some(session => session.path === home), false);
 });
 
-test('uses CRM tmux attach fallback for enabled persistent agents without shell aliases', async () => {
+test('uses CRM tmux attach fallback for enabled persistent agents without shell aliases', async (t) => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');
   const agentPath = path.join(devRoot, 'claude-remote-manager', 'agents', 'cooper');
+
+  const previousInstanceId = process.env.CRM_INSTANCE_ID;
+  process.env.CRM_INSTANCE_ID = 'default';
+  t.after(() => {
+    if (previousInstanceId === undefined) delete process.env.CRM_INSTANCE_ID;
+    else process.env.CRM_INSTANCE_ID = previousInstanceId;
+  });
 
   writeJson(path.join(agentPath, 'config.json'), {
     agent_name: 'cooper',
@@ -883,12 +892,19 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
+    hasTmuxSession: async () => true,
   });
   let attachCommandCalls = 0;
+  let sessionNameCalls = 0;
   const originalAttachCommand = discovery._resolveCrmAgentAttachCommand.bind(discovery);
+  const originalSessionName = discovery._resolveCrmAgentSessionName.bind(discovery);
   discovery._resolveCrmAgentAttachCommand = (...args) => {
     attachCommandCalls += 1;
     return originalAttachCommand(...args);
+  };
+  discovery._resolveCrmAgentSessionName = (...args) => {
+    sessionNameCalls += 1;
+    return originalSessionName(...args);
   };
 
   const sessions = await discovery.discover();
@@ -900,6 +916,49 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
   assert.equal(cooper.launch.action, 'attach');
   assert.equal(cooper.sessionContract.liveAttach.evidence, 'crm-tmux-session-name');
   assert.equal(attachCommandCalls, 1);
+  assert.equal(sessionNameCalls, 1);
+});
+
+test('does not advertise CRM attach when the derived tmux session is absent', async (t) => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const agentPath = path.join(devRoot, 'claude-remote-manager', 'agents', 'mira');
+  const probedSessions = [];
+
+  const previousInstanceId = process.env.CRM_INSTANCE_ID;
+  process.env.CRM_INSTANCE_ID = 'default';
+  t.after(() => {
+    if (previousInstanceId === undefined) delete process.env.CRM_INSTANCE_ID;
+    else process.env.CRM_INSTANCE_ID = previousInstanceId;
+  });
+
+  writeJson(path.join(agentPath, 'config.json'), {
+    agent_name: 'mira',
+    enabled: true,
+    model: 'claude-opus-4-6',
+  });
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [devRoot],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+    hasTmuxSession: async (sessionName) => {
+      probedSessions.push(sessionName);
+      return false;
+    },
+  });
+
+  const sessions = await discovery.discover();
+  const mira = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'mira');
+
+  assert.ok(mira);
+  assert.deepEqual(probedSessions, ['crm-default-mira']);
+  assert.equal(mira.launch.command, 'tmux attach -t crm-default-mira');
+  assert.equal(mira.launch.action, 'attach');
+  assert.equal(mira.launch.canLaunch, false);
+  assert.match(mira.launch.disabledReason, /tmux session crm-default-mira is not running/i);
+  assert.equal(mira.sessionContract.liveAttach.state, 'unsupported');
+  assert.equal(mira.sessionContract.resumeCommand.state, 'unsupported');
 });
 
 test('keeps explicit agent launch commands as folder launches rather than attach claims', async () => {

@@ -5,6 +5,7 @@ export default function StatusBar({ activeTab, sessions, ollamaStatus, processSt
   const [time, setTime] = useState(() => new Date());
   const [sessionDuration, setSessionDuration] = useState(null);
   const sessionStartRef = useRef(null);
+  const activeTabId = activeTab?.id;
 
   // Clock — updates every second
   useEffect(() => {
@@ -14,9 +15,9 @@ export default function StatusBar({ activeTab, sessions, ollamaStatus, processSt
 
   // Session duration timer — tracks how long the active tab has been open
   useEffect(() => {
-    if (activeTab) {
-      if (!sessionStartRef.current || sessionStartRef.current.tabId !== activeTab.id) {
-        sessionStartRef.current = { tabId: activeTab.id, start: Date.now() };
+    if (activeTabId) {
+      if (!sessionStartRef.current || sessionStartRef.current.tabId !== activeTabId) {
+        sessionStartRef.current = { tabId: activeTabId, start: Date.now() };
       }
     } else {
       sessionStartRef.current = null;
@@ -39,7 +40,7 @@ export default function StatusBar({ activeTab, sessions, ollamaStatus, processSt
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [activeTab?.id]);
+  }, [activeTabId]);
 
   const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
