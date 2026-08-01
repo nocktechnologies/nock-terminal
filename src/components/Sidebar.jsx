@@ -49,7 +49,7 @@ export default function Sidebar({
       <div className="flex flex-col gap-1 p-2 border-b border-nock-border">
         <NavButton icon={<GridIcon />} label="Dashboard" collapsed={collapsed} active={activeView === 'dashboard'} onClick={() => onViewChange('dashboard')} />
         <NavButton icon={<CommandIcon />} label="Launcher" collapsed={collapsed} active={false} onClick={onOpenCommandPalette} />
-        <NavButton icon={<AgentConsoleIcon />} label="Agent Console" collapsed={collapsed} active={activeView === 'agent-console'} tone="signal" onClick={() => onViewChange('agent-console')} />
+        <NavButton icon={<AgentConsoleIcon />} label="Agent Console" collapsed={collapsed} active={activeView === 'agent-console'} onClick={() => onViewChange('agent-console')} />
         <NavButton icon={<TerminalIcon />} label="Terminal" collapsed={collapsed} active={activeView === 'terminal'} onClick={() => onViewChange('terminal')} />
         <NavButton icon={<GearIcon />} label="Settings" collapsed={collapsed} active={activeView === 'settings'} onClick={() => onViewChange('settings')} />
       </div>
@@ -295,10 +295,8 @@ function SidebarSessionSection({ label, sectionKey, sessions, onSessionClick, de
   );
 }
 
-function NavButton({ icon, label, collapsed, active, tone = 'default', onClick }) {
-  const activeClass = tone === 'signal'
-    ? 'bg-[var(--nock-agent-signal-bg)] text-[var(--nock-agent-signal)] border border-[var(--nock-agent-signal-dark)] shadow-[0_0_18px_rgba(245,154,35,0.08)]'
-    : 'bg-nock-card text-nock-text border border-nock-border-bright shadow-glow-blue';
+function NavButton({ icon, label, collapsed, active, onClick }) {
+  const activeClass = 'bg-nock-card text-nock-text border border-nock-border-bright shadow-glow-blue';
   return (
     <button
       type="button"

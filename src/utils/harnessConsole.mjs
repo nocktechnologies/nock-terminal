@@ -13,3 +13,7 @@ export function findHarnessSeatCollision(seats, candidateId, editingSeatId = '')
   const current = Array.isArray(seats) ? seats : [];
   return current.find((seat) => seat?.id === candidateId && seat.id !== editingSeatId) || null;
 }
+
+export function harnessAccessSurface(mode) {
+  return mode === 'shell' ? 'terminal' : 'embedded';
+}

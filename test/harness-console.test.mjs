@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  harnessAccessSurface,
   findHarnessSeatCollision,
   removeHarnessSeat,
   upsertHarnessSeat,
@@ -36,4 +37,10 @@ test('findHarnessSeatCollision ignores the edited seat but protects another seat
 
   assert.equal(findHarnessSeatCollision([mira, crane], mira.id, mira.id), null);
   assert.equal(findHarnessSeatCollision([mira, crane], crane.id, mira.id), crane);
+});
+
+test('interactive harness modes stay embedded while an engine shell opens a terminal tab', () => {
+  assert.equal(harnessAccessSurface('console'), 'embedded');
+  assert.equal(harnessAccessSurface('watch'), 'embedded');
+  assert.equal(harnessAccessSurface('shell'), 'terminal');
 });

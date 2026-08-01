@@ -6,7 +6,7 @@ const LAUNCH_COMMAND_DELAY_MS = 500;
 const STAGED_INPUT_DELAY_MS = 1400;
 const DIRECT_STAGED_INPUT_DELAY_MS = 700;
 
-export default function TerminalView({ tabId, cwd, active, launchCommand, initialInput }) {
+export default function TerminalView({ tabId, cwd, active, launchCommand, initialInput, destroyOnUnmount = false }) {
   const containerRef = useRef(null);
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
@@ -38,6 +38,8 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
   };
 
   useEffect(() => {
+    let disposed = false;
+    let ptyCreated = false;
     let term = null;
     let fitAddon = null;
     let cleanupData = null;
@@ -54,7 +56,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
       // Import xterm CSS
       await import('xterm/css/xterm.css');
 
-      if (!containerRef.current) return;
+      if (disposed || !containerRef.current) return;
 
       // Load settings and project profile overrides (fall back to defaults)
       const settings = await window.nockTerminal.settings.getAll();
@@ -66,6 +68,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
           profile = null;
         }
       }
+      if (disposed || !containerRef.current) return;
       const fontSize = settings?.terminalFontSize ?? 16;
       const fontFamily = settings?.terminalFontFamily ?? "'JetBrains Mono', 'Consolas', monospace";
       const cursorStyle = settings?.cursorStyle || 'block';
@@ -174,6 +177,13 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
         term.writeln(`\x1b[31mFailed to create terminal: ${result.error}\x1b[0m`);
         return;
       }
+      ptyCreated = true;
+      if (disposed) {
+        // A tab can close while the PTY create IPC is still in flight. Once
+        // it resolves there is no renderer owner left, so always reap it.
+        window.nockTerminal.terminal.destroy(tabId);
+        return;
+      }
 
       // If a launch command is specified, send it to the pty after a short
       // delay so the shell prompt has time to initialize.
@@ -229,6 +239,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
     init();
 
     return () => {
+      disposed = true;
       if (launchTimer) clearTimeout(launchTimer);
       if (stagedInputTimer) clearTimeout(stagedInputTimer);
       if (cleanupData) cleanupData();
@@ -238,11 +249,14 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
         term.dispose();
         terminalRef.current = null;
       }
+      if (destroyOnUnmount && ptyCreated) {
+        window.nockTerminal.terminal.destroy(tabId);
+      }
     };
     // initialInput is staged once at tab creation; re-running this effect on
     // its change would destroy and recreate the live terminal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId, cwd, launchCommand]);
+  }, [tabId, cwd, launchCommand, destroyOnUnmount]);
 
   // Refit on visibility change or window resize
   useEffect(() => {

@@ -2,12 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --nock-agent-signal-bg: #17140d;
-  --nock-agent-signal: #f59a23;
-  --nock-agent-signal-dark: #68400f;
-}
-
 /* ---------- Resets ---------- */
 * {
   margin: 0;
@@ -253,18 +247,21 @@ kbd {
 
 /* ---------- Persistent agent console ---------- */
 .agent-console {
-  --ac-bg: oklch(15% 0.012 105);
-  --ac-surface: oklch(18% 0.014 105);
-  --ac-panel: oklch(21% 0.016 105);
-  --ac-line: oklch(29% 0.018 105);
-  --ac-text: oklch(86% 0.022 88);
-  --ac-text-strong: oklch(94% 0.025 88);
-  --ac-muted: oklch(57% 0.025 100);
-  --ac-muted-strong: oklch(70% 0.025 96);
-  --ac-signal: var(--nock-agent-signal);
-  --ac-signal-dark: var(--nock-agent-signal-dark);
-  --ac-live: oklch(76% 0.13 145);
-  --ac-danger: oklch(68% 0.18 27);
+  --ac-bg: oklch(12.5% 0.012 285);
+  --ac-surface: oklch(14.5% 0.015 285);
+  --ac-panel: oklch(17% 0.018 285);
+  --ac-panel-raised: oklch(20% 0.022 285);
+  --ac-line: oklch(24% 0.025 285);
+  --ac-line-bright: oklch(31% 0.045 285);
+  --ac-text: oklch(88% 0.014 285);
+  --ac-text-strong: oklch(94% 0.012 285);
+  --ac-muted: oklch(56% 0.028 285);
+  --ac-muted-strong: oklch(67% 0.03 285);
+  --ac-signal: oklch(58% 0.16 262);
+  --ac-signal-dark: oklch(35% 0.1 262);
+  --ac-signal-bright: oklch(84% 0.15 205);
+  --ac-live: oklch(77% 0.14 160);
+  --ac-danger: oklch(70% 0.17 25);
 
   container-type: inline-size;
   font-family: Sora, system-ui, sans-serif;
@@ -287,6 +284,7 @@ kbd {
   justify-content: center;
   gap: 8px;
   border: 1px solid var(--ac-line);
+  border-radius: 6px;
   padding: 0 13px;
   font-size: 10px;
   font-weight: 650;
@@ -297,8 +295,8 @@ kbd {
 .ac-button:hover { transform: translateY(-1px); }
 .ac-button:active { transform: translateY(0); }
 .ac-button:disabled { cursor: not-allowed; opacity: 0.45; transform: none; }
-.ac-button-signal { border-color: var(--ac-signal); background: var(--ac-signal); color: var(--ac-bg); }
-.ac-button-signal:hover { background: var(--ac-text-strong); border-color: var(--ac-text-strong); }
+.ac-button-signal { border-color: var(--ac-signal); background: var(--ac-signal); color: var(--ac-text-strong); box-shadow: 0 0 18px -8px var(--ac-signal); }
+.ac-button-signal:hover { background: var(--ac-signal-bright); border-color: var(--ac-signal-bright); color: var(--ac-bg); }
 .ac-button-quiet { color: var(--ac-muted-strong); background: var(--ac-surface); }
 .ac-button-quiet:hover { border-color: var(--ac-muted); color: var(--ac-text-strong); }
 .ac-button-danger { border-color: color-mix(in oklch, var(--ac-danger) 45%, var(--ac-line)); color: var(--ac-danger); }
@@ -312,6 +310,7 @@ kbd {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--ac-line);
+  border-radius: 6px;
   color: var(--ac-muted-strong);
   transition: border-color 120ms cubic-bezier(0.25, 1, 0.5, 1), color 120ms cubic-bezier(0.25, 1, 0.5, 1);
 }
@@ -321,7 +320,7 @@ kbd {
   height: 38px;
   width: 100%;
   border: 1px solid var(--ac-line);
-  border-radius: 0;
+  border-radius: 6px;
   background: var(--ac-bg);
   padding: 0 11px;
   color: var(--ac-text-strong);
@@ -338,12 +337,13 @@ kbd {
   align-items: center;
   gap: 10px;
   border: 1px solid transparent;
+  border-radius: 6px;
   padding: 8px;
   text-align: left;
   transition: background-color 120ms cubic-bezier(0.25, 1, 0.5, 1), border-color 120ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 .ac-seat:hover { background: var(--ac-panel); }
-.ac-seat-active { border-color: var(--ac-line); background: var(--ac-panel); }
+.ac-seat-active { border-color: var(--ac-line-bright); background: var(--ac-panel); }
 .ac-seat-dot { height: 6px; width: 6px; flex: none; border-radius: 9999px; background: var(--ac-muted); }
 .ac-seat-dot-live { background: var(--ac-live); }
 
@@ -387,6 +387,78 @@ kbd {
 .ac-access-row:hover { color: var(--ac-text-strong); padding-left: 10px; padding-right: 10px; background: var(--ac-panel); }
 .ac-access-primary { color: var(--ac-signal); }
 
+.ac-live-frame {
+  overflow: hidden;
+  border: 1px solid var(--ac-line-bright);
+  border-radius: 8px;
+  background: var(--ac-surface);
+  box-shadow: 0 18px 50px -36px var(--ac-signal);
+}
+
+.ac-live-toolbar {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--ac-line);
+  background: var(--ac-panel);
+  padding: 7px 10px 7px 14px;
+}
+
+.ac-live-link-dot {
+  height: 7px;
+  width: 7px;
+  flex: none;
+  border-radius: 9999px;
+  background: var(--ac-muted);
+  box-shadow: 0 0 0 4px var(--ac-line);
+}
+
+.ac-live-link-dot-connected {
+  background: var(--ac-live);
+  box-shadow: 0 0 12px var(--ac-live);
+}
+
+.ac-mode-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 0 9px;
+  color: var(--ac-muted-strong);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: color 120ms cubic-bezier(0.25, 1, 0.5, 1), border-color 120ms cubic-bezier(0.25, 1, 0.5, 1), background-color 120ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.ac-mode-button:hover { border-color: var(--ac-line-bright); color: var(--ac-text-strong); }
+.ac-mode-button:disabled { cursor: wait; opacity: 0.5; }
+.ac-mode-button-active { border-color: var(--ac-signal-dark); background: var(--ac-bg); color: var(--ac-signal-bright); }
+
+.ac-live-terminal {
+  height: min(390px, 45vh);
+  min-height: 300px;
+  background: var(--ac-bg);
+}
+
+.ac-live-empty {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 32px;
+  background-image:
+    linear-gradient(var(--ac-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ac-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
 .ac-metric {
   display: flex;
   min-height: 82px;
@@ -404,6 +476,8 @@ kbd {
 @container (max-width: 840px) {
   .agent-console-layout { grid-template-columns: 1fr; }
   .agent-console-layout > aside { border-top: 1px solid var(--ac-line); }
+  .ac-live-toolbar { align-items: flex-start; flex-direction: column; }
+  .ac-live-toolbar > :last-child { margin-left: 0; flex-wrap: wrap; }
 }
 
 @media (prefers-reduced-motion: reduce) {
