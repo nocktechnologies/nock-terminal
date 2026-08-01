@@ -59,6 +59,12 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     list: () => ipcRenderer.invoke('harness:list'),
     snapshot: (seatId) => ipcRenderer.invoke('harness:snapshot', { seatId }),
     launch: (seatId, mode) => ipcRenderer.invoke('harness:launch', { seatId, mode }),
+    control: (seatId, action, options = {}) => ipcRenderer.invoke('harness:control', {
+      seatId,
+      action,
+      wakeId: options?.wakeId,
+      note: options?.note,
+    }),
   },
 
   // AI Chat

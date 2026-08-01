@@ -6,6 +6,14 @@ const execFileAsync = promisify(execFile);
 const SNAPSHOT_TIMEOUT_MS = 8000;
 const SNAPSHOT_MAX_BUFFER = 512 * 1024;
 const LAUNCH_MODES = new Set(['console', 'watch', 'shell']);
+const CONTROL_ACTIONS = new Set([
+  'status',
+  'pause',
+  'resume',
+  'cancel-turn',
+  'queue-retry',
+  'queue-acknowledge',
+]);
 
 function quotePosix(value) {
   return `'${String(value).replace(/'/g, `'"'"'`)}'`;
@@ -39,10 +47,16 @@ function snapshotSshArgs(seat) {
     `./scripts/status ${agent} 2>&1 || true`,
     `printf '%s\\n' '__NOCK_QUEUE__'`,
     `./scripts/queue ${agent} list 2>&1 || true`,
+    `printf '%s\\n' '__NOCK_CONTROL__'`,
+    `if [ -x ./scripts/control ]; then ./scripts/control ${agent} 'status' 2>/dev/null || true; fi`,
     `printf '%s\\n' '__NOCK_MANIFEST__'`,
     `cat -- ${manifestPath} 2>/dev/null || true`,
   ].join('; ');
 
+  return baseSshArgs(seat, remoteCommand);
+}
+
+function baseSshArgs(seat, remoteCommand) {
   return [
     '-o', 'BatchMode=yes',
     '-o', 'ConnectTimeout=5',
@@ -117,9 +131,89 @@ function parseManifest(text) {
   }
 }
 
+function emptyControlState() {
+  return {
+    available: false,
+    seatState: 'unknown',
+    paused: false,
+    turn: { active: false, id: '', batch: null, class: '', steerable: false },
+    capabilities: {
+      pause: false,
+      resume: false,
+      cancelTurn: false,
+      queueRetry: false,
+      queueAcknowledge: false,
+    },
+  };
+}
+
+function sanitizeControlPayloadState(state) {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return null;
+  const turn = state.turn && typeof state.turn === 'object' && !Array.isArray(state.turn)
+    ? state.turn
+    : {};
+  const capabilities = state.capabilities
+    && typeof state.capabilities === 'object'
+    && !Array.isArray(state.capabilities)
+    ? state.capabilities
+    : {};
+  return {
+    seatState: String(state.seatState || 'unknown').slice(0, 80),
+    paused: state.paused === true,
+    turn: {
+      active: turn.active === true,
+      id: String(turn.id || '').slice(0, 160),
+      batch: Number.isSafeInteger(turn.batch) ? turn.batch : null,
+      class: String(turn.class || '').slice(0, 80),
+      steerable: turn.steerable === true,
+    },
+    capabilities: {
+      pause: capabilities.pause === true,
+      resume: capabilities.resume === true,
+      cancelTurn: capabilities.cancelTurn === true,
+      queueRetry: capabilities.queueRetry === true,
+      queueAcknowledge: capabilities.queueAcknowledge === true,
+    },
+  };
+}
+
+function parseControlResponse(text) {
+  const lines = String(text || '').trim().split(/\r?\n/).reverse();
+  for (const line of lines) {
+    const candidate = line.trim();
+    if (!candidate.startsWith('{')) continue;
+    try {
+      const response = JSON.parse(candidate);
+      if (response?.schemaVersion !== 1 || typeof response?.ok !== 'boolean') continue;
+      return {
+        schemaVersion: 1,
+        ok: response.ok,
+        action: String(response.action || '').slice(0, 40),
+        code: String(response.code || '').slice(0, 80),
+        message: String(response.message || '').slice(0, 500),
+        state: sanitizeControlPayloadState(response.state),
+      };
+    } catch {
+      // A bounded remote command can put a shell diagnostic before the JSON.
+    }
+  }
+  return null;
+}
+
+function parseControlState(text) {
+  const response = parseControlResponse(text);
+  const state = response?.ok ? response.state : null;
+  if (!state) return emptyControlState();
+  return {
+    available: true,
+    ...state,
+  };
+}
+
 function parseHarnessSnapshot(output, seat) {
   const statusText = section(String(output || ''), 'STATUS', 'QUEUE');
-  const queueText = section(String(output || ''), 'QUEUE', 'MANIFEST');
+  const queueText = section(String(output || ''), 'QUEUE', 'CONTROL');
+  const controlText = section(String(output || ''), 'CONTROL', 'MANIFEST');
   const manifestText = section(String(output || ''), 'MANIFEST');
   const daemon = statusText.match(/^[^\r\n]*-agentd\s*:\s*(\S+)/m);
   const context = statusText.match(
@@ -147,7 +241,62 @@ function parseHarnessSnapshot(output, seat) {
     lastTurn: lastTurn
       ? { status: lastTurn[1], source: lastTurn[2], age: lastTurn[3].trim().slice(0, 120) }
       : { status: 'none', source: '', age: '' },
+    control: parseControlState(controlText),
     manifest: parseManifest(manifestText),
+  };
+}
+
+function buildHarnessControlDescriptor(input, action, options = {}) {
+  const seat = normalizeHarnessSeat(input);
+  if (!seat || !CONTROL_ACTIONS.has(action)) {
+    return {
+      success: false,
+      code: 'IPC_VALIDATION_ERROR',
+      error: 'Harness control request did not match a configured seat and supported action.',
+    };
+  }
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    return {
+      success: false,
+      code: 'IPC_VALIDATION_ERROR',
+      error: 'Harness control options must be an object.',
+    };
+  }
+
+  const queueAction = action === 'queue-retry' || action === 'queue-acknowledge';
+  const wakeId = options.wakeId;
+  if (queueAction && (!Number.isSafeInteger(wakeId) || wakeId < 1)) {
+    return {
+      success: false,
+      code: 'IPC_VALIDATION_ERROR',
+      error: 'Queue controls require a positive wake id.',
+    };
+  }
+  const note = typeof options.note === 'string' ? options.note.trim() : '';
+  if (action === 'queue-acknowledge' && (note.length < 10 || note.length > 500)) {
+    return {
+      success: false,
+      code: 'IPC_VALIDATION_ERROR',
+      error: 'Acknowledging a wake requires a 10–500 character review note.',
+    };
+  }
+
+  const command = ['./scripts/control', quotePosix(seat.agent), quotePosix(action)];
+  if (queueAction) command.push('--wake-id', quotePosix(String(wakeId)));
+  if (action === 'queue-acknowledge') command.push('--note', quotePosix(note));
+  command.push('--operator', quotePosix('nock-terminal'));
+  const remoteCommand = [
+    `cd -- ${quotePosix(seat.enginePath)} || exit 71`,
+    `${command.join(' ')} 2>/dev/null || true`,
+  ].join('; ');
+
+  return {
+    success: true,
+    seatId: seat.id,
+    destination: sshDestination(seat),
+    action,
+    remoteCommand,
+    sshArgs: baseSshArgs(seat, remoteCommand),
   };
 }
 
@@ -235,13 +384,58 @@ class HarnessSeatService {
     }
   }
 
+  async control(input, action, options = {}) {
+    const descriptor = buildHarnessControlDescriptor(input, action, options);
+    if (!descriptor.success) return descriptor;
+
+    try {
+      const { stdout = '' } = await this.runSsh(descriptor.sshArgs, {
+        timeout: SNAPSHOT_TIMEOUT_MS,
+        maxBuffer: SNAPSHOT_MAX_BUFFER,
+        windowsHide: true,
+      });
+      const control = parseControlResponse(stdout);
+      if (!control) {
+        return {
+          success: false,
+          code: 'HARNESS_CONTROL_UNAVAILABLE',
+          error: 'This harness engine does not publish typed operator controls yet.',
+        };
+      }
+      if (!control.ok) {
+        return {
+          success: false,
+          code: control.code || 'HARNESS_CONTROL_REFUSED',
+          error: control.message || 'The harness refused that control action.',
+          control,
+        };
+      }
+      return { success: true, control };
+    } catch (error) {
+      if (error?.killed || error?.signal === 'SIGTERM' || error?.code === 'ETIMEDOUT') {
+        return {
+          success: false,
+          code: 'HARNESS_SSH_TIMEOUT',
+          error: `Timed out connecting to ${descriptor.destination}. The control action was not confirmed.`,
+        };
+      }
+      return {
+        success: false,
+        code: 'HARNESS_SSH_UNREACHABLE',
+        error: `SSH could not reach ${descriptor.destination}. The control action was not confirmed.`,
+      };
+    }
+  }
+
   launch(input, mode, options) {
     return buildHarnessLaunchDescriptor(input, mode, options);
   }
 }
 
 module.exports = {
+  CONTROL_ACTIONS,
   HarnessSeatService,
+  buildHarnessControlDescriptor,
   buildHarnessLaunchDescriptor,
   parseHarnessSnapshot,
   snapshotSshArgs,

@@ -1,3 +1,5 @@
+const { CONTROL_ACTIONS } = require('./harness-seat-service');
+
 const HARNESS_MODES = new Set(['console', 'watch', 'shell']);
 
 function error(code, message) {
@@ -21,6 +23,7 @@ function requestSeat(payload, getSettingsSnapshot) {
 
 function registerHarnessIPC({ ipcMain, service, getSettingsSnapshot }) {
   const snapshotInFlight = new Map();
+  const controlInFlight = new Map();
 
   ipcMain.handle('harness:list', () => {
     const seats = getSettingsSnapshot()?.harnessSeats;
@@ -51,6 +54,39 @@ function registerHarnessIPC({ ipcMain, service, getSettingsSnapshot }) {
     return service.launch(resolved.seat, payload.mode, {
       shell: getSettingsSnapshot()?.defaultShell,
     });
+  });
+
+  ipcMain.handle('harness:control', (_, payload) => {
+    const resolved = requestSeat(payload, getSettingsSnapshot);
+    if (resolved.error) return resolved.error;
+    if (!CONTROL_ACTIONS.has(payload.action)) {
+      return error('IPC_VALIDATION_ERROR', 'Harness control action is not supported.');
+    }
+
+    const options = {};
+    if (payload.action === 'queue-retry' || payload.action === 'queue-acknowledge') {
+      if (!Number.isSafeInteger(payload.wakeId) || payload.wakeId < 1) {
+        return error('IPC_VALIDATION_ERROR', 'Queue controls require a positive wake id.');
+      }
+      options.wakeId = payload.wakeId;
+    }
+    if (payload.action === 'queue-acknowledge') {
+      const note = typeof payload.note === 'string' ? payload.note.trim() : '';
+      if (note.length < 10 || note.length > 500) {
+        return error('IPC_VALIDATION_ERROR', 'Acknowledging a wake requires a 10–500 character review note.');
+      }
+      options.note = note;
+    }
+    if (controlInFlight.has(resolved.seat.id)) {
+      return error('HARNESS_CONTROL_IN_FLIGHT', 'Another harness control is still awaiting confirmation for this seat.');
+    }
+    const pending = Promise.resolve(service.control(resolved.seat, payload.action, options)).finally(() => {
+      if (controlInFlight.get(resolved.seat.id) === pending) {
+        controlInFlight.delete(resolved.seat.id);
+      }
+    });
+    controlInFlight.set(resolved.seat.id, pending);
+    return pending;
   });
 }
 

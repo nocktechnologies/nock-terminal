@@ -2,13 +2,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   ArrowUpRight,
+  Check,
   Clock3,
   Eye,
   Gauge,
   HardDrive,
+  Octagon,
+  Pause,
+  Play,
   Plus,
   Radio,
   RefreshCw,
+  RotateCcw,
   Server,
   Settings2,
   ShieldCheck,
@@ -21,6 +26,8 @@ import {
 import {
   findHarnessSeatCollision,
   harnessAccessSurface,
+  harnessControlState,
+  harnessQueueActions,
   isCurrentHarnessSeat,
   isHarnessLaunchPending,
   removeHarnessSeat,
@@ -90,7 +97,13 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const [embeddedSession, setEmbeddedSession] = useState(null);
   const [pendingLaunch, setPendingLaunch] = useState(null);
   const [launchError, setLaunchError] = useState('');
+  const [pendingControl, setPendingControl] = useState(null);
+  const [controlFeedback, setControlFeedback] = useState(null);
+  const [cancelArmed, setCancelArmed] = useState(false);
+  const [acknowledgingWakeId, setAcknowledgingWakeId] = useState(null);
+  const [ackNote, setAckNote] = useState('');
   const selectedSeatIdRef = useRef(selectedSeatId);
+  const controlInFlightSeatsRef = useRef(new Set());
 
   const selectedSeat = useMemo(
     () => seats.find((seat) => seat.id === selectedSeatId) || seats[0] || null,
@@ -103,6 +116,13 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const StatusIcon = presentation.Icon;
   const selectedSeatLaunchPending = isHarnessLaunchPending(pendingLaunch, selectedSeat?.id);
   const launchingMode = selectedSeatLaunchPending ? pendingLaunch.mode : '';
+  const controlState = harnessControlState(snapshot);
+  const controlCapabilities = {
+    queueRetry: controlState.canQueueRetry,
+    queueAcknowledge: controlState.canQueueAcknowledge,
+  };
+  const selectedSeatControlPending = Boolean(selectedSeat?.id)
+    && pendingControl?.seatId === selectedSeat.id;
 
   const loadSeats = useCallback(async () => {
     try {
@@ -165,7 +185,18 @@ export default function AgentConsole({ active, onOpenTerminal }) {
       current && current.seatId !== selectedSeatId ? null : current
     ));
     setLaunchError('');
+    setPendingControl(null);
+    setControlFeedback(null);
+    setCancelArmed(false);
+    setAcknowledgingWakeId(null);
+    setAckNote('');
   }, [selectedSeatId]);
+
+  useEffect(() => {
+    if (!cancelArmed) return undefined;
+    const timeout = setTimeout(() => setCancelArmed(false), 5_000);
+    return () => clearTimeout(timeout);
+  }, [cancelArmed]);
 
   const openHarnessAccess = useCallback(async (seat, mode) => {
     if (!seat?.id) return;
@@ -203,6 +234,34 @@ export default function AgentConsole({ active, onOpenTerminal }) {
       ));
     }
   }, [onOpenTerminal, pendingLaunch]);
+
+  const runHarnessControl = useCallback(async (action, options = {}) => {
+    const seat = selectedSeat;
+    if (!seat?.id || controlInFlightSeatsRef.current.has(seat.id)) return;
+    controlInFlightSeatsRef.current.add(seat.id);
+    setPendingControl({ seatId: seat.id, action, wakeId: options.wakeId });
+    setControlFeedback(null);
+    try {
+      const result = await window.nockTerminal.harness.control(seat.id, action, options);
+      if (!isCurrentHarnessSeat(selectedSeatIdRef.current, seat.id)) return;
+      if (!result?.success) {
+        setControlFeedback({ tone: 'error', message: result?.error || 'The harness did not confirm that control action.' });
+        return;
+      }
+      setControlFeedback({ tone: 'success', message: result.control?.message || 'Harness control confirmed.' });
+      setCancelArmed(false);
+      setAcknowledgingWakeId(null);
+      setAckNote('');
+      await refreshSeat(seat.id);
+    } catch {
+      if (isCurrentHarnessSeat(selectedSeatIdRef.current, seat.id)) {
+        setControlFeedback({ tone: 'error', message: 'The harness control link failed. No action was confirmed.' });
+      }
+    } finally {
+      controlInFlightSeatsRef.current.delete(seat.id);
+      setPendingControl((current) => current?.seatId === seat.id ? null : current);
+    }
+  }, [refreshSeat, selectedSeat]);
 
   const beginAdd = () => {
     setEditingSeatId('');
@@ -437,6 +496,71 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                         </div>
                       )}
                     </div>
+
+                    <div className="ac-control-deck" role="group" aria-label="Harness operator controls">
+                      <div className="ac-control-identity">
+                        <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                        <div>
+                          <div className="ac-control-kicker">Harness control</div>
+                          <div className="ac-control-state">
+                            {controlState.available ? controlState.seatState : 'engine update required'}
+                          </div>
+                        </div>
+                      </div>
+                      <ControlReadout
+                        label="Intake"
+                        value={!controlState.available ? 'Unknown' : (controlState.paused ? 'Paused' : 'Open')}
+                        tone={!controlState.available ? 'quiet' : (controlState.paused ? 'warning' : 'live')}
+                      />
+                      <ControlReadout
+                        label="Turn"
+                        value={!controlState.available ? 'Unknown' : (controlState.turnActive ? 'Running' : 'Idle')}
+                        detail={controlState.steerable ? 'steer open' : 'no live steer'}
+                        tone={controlState.turnActive ? 'signal' : 'quiet'}
+                      />
+                      <div className="ac-control-actions">
+                        {controlState.paused ? (
+                          <button
+                            type="button"
+                            className="ac-control-button ac-control-button-primary"
+                            disabled={!controlState.canResume || selectedSeatControlPending}
+                            onClick={() => runHarnessControl('resume')}
+                          >
+                            <Play className="h-3 w-3" aria-hidden="true" />
+                            {pendingControl?.action === 'resume' ? 'Resuming…' : 'Resume intake'}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="ac-control-button"
+                            disabled={!controlState.canPause || selectedSeatControlPending}
+                            onClick={() => runHarnessControl('pause')}
+                          >
+                            <Pause className="h-3 w-3" aria-hidden="true" />
+                            {pendingControl?.action === 'pause' ? 'Pausing…' : 'Pause intake'}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className={`ac-control-button ac-control-button-danger ${cancelArmed ? 'ac-control-button-armed' : ''}`}
+                          disabled={!controlState.canCancelTurn || selectedSeatControlPending}
+                          onClick={() => {
+                            if (cancelArmed) runHarnessControl('cancel-turn');
+                            else setCancelArmed(true);
+                          }}
+                        >
+                          <Octagon className="h-3 w-3" aria-hidden="true" />
+                          {pendingControl?.action === 'cancel-turn'
+                            ? 'Stopping…'
+                            : (cancelArmed ? 'Confirm stop' : 'Stop turn')}
+                        </button>
+                      </div>
+                    </div>
+                    {controlFeedback && (
+                      <div className={`ac-control-feedback ac-control-feedback-${controlFeedback.tone}`} role="status">
+                        {controlFeedback.message}
+                      </div>
+                    )}
                   </div>
                   {launchError && <p className="mt-3 text-[11px] text-[var(--ac-danger)]" role="alert">{launchError}</p>}
 
@@ -461,14 +585,77 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                     <Metric label="Dead" value={queueCounts.dead} tone={queueCounts.dead ? 'danger' : 'quiet'} />
                   </div>
                   <div className="mt-4 divide-y divide-[var(--ac-line)] border-y border-[var(--ac-line)]">
-                    {(snapshot?.queue || []).length > 0 ? snapshot.queue.map((wake) => (
-                      <div key={wake.id} className="grid grid-cols-[64px_92px_minmax(0,1fr)_40px] items-start gap-3 py-3 font-mono text-[10px]">
-                        <span className="text-[var(--ac-signal)]">#{wake.id}</span>
-                        <span className="uppercase text-[var(--ac-text)]">{wake.state}</span>
-                        <span className="min-w-0 truncate text-[var(--ac-muted-strong)]" title={wake.summary}>{wake.class}/{wake.source} · {wake.summary}</span>
-                        <span className="text-right text-[var(--ac-muted)]">a{wake.attempts}</span>
-                      </div>
-                    )) : (
+                    {(snapshot?.queue || []).length > 0 ? snapshot.queue.map((wake) => {
+                      const actions = harnessQueueActions(wake, controlCapabilities);
+                      const pendingThisWake = selectedSeatControlPending && pendingControl?.wakeId === wake.id;
+                      const acknowledging = acknowledgingWakeId === wake.id;
+                      return (
+                        <div key={wake.id} className="ac-wake-row">
+                          <div className="grid grid-cols-[64px_92px_minmax(0,1fr)_40px] items-start gap-3 font-mono text-[10px]">
+                            <span className="text-[var(--ac-signal)]">#{wake.id}</span>
+                            <span className={`uppercase ${wake.state === 'dead' ? 'text-[var(--ac-danger)]' : 'text-[var(--ac-text)]'}`}>{wake.state}</span>
+                            <span className="min-w-0 truncate text-[var(--ac-muted-strong)]" title={wake.summary}>{wake.class}/{wake.source} · {wake.summary}</span>
+                            <span className="text-right text-[var(--ac-muted)]">a{wake.attempts}</span>
+                          </div>
+                          {(actions.canRetry || actions.canAcknowledge) && (
+                            <div className="ac-wake-actions">
+                              <span className="mr-auto text-[9px] text-[var(--ac-muted)]">Dead-letter review required</span>
+                              {actions.canRetry && (
+                                <button
+                                  type="button"
+                                  className="ac-wake-button"
+                                  disabled={selectedSeatControlPending}
+                                  onClick={() => runHarnessControl('queue-retry', { wakeId: wake.id })}
+                                >
+                                  <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                                  {pendingThisWake && pendingControl?.action === 'queue-retry' ? 'Retrying…' : 'Retry'}
+                                </button>
+                              )}
+                              {actions.canAcknowledge && (
+                                <button
+                                  type="button"
+                                  className={`ac-wake-button ${acknowledging ? 'ac-wake-button-active' : ''}`}
+                                  disabled={selectedSeatControlPending}
+                                  onClick={() => {
+                                    setAcknowledgingWakeId(acknowledging ? null : wake.id);
+                                    setAckNote('');
+                                  }}
+                                >
+                                  <Check className="h-3 w-3" aria-hidden="true" />
+                                  Acknowledge
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {acknowledging && actions.canAcknowledge && (
+                            <form
+                              className="ac-wake-ack"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                runHarnessControl('queue-acknowledge', { wakeId: wake.id, note: ackNote });
+                              }}
+                            >
+                              <label htmlFor={`ack-note-${wake.id}`}>Review disposition</label>
+                              <div className="mt-2 flex gap-2">
+                                <input
+                                  id={`ack-note-${wake.id}`}
+                                  className="ac-input"
+                                  value={ackNote}
+                                  minLength={10}
+                                  maxLength={500}
+                                  required
+                                  onChange={(event) => setAckNote(event.target.value)}
+                                  placeholder="Reviewed the failure and confirmed this wake is terminal."
+                                />
+                                <button type="submit" className="ac-control-button ac-control-button-primary" disabled={selectedSeatControlPending || ackNote.trim().length < 10}>
+                                  {pendingThisWake && pendingControl?.action === 'queue-acknowledge' ? 'Saving…' : 'Save review'}
+                                </button>
+                              </div>
+                            </form>
+                          )}
+                        </div>
+                      );
+                    }) : (
                       <div className="py-6 text-sm text-[var(--ac-muted)]">No nonterminal wakes. New operator work will appear here.</div>
                     )}
                   </div>
@@ -504,7 +691,9 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                   <ContractRow label="Speak / steer" value="Supported" available />
                   <ContractRow label="Read-only watch" value="Supported" available />
                   <ContractRow label="Queue inspection" value="Supported" available />
-                  <ContractRow label="Pause / resume" value="Not published" />
+                  <ContractRow label="Pause / resume" value={controlState.available ? 'Published' : 'Not published'} available={controlState.available} />
+                  <ContractRow label="Turn interrupt" value={controlState.available ? 'Confirmation gated' : 'Not published'} available={controlState.available} />
+                  <ContractRow label="Dead-wake review" value={controlCapabilities.queueAcknowledge ? 'Journalled' : 'Not published'} available={controlCapabilities.queueAcknowledge} />
                 </div>
 
                 <div className="p-5 font-mono text-[9px] leading-5 text-[var(--ac-muted)]">
@@ -590,6 +779,16 @@ function SectionLabel({ number, title, detail }) {
       <span className="font-mono text-[9px] text-[var(--ac-signal)]">{number}</span>
       <h3 className="font-display text-lg font-semibold text-[var(--ac-text-strong)]">{title}</h3>
       <p className="text-[11px] text-[var(--ac-muted)]">{detail}</p>
+    </div>
+  );
+}
+
+function ControlReadout({ label, value, detail = '', tone = 'quiet' }) {
+  return (
+    <div className={`ac-control-readout ac-control-readout-${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {detail && <small>{detail}</small>}
     </div>
   );
 }
