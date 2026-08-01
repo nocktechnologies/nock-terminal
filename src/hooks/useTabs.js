@@ -6,10 +6,12 @@ import {
 } from '../utils/agentLaunchers.mjs';
 import {
   createTabId,
+  duplicateTabWithFreshIds,
   nextActiveTabId,
   removeTabById,
   reorderTabList,
 } from '../utils/tabOps.mjs';
+import { collectLiveTerminalIds } from '../utils/terminalLifecycle.mjs';
 
 // Owns the terminal tab list, the active tab selection, and every operation
 // that creates, closes, or rearranges tabs. Split-pane/editor content inside a
@@ -128,7 +130,9 @@ export default function useTabs({ setView }) {
       }
       return filtered;
     });
-    window.nockTerminal.terminal.destroy(tabId);
+    for (const terminalId of collectLiveTerminalIds([tabToClose])) {
+      window.nockTerminal.terminal.destroy(terminalId);
+    }
   }, [activeTabId, tabs, setView]);
 
   const renameTab = useCallback((tabId, title) => {
@@ -140,8 +144,9 @@ export default function useTabs({ setView }) {
   }, []);
 
   const duplicateTab = useCallback((tab) => {
+    const duplicate = duplicateTabWithFreshIds(tab);
     openTab(
-      { ...tab, id: createTabId(), pinned: false, initialInput: '' },
+      duplicate,
       { project: tab.title || 'Terminal', shell: '', cwd: tab.cwd || undefined },
       { show: false }
     );

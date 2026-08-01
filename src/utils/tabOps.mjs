@@ -2,6 +2,21 @@ export function createTabId(prefix = 'tab') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+export function duplicateTabWithFreshIds(tab, idFactory = createTabId) {
+  const id = idFactory();
+  const splitContent = tab?.splitContent?.type === 'terminal'
+    ? { ...tab.splitContent, id: idFactory(`${id}-split`) }
+    : tab?.splitContent;
+
+  return {
+    ...tab,
+    id,
+    pinned: false,
+    initialInput: '',
+    splitContent,
+  };
+}
+
 export function reorderTabList(tabs, dragId, targetId) {
   const arr = [...tabs];
   const dragIdx = arr.findIndex(t => t.id === dragId);

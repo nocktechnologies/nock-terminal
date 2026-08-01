@@ -97,6 +97,7 @@ test('discovers agent folders from existing config.json files', async () => {
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot,
+    hasTmuxSession: async () => true,
   });
 
   const sessions = await discovery.discover();
@@ -236,6 +237,7 @@ test('upgrades Claude transcript paths to agent folders even without dev roots',
     claudeDir,
     devRoots: [],
     fileBusRoot,
+    hasTmuxSession: async () => true,
   });
 
   const sessions = await discovery.discover();
@@ -883,6 +885,7 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
+    hasTmuxSession: async () => true,
   });
   let attachCommandCalls = 0;
   const originalAttachCommand = discovery._resolveCrmAgentAttachCommand.bind(discovery);
@@ -900,6 +903,41 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
   assert.equal(cooper.launch.action, 'attach');
   assert.equal(cooper.sessionContract.liveAttach.evidence, 'crm-tmux-session-name');
   assert.equal(attachCommandCalls, 1);
+});
+
+test('does not advertise CRM attach when the derived tmux session is absent', async () => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const agentPath = path.join(devRoot, 'claude-remote-manager', 'agents', 'mira');
+  const probedSessions = [];
+
+  writeJson(path.join(agentPath, 'config.json'), {
+    agent_name: 'mira',
+    enabled: true,
+    model: 'claude-opus-4-6',
+  });
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [devRoot],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+    hasTmuxSession: async (sessionName) => {
+      probedSessions.push(sessionName);
+      return false;
+    },
+  });
+
+  const sessions = await discovery.discover();
+  const mira = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'mira');
+
+  assert.ok(mira);
+  assert.deepEqual(probedSessions, ['crm-default-mira']);
+  assert.equal(mira.launch.command, 'tmux attach -t crm-default-mira');
+  assert.equal(mira.launch.action, 'attach');
+  assert.equal(mira.launch.canLaunch, false);
+  assert.match(mira.launch.disabledReason, /tmux session crm-default-mira is not running/i);
+  assert.equal(mira.sessionContract.liveAttach.state, 'unsupported');
+  assert.equal(mira.sessionContract.resumeCommand.state, 'unsupported');
 });
 
 test('keeps explicit agent launch commands as folder launches rather than attach claims', async () => {

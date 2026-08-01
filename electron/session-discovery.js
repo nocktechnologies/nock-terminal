@@ -39,6 +39,9 @@ class SessionDiscovery {
     this.devRoots = this._effectiveDevRoots(opts.devRoots);
     // Project names to hide from dashboard (case-insensitive)
     this.skipList = (opts.skipList || []).map(s => s.toLowerCase());
+    this.hasTmuxSession = typeof opts.hasTmuxSession === 'function'
+      ? opts.hasTmuxSession
+      : this._hasTmuxSession.bind(this);
     // Cache git status results: { projectPath: { branch, dirty, cachedAt } }
     this.gitCache = new Map();
     this.gitCacheTTL = 15000; // 15 seconds
@@ -847,11 +850,16 @@ class SessionDiscovery {
       const dispatchLaunch = await this._resolveDispatchLaunch(agentPath, config, agentName, agentRuntime);
       const launchCwd = dispatchLaunch?.cwd || this._resolveAgentLaunchCwd(config, agentPath);
       const crmAttachCommand = dispatchLaunch ? '' : this._resolveCrmAgentAttachCommand(agentPath, agentName);
+      const crmAttachSessionName = dispatchLaunch
+        ? ''
+        : this._resolveCrmAgentSessionName(agentPath, agentName);
+      const crmAttachAvailable = crmAttachSessionName
+        ? await this._isTmuxSessionAvailable(crmAttachSessionName)
+        : false;
       const launchCommand = dispatchLaunch
         ? ''
         : (enabled ? this._resolveAgentLaunchCommand(config, agentName, agentPath, crmAttachCommand) : '');
       const sessionContract = this._resolveAgentSessionContract({
-        agentName,
         agentRuntime,
         agentPath,
         enabled,
@@ -859,14 +867,15 @@ class SessionDiscovery {
         launchCommand,
         launchCwd,
         crmAttachCommand,
+        crmAttachSessionName,
+        crmAttachAvailable,
       });
       const terminalLaunch = this._terminalLaunchDescriptor({
-        agentName,
-        agentPath,
         enabled,
         launchCommand,
-        launchCwd,
         crmAttachCommand,
+        crmAttachSessionName,
+        crmAttachAvailable,
       });
       const runtime = await this._getAgentRuntimeState(agentName, dirName, config, enabled, Boolean(dispatchLaunch));
       const gitInfo = await this._getGitInfo(agentPath);
@@ -1027,7 +1036,13 @@ class SessionDiscovery {
     return this._safeAgentName(agentName) || this._formatAgentName(agentName).replace(/\s+/g, '');
   }
 
-  _terminalLaunchDescriptor({ agentName, agentPath, enabled, launchCommand, crmAttachCommand }) {
+  _terminalLaunchDescriptor({
+    enabled,
+    launchCommand,
+    crmAttachCommand,
+    crmAttachSessionName,
+    crmAttachAvailable,
+  }) {
     if (!enabled || !launchCommand) {
       return {
         action: 'unavailable',
@@ -1037,14 +1052,15 @@ class SessionDiscovery {
         disabledReason: enabled ? 'Agent launch command is missing' : 'Agent is disabled',
       };
     }
-    const attachCommand = crmAttachCommand || this._resolveCrmAgentAttachCommand(agentPath, agentName);
-    if (attachCommand && launchCommand === attachCommand) {
+    if (crmAttachCommand && launchCommand === crmAttachCommand) {
       return {
         action: 'attach',
         actionLabel: 'Attach',
         capability: 'live-attach',
-        canLaunch: true,
-        disabledReason: '',
+        canLaunch: crmAttachAvailable,
+        disabledReason: crmAttachAvailable
+          ? ''
+          : `tmux session ${crmAttachSessionName} is not running`,
       };
     }
     return {
@@ -1057,7 +1073,6 @@ class SessionDiscovery {
   }
 
   _resolveAgentSessionContract({
-    agentName,
     agentRuntime,
     agentPath,
     enabled,
@@ -1065,6 +1080,8 @@ class SessionDiscovery {
     launchCommand,
     launchCwd,
     crmAttachCommand,
+    crmAttachSessionName,
+    crmAttachAvailable,
   }) {
     if (dispatchLaunch) {
       const contract = getAgentSessionContract('dispatch-agent');
@@ -1083,28 +1100,37 @@ class SessionDiscovery {
 
     const contract = getAgentSessionContract('local-agent-folder');
     contract.adapterId = 'local-agent-folder';
-    const attachCommand = crmAttachCommand || this._resolveCrmAgentAttachCommand(agentPath, agentName);
-    const canAttach = Boolean(enabled && launchCommand && attachCommand && launchCommand === attachCommand);
+    const isAttachCommand = Boolean(
+      enabled
+      && launchCommand
+      && crmAttachCommand
+      && launchCommand === crmAttachCommand
+    );
+    const canAttach = Boolean(isAttachCommand && crmAttachAvailable);
+    const attachDisabledReason = isAttachCommand && crmAttachSessionName
+      ? `tmux session ${crmAttachSessionName} is not running`
+      : 'No deterministic live attach target was resolved for this agent folder.';
     contract.liveAttach = {
       ...(contract.liveAttach || {}),
       state: canAttach ? 'supported' : 'unsupported',
       command: canAttach ? launchCommand : '',
       evidence: canAttach ? 'crm-tmux-session-name' : '',
-      disabledReason: canAttach ? '' : 'No deterministic live attach target was resolved for this agent folder.',
+      disabledReason: canAttach ? '' : attachDisabledReason,
     };
     contract.resumeCommand = {
       ...(contract.resumeCommand || {}),
       state: canAttach ? 'supported' : 'unsupported',
       command: canAttach ? launchCommand : '',
       evidence: canAttach ? 'crm-tmux-session-name' : '',
-      disabledReason: canAttach ? '' : 'No deterministic resume command was resolved for this agent folder.',
+      disabledReason: canAttach ? '' : attachDisabledReason,
     };
+    const hasFolderLaunch = Boolean(enabled && launchCommand && !isAttachCommand);
     contract.folderLaunch = {
       ...(contract.folderLaunch || {}),
-      state: enabled && launchCommand && !canAttach ? 'conditional' : 'unsupported',
-      command: launchCommand || '',
+      state: hasFolderLaunch ? 'conditional' : 'unsupported',
+      command: hasFolderLaunch ? launchCommand : '',
       cwd: launchCwd || agentPath,
-      disabledReason: enabled && launchCommand && !canAttach
+      disabledReason: hasFolderLaunch
         ? UNTRUSTED_AGENT_LAUNCH_REASON
         : 'No trusted folder launch command was resolved for this agent folder.',
     };
@@ -1112,13 +1138,38 @@ class SessionDiscovery {
   }
 
   _resolveCrmAgentAttachCommand(agentPath, agentName) {
+    const sessionName = this._resolveCrmAgentSessionName(agentPath, agentName);
+    return sessionName ? `tmux attach -t ${sessionName}` : '';
+  }
+
+  _resolveCrmAgentSessionName(agentPath, agentName) {
     if (process.platform === 'win32') return '';
     const safeAgent = this._safeAgentName(agentName);
     if (!safeAgent) return '';
     const normalizedPath = String(agentPath || '').replace(/\\/g, '/');
     if (!/\/claude-remote-manager\/agents\/[^/]+$/i.test(normalizedPath)) return '';
     const instanceId = this._safeAgentName(process.env.CRM_INSTANCE_ID || 'default') || 'default';
-    return `tmux attach -t crm-${instanceId}-${safeAgent}`;
+    return `crm-${instanceId}-${safeAgent}`;
+  }
+
+  async _isTmuxSessionAvailable(sessionName) {
+    try {
+      return await this.hasTmuxSession(sessionName) === true;
+    } catch {
+      return false;
+    }
+  }
+
+  async _hasTmuxSession(sessionName) {
+    try {
+      await execFileAsync('tmux', ['has-session', '-t', `=${sessionName}`], {
+        timeout: 1500,
+        windowsHide: true,
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   _resolveAgentLaunchCwd(config, agentPath) {

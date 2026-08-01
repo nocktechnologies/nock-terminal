@@ -513,6 +513,7 @@ function registerIPC() {
     terminalManager,
     projectProfiles,
     getAllowedProjectRoots,
+    getDefaultTerminalCwd: () => app.getPath('home'),
     getSettingsSnapshot,
     // Opening a terminal in a repo marks it trusted for git pull/push/fetch (#8663).
     onTerminalLaunched: (cwd) => fileService?.trustRepoRoot(cwd),

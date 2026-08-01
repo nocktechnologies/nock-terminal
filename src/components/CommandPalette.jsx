@@ -72,7 +72,7 @@ export default function CommandPalette({
         inputRef.current?.focus();
       }
     }, 0);
-  }, [open, preset?.key]);
+  }, [open, preset?.focusTask, preset?.key, preset?.query, preset?.sessionId]);
 
   useEffect(() => {
     if (!open || taskTargetId || !orderedTaskTargets[0]) return;
@@ -89,7 +89,7 @@ export default function CommandPalette({
     if (!selectedTaskTarget || selectedTaskTarget.kind === 'agent') return;
     const profile = profilesByPath?.[selectedTaskTarget.path] || {};
     setTaskAgentId(profile.defaultAgent || DEFAULT_AGENT_ID);
-  }, [profilesByPath, selectedTaskTarget?.id]);
+  }, [profilesByPath, selectedTaskTarget]);
 
   useEffect(() => {
     if (!open) return undefined;

@@ -3,10 +3,33 @@ import assert from 'node:assert/strict';
 
 import {
   createTabId,
+  duplicateTabWithFreshIds,
   nextActiveTabId,
   removeTabById,
   reorderTabList,
 } from '../src/utils/tabOps.mjs';
+
+test('duplicateTabWithFreshIds gives both terminal panes independent process ids', () => {
+  const ids = ['duplicate-primary', 'duplicate-split'];
+  const original = {
+    id: 'tab-1',
+    title: 'Agent',
+    pinned: true,
+    initialInput: 'old task',
+    splitContent: { type: 'terminal', id: 'split-1' },
+  };
+
+  const duplicate = duplicateTabWithFreshIds(original, () => ids.shift());
+
+  assert.deepEqual(duplicate, {
+    id: 'duplicate-primary',
+    title: 'Agent',
+    pinned: false,
+    initialInput: '',
+    splitContent: { type: 'terminal', id: 'duplicate-split' },
+  });
+  assert.deepEqual(original.splitContent, { type: 'terminal', id: 'split-1' });
+});
 
 test('createTabId produces unique prefixed ids', () => {
   const first = createTabId();

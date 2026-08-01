@@ -171,7 +171,7 @@ export default function EditorPane({
     };
     loadMonaco();
     return () => { cancelled = true; };
-  }, []);
+  }, [notifyUnsavedFiles]);
 
   useEffect(() => {
     const loadNewFiles = async () => {
@@ -245,7 +245,7 @@ export default function EditorPane({
       editor.restoreViewState(entry.viewState);
     }
     editor.updateOptions({ readOnly: content.readOnly || false });
-  }, [activeFile, fileContents]);
+  }, [activeFile, applyContentToCleanModel, fileContents, notifyUnsavedFiles]);
 
   useEffect(() => {
     const openPaths = new Set(files);

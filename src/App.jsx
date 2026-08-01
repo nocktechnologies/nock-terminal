@@ -18,6 +18,7 @@ import {
   sanitizeStagedTerminalInput,
 } from './utils/agentLaunchers.mjs';
 import { createTabId } from './utils/tabOps.mjs';
+import { collectLiveTerminalIds } from './utils/terminalLifecycle.mjs';
 import { buildUnsavedFilesMessage, collectUnsavedFiles } from './utils/unsavedFiles.mjs';
 import useTabs from './hooks/useTabs.js';
 import useTabSplits from './hooks/useTabSplits.js';
@@ -97,7 +98,7 @@ export default function App() {
 
   const cleanupStaleTerminals = useCallback(async () => {
     try {
-      const liveTerminalIds = tabs.map((tab) => tab.id);
+      const liveTerminalIds = collectLiveTerminalIds(tabs);
       await window.nockTerminal.terminal.reapStale({
         liveTerminalIds,
         rendererStartedAt: rendererStartedAtRef.current,
@@ -263,7 +264,7 @@ export default function App() {
       shell: launch.command,
       cwd: launch.cwd || undefined,
     });
-  }, [getProfileForPath, openTab, openTerminalTab, recordDispatchRun]);
+  }, [getProfileForPath, openTab, openTerminalTab, recordDispatchRun, showDispatchError]);
 
   const executePrompt = useCallback((promptText) => {
     const text = typeof promptText === 'string' ? promptText.trim() : '';
