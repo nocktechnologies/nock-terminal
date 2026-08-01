@@ -2,7 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  harnessAccessSurface,
   findHarnessSeatCollision,
+  isCurrentHarnessSeat,
+  isHarnessLaunchPending,
   removeHarnessSeat,
   upsertHarnessSeat,
 } from '../src/utils/harnessConsole.mjs';
@@ -36,4 +39,25 @@ test('findHarnessSeatCollision ignores the edited seat but protects another seat
 
   assert.equal(findHarnessSeatCollision([mira, crane], mira.id, mira.id), null);
   assert.equal(findHarnessSeatCollision([mira, crane], crane.id, mira.id), crane);
+});
+
+test('interactive harness modes stay embedded while an engine shell opens a terminal tab', () => {
+  assert.equal(harnessAccessSurface('console'), 'embedded');
+  assert.equal(harnessAccessSurface('watch'), 'embedded');
+  assert.equal(harnessAccessSurface('shell'), 'terminal');
+});
+
+test('pending harness launches are scoped to their seat and optional mode', () => {
+  const pending = { seatId: mira.id, mode: 'console' };
+
+  assert.equal(isHarnessLaunchPending(pending, mira.id), true);
+  assert.equal(isHarnessLaunchPending(pending, mira.id, 'console'), true);
+  assert.equal(isHarnessLaunchPending(pending, mira.id, 'watch'), false);
+  assert.equal(isHarnessLaunchPending(pending, 'kevin@mac:22/crane'), false);
+  assert.equal(isHarnessLaunchPending(null, mira.id), false);
+});
+
+test('stale harness launch results do not belong to the newly selected seat', () => {
+  assert.equal(isCurrentHarnessSeat(mira.id, mira.id), true);
+  assert.equal(isCurrentHarnessSeat('kevin@mac:22/crane', mira.id), false);
 });

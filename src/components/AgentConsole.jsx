@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   ArrowUpRight,
@@ -20,9 +20,14 @@ import {
 } from 'lucide-react';
 import {
   findHarnessSeatCollision,
+  harnessAccessSurface,
+  isCurrentHarnessSeat,
+  isHarnessLaunchPending,
   removeHarnessSeat,
   upsertHarnessSeat,
 } from '../utils/harnessConsole.mjs';
+import { createTabId } from '../utils/tabOps.mjs';
+import TerminalView from './TerminalView';
 
 const EMPTY_FORM = {
   label: '',
@@ -33,7 +38,7 @@ const EMPTY_FORM = {
   enginePath: '',
 };
 
-const ACCESS_MODES = [
+const EMBEDDED_ACCESS_MODES = [
   {
     mode: 'console',
     Icon: Radio,
@@ -47,13 +52,6 @@ const ACCESS_MODES = [
     eyebrow: 'Read only',
     title: 'Watch the stream',
     detail: 'Follow speech, tools, results, and turn boundaries without any chance of sending.',
-  },
-  {
-    mode: 'shell',
-    Icon: Terminal,
-    eyebrow: 'Engine',
-    title: 'Open harness shell',
-    detail: 'Start a normal remote terminal in the shared engine repository.',
   },
 ];
 
@@ -89,6 +87,10 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [embeddedSession, setEmbeddedSession] = useState(null);
+  const [pendingLaunch, setPendingLaunch] = useState(null);
+  const [launchError, setLaunchError] = useState('');
+  const selectedSeatIdRef = useRef(selectedSeatId);
 
   const selectedSeat = useMemo(
     () => seats.find((seat) => seat.id === selectedSeatId) || seats[0] || null,
@@ -99,6 +101,8 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const loading = selectedSeat?.id === loadingSeatId;
   const presentation = statusPresentation(snapshot, loading, seatError);
   const StatusIcon = presentation.Icon;
+  const selectedSeatLaunchPending = isHarnessLaunchPending(pendingLaunch, selectedSeat?.id);
+  const launchingMode = selectedSeatLaunchPending ? pendingLaunch.mode : '';
 
   const loadSeats = useCallback(async () => {
     try {
@@ -151,6 +155,54 @@ export default function AgentConsole({ active, onOpenTerminal }) {
     const interval = setInterval(() => refreshSeat(selectedSeat.id), 12_000);
     return () => clearInterval(interval);
   }, [active, refreshSeat, selectedSeat?.id]);
+
+  useEffect(() => {
+    selectedSeatIdRef.current = selectedSeatId;
+    setEmbeddedSession((current) => (
+      current && current.seatId !== selectedSeatId ? null : current
+    ));
+    setPendingLaunch((current) => (
+      current && current.seatId !== selectedSeatId ? null : current
+    ));
+    setLaunchError('');
+  }, [selectedSeatId]);
+
+  const openHarnessAccess = useCallback(async (seat, mode) => {
+    if (!seat?.id) return;
+    if (harnessAccessSurface(mode) === 'terminal') {
+      onOpenTerminal(seat, mode);
+      return;
+    }
+    if (isHarnessLaunchPending(pendingLaunch, seat.id)) return;
+
+    setPendingLaunch({ seatId: seat.id, mode });
+    setLaunchError('');
+    try {
+      const launch = await window.nockTerminal.harness.launch(seat.id, mode);
+      if (!isCurrentHarnessSeat(selectedSeatIdRef.current, seat.id)) return;
+      if (!launch?.success || !launch.command) {
+        setLaunchError(launch?.error || `Nock Terminal could not open ${seat.label}.`);
+        return;
+      }
+      setEmbeddedSession({
+        id: createTabId('harness-live'),
+        seatId: seat.id,
+        label: seat.label,
+        mode,
+        title: launch.title,
+        command: launch.command,
+        cwd: launch.cwd,
+      });
+    } catch {
+      if (isCurrentHarnessSeat(selectedSeatIdRef.current, seat.id)) {
+        setLaunchError(`Nock Terminal could not open ${seat.label}. Check the saved SSH connection.`);
+      }
+    } finally {
+      setPendingLaunch((current) => (
+        isHarnessLaunchPending(current, seat.id, mode) ? null : current
+      ));
+    }
+  }, [onOpenTerminal, pendingLaunch]);
 
   const beginAdd = () => {
     setEditingSeatId('');
@@ -324,27 +376,81 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                 </div>
 
                 <div className="px-7 py-7">
-                  <SectionLabel number="01" title="Live access" detail="Every mode opens in a real PTY-backed terminal." />
-                  <div className="mt-4 divide-y divide-[var(--ac-line)] border-y border-[var(--ac-line)]">
-                    {ACCESS_MODES.map(({ mode, Icon, eyebrow, title, detail }) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => onOpenTerminal(selectedSeat, mode)}
-                        className={`ac-access-row ${mode === 'console' ? 'ac-access-primary' : ''}`}
-                      >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-current">
-                          <Icon className="h-4 w-4" aria-hidden="true" />
-                        </span>
-                        <span className="min-w-0 flex-1 text-left">
-                          <span className="block text-[9px] font-semibold uppercase tracking-[0.2em] opacity-65">{eyebrow}</span>
-                          <span className="mt-0.5 block text-sm font-semibold">{title}</span>
-                          <span className="mt-1 block max-w-2xl text-[11px] leading-5 opacity-60">{detail}</span>
-                        </span>
-                        <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      </button>
-                    ))}
+                  <SectionLabel number="01" title="Live channel" detail="Speak and watch without leaving Agent Console." />
+                  <div className="ac-live-frame mt-4">
+                    <div className="ac-live-toolbar">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className={`ac-live-link-dot ${embeddedSession ? 'ac-live-link-dot-connected' : ''}`} aria-hidden="true" />
+                        <div className="min-w-0">
+                          <div className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-[var(--ac-muted)]">Operator link</div>
+                          <div className="truncate text-[11px] font-semibold text-[var(--ac-text-strong)]">
+                            {embeddedSession ? `${embeddedSession.label} · ${embeddedSession.mode === 'console' ? 'interactive' : 'read only'}` : 'No live session attached'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="ml-auto flex items-center gap-1" role="group" aria-label="Live channel mode">
+                        {EMBEDDED_ACCESS_MODES.map(({ mode, Icon, eyebrow }) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => openHarnessAccess(selectedSeat, mode)}
+                            disabled={selectedSeatLaunchPending}
+                            className={`ac-mode-button ${embeddedSession?.mode === mode ? 'ac-mode-button-active' : ''}`}
+                            aria-pressed={embeddedSession?.mode === mode}
+                          >
+                            <Icon className="h-3 w-3" aria-hidden="true" />
+                            {launchingMode === mode ? 'Connecting…' : eyebrow}
+                          </button>
+                        ))}
+                        {embeddedSession && (
+                          <button type="button" onClick={() => setEmbeddedSession(null)} className="ac-mode-button" aria-label="Disconnect live channel">
+                            <X className="h-3 w-3" aria-hidden="true" />
+                            Disconnect
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="ac-live-terminal" aria-live="polite">
+                      {embeddedSession ? (
+                        <TerminalView
+                          key={embeddedSession.id}
+                          tabId={embeddedSession.id}
+                          cwd={embeddedSession.cwd}
+                          active={active}
+                          launchCommand={embeddedSession.command}
+                          destroyOnUnmount
+                        />
+                      ) : (
+                        <div className="ac-live-empty">
+                          <Radio className="h-6 w-6 text-[var(--ac-signal-bright)]" aria-hidden="true" />
+                          <div className="mt-3 font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--ac-text-strong)]">Live PTY ready</div>
+                          <p className="mt-2 max-w-md text-center text-[11px] leading-5 text-[var(--ac-muted)]">Attach interactively to watch and speak, or open the same harness stream in protected read-only mode.</p>
+                          <div className="mt-4 flex flex-wrap justify-center gap-2">
+                            {EMBEDDED_ACCESS_MODES.map(({ mode, Icon, title }) => (
+                              <button key={mode} type="button" onClick={() => openHarnessAccess(selectedSeat, mode)} disabled={selectedSeatLaunchPending} className={mode === 'console' ? 'ac-button ac-button-signal' : 'ac-button ac-button-quiet'}>
+                                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                                {launchingMode === mode ? 'Connecting…' : title}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                  {launchError && <p className="mt-3 text-[11px] text-[var(--ac-danger)]" role="alert">{launchError}</p>}
+
+                  <button type="button" onClick={() => openHarnessAccess(selectedSeat, 'shell')} className="ac-access-row mt-3 border-y border-[var(--ac-line)]">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-current">
+                      <Terminal className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className="block text-[9px] font-semibold uppercase tracking-[0.2em] opacity-65">Engine</span>
+                      <span className="mt-0.5 block text-sm font-semibold">Open harness shell</span>
+                      <span className="mt-1 block max-w-2xl text-[11px] leading-5 opacity-60">Open a separate terminal tab in the shared engine repository.</span>
+                    </span>
+                    <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  </button>
                 </div>
 
                 <div className="border-t border-[var(--ac-line)] px-7 py-7">

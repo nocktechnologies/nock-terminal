@@ -13,3 +13,16 @@ export function findHarnessSeatCollision(seats, candidateId, editingSeatId = '')
   const current = Array.isArray(seats) ? seats : [];
   return current.find((seat) => seat?.id === candidateId && seat.id !== editingSeatId) || null;
 }
+
+export function harnessAccessSurface(mode) {
+  return mode === 'shell' ? 'terminal' : 'embedded';
+}
+
+export function isHarnessLaunchPending(pendingLaunch, seatId, mode = '') {
+  if (!pendingLaunch || pendingLaunch.seatId !== seatId) return false;
+  return !mode || pendingLaunch.mode === mode;
+}
+
+export function isCurrentHarnessSeat(selectedSeatId, launchSeatId) {
+  return Boolean(selectedSeatId) && selectedSeatId === launchSeatId;
+}
