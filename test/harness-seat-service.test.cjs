@@ -129,6 +129,7 @@ test('builds only allowlisted typed control commands with quoted review notes', 
   assert.match(acknowledge.remoteCommand, /Reviewed Kevin'"'"'s failure/);
   assert.match(acknowledge.remoteCommand, /--operator 'nock-terminal'/);
   assert.equal(buildHarnessControlDescriptor(seat, 'restart-daemon').success, false);
+  assert.equal(buildHarnessControlDescriptor(seat, 'pause', null).success, false);
   assert.equal(buildHarnessControlDescriptor(seat, 'queue-retry', { wakeId: -4 }).success, false);
   assert.equal(buildHarnessControlDescriptor(seat, 'queue-acknowledge', { wakeId: 4, note: 'short' }).success, false);
 });

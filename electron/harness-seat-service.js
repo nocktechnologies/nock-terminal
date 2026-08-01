@@ -255,6 +255,13 @@ function buildHarnessControlDescriptor(input, action, options = {}) {
       error: 'Harness control request did not match a configured seat and supported action.',
     };
   }
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    return {
+      success: false,
+      code: 'IPC_VALIDATION_ERROR',
+      error: 'Harness control options must be an object.',
+    };
+  }
 
   const queueAction = action === 'queue-retry' || action === 'queue-acknowledge';
   const wakeId = options.wakeId;
