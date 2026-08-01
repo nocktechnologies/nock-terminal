@@ -29,7 +29,7 @@ __NOCK_QUEUE__
 # 886 working    message/telegram a=1  :: {"prompt": "Build the console"}
 (1 rows; counts={'completed': 884, 'purged': 1, 'working': 1})
 __NOCK_CONTROL__
-{"schemaVersion":1,"ok":true,"action":"status","message":"Operator control state is current.","state":{"seatState":"working:message","paused":false,"turn":{"active":true,"id":"turn-123","batch":886,"class":"message","steerable":true},"queueCounts":{"working":1},"capabilities":{"pause":true,"resume":false,"cancelTurn":true,"queueRetry":true,"queueAcknowledge":true}}}
+{"schemaVersion":1,"ok":true,"action":"status","message":"Operator control state is current.","state":{"seatState":"working:message","paused":false,"turn":{"active":true,"id":"turn-123","batch":886,"class":"message","steerable":true},"queueCounts":{"working":1},"capabilities":{"pause":true,"resume":false,"cancelTurn":true,"queueRetry":true,"queueAcknowledge":true},"pulse":{"schemaVersion":1,"updatedAt":1785618000.25,"disposition":"working","reason":{"code":"TURN_ACTIVE","summary":"Advance the operator console"},"objective":"Make Mira visibly own and advance durable work.","currentAction":{"id":"wake:886","source":"telegram","title":"Advance the operator console","startedAt":1785617900},"nextAction":{"id":"plan:step:4","source":"active_plan","title":"Verify the live Agent Pulse","status":"current"},"initiative":{"state":"working","reasonCode":"TURN_ACTIVE","attentionRequired":false,"wakeId":886,"nextJudgmentAt":1785625200},"lastOutcome":{"verified":true,"observedAt":1785617600,"snapshotId":"drive:892","transition":"ACTED","selectedCandidate":{"id":"nock:9","title":"Agent Pulse"},"summary":"Implemented the authoritative pulse contract.","evidence":["tests/test_agent_pulse.py"]}}}}
 __NOCK_MANIFEST__
 {"runtime":"claude","model":"claude-opus-4-8[1m]","home":"/home/nock/Dev/mira-home","work_dir":"/home/nock/Dev/mira-home","turn_budget":{"enabled":true,"hard_s":1200}}
 `;
@@ -76,6 +76,41 @@ test('parses harness status, queue, and residence evidence into a bounded snapsh
         queueRetry: true,
         queueAcknowledge: true,
       },
+      pulse: {
+        schemaVersion: 1,
+        updatedAt: 1785618000.25,
+        disposition: 'working',
+        reason: { code: 'TURN_ACTIVE', summary: 'Advance the operator console' },
+        objective: 'Make Mira visibly own and advance durable work.',
+        currentAction: {
+          id: 'wake:886',
+          source: 'telegram',
+          title: 'Advance the operator console',
+          startedAt: 1785617900,
+        },
+        nextAction: {
+          id: 'plan:step:4',
+          source: 'active_plan',
+          title: 'Verify the live Agent Pulse',
+          status: 'current',
+        },
+        initiative: {
+          state: 'working',
+          reasonCode: 'TURN_ACTIVE',
+          attentionRequired: false,
+          wakeId: 886,
+          nextJudgmentAt: 1785625200,
+        },
+        lastOutcome: {
+          verified: true,
+          observedAt: 1785617600,
+          snapshotId: 'drive:892',
+          transition: 'ACTED',
+          selectedCandidate: { id: 'nock:9', title: 'Agent Pulse' },
+          summary: 'Implemented the authoritative pulse contract.',
+          evidence: ['tests/test_agent_pulse.py'],
+        },
+      },
     },
     manifest: {
       runtime: 'claude',
@@ -85,6 +120,46 @@ test('parses harness status, queue, and residence evidence into a bounded snapsh
       turnBudget: { enabled: true, hardSeconds: 1200 },
     },
   });
+});
+
+test('rejects an unversioned pulse and bounds every published pulse field', () => {
+  const longText = 'x'.repeat(2400);
+  const output = snapshotOutput.replace(
+    /"pulse":\{.*\}\}\}\n__NOCK_MANIFEST__/,
+    `"pulse":{"schemaVersion":1,"updatedAt":12,"disposition":"blocked","reason":{"code":"PLAN_BLOCKED","summary":"${longText}"},"objective":"${longText}","currentAction":null,"nextAction":{"id":"plan:step:1","source":"active_plan","title":"${longText}","status":"blocked"},"initiative":{"state":"blocked","reasonCode":"PLAN_BLOCKED","attentionRequired":true,"wakeId":null,"nextJudgmentAt":null},"lastOutcome":{"verified":false,"observedAt":10,"snapshotId":"drive:1","transition":"GATED","selectedCandidate":null,"summary":"${longText}","evidence":["${longText}","second"]}}}}\n__NOCK_MANIFEST__`
+  );
+
+  const pulse = parseHarnessSnapshot(output, seat).control.pulse;
+  assert.equal(pulse.objective.length, 500);
+  assert.equal(pulse.reason.summary.length, 1500);
+  assert.equal(pulse.nextAction.title.length, 500);
+  assert.equal(pulse.lastOutcome.summary.length, 1500);
+  assert.equal(pulse.lastOutcome.evidence[0].length, 500);
+
+  const legacy = snapshotOutput.replace('"schemaVersion":1,"updatedAt":1785618000.25', '"schemaVersion":2,"updatedAt":1785618000.25');
+  assert.equal(parseHarnessSnapshot(legacy, seat).control.pulse, null);
+
+  const impossibleTime = snapshotOutput.replace('"updatedAt":1785618000.25', '"updatedAt":1e300');
+  assert.equal(parseHarnessSnapshot(impossibleTime, seat).control.pulse.updatedAt, null);
+
+  const unknownInitiative = snapshotOutput.replace('"initiative":{"state":"working"', '"initiative":{"state":"plotting"');
+  assert.equal(parseHarnessSnapshot(unknownInitiative, seat).control.pulse, null);
+
+  const missingActionId = snapshotOutput.replace('"id":"wake:886"', '"id":""');
+  assert.equal(parseHarnessSnapshot(missingActionId, seat).control.pulse.currentAction, null);
+
+  const missingActionTitle = snapshotOutput.replace(
+    '"currentAction":{"id":"wake:886","source":"telegram","title":"Advance the operator console"',
+    '"currentAction":{"id":"wake:886","source":"telegram","title":""'
+  );
+  assert.equal(parseHarnessSnapshot(missingActionTitle, seat).control.pulse.currentAction, null);
+
+  const evidenceItems = Array.from({ length: 25 }, (_, index) => `"evidence-${index}"`).join(',');
+  const excessEvidence = snapshotOutput.replace(
+    '"evidence":["tests/test_agent_pulse.py"]',
+    `"evidence":[${evidenceItems}]`
+  );
+  assert.equal(parseHarnessSnapshot(excessEvidence, seat).control.pulse.lastOutcome.evidence.length, 20);
 });
 
 test('builds quoted console, watch, and shell launches only from normalized seats', () => {

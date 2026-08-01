@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   harnessAccessSurface,
+  harnessAgentPulse,
   harnessControlState,
   harnessQueueActions,
   findHarnessSeatCollision,
@@ -135,5 +136,56 @@ test('only dead wakes expose retry and acknowledge actions', () => {
   assert.deepEqual(harnessQueueActions({ state: 'working' }, { queueRetry: true, queueAcknowledge: true }), {
     canRetry: false,
     canAcknowledge: false,
+  });
+});
+
+test('agent pulse stays unavailable until the engine publishes the v1 contract', () => {
+  assert.deepEqual(harnessAgentPulse(null), {
+    available: false,
+    disposition: 'unknown',
+    reasonCode: 'PULSE_UNAVAILABLE',
+    reasonSummary: 'This engine has not published Agent Pulse yet.',
+    objective: '',
+    currentAction: null,
+    nextAction: null,
+    initiative: {
+      state: 'unknown',
+      reasonCode: '',
+      attentionRequired: false,
+      wakeId: null,
+      nextJudgmentAt: null,
+    },
+    lastOutcome: null,
+    updatedAt: null,
+  });
+});
+
+test('agent pulse exposes the bounded engine-authored work chain without inference', () => {
+  assert.deepEqual(harnessAgentPulse({
+    control: {
+      available: true,
+      pulse: {
+        schemaVersion: 1,
+        updatedAt: 1785618000.25,
+        disposition: 'working',
+        reason: { code: 'TURN_ACTIVE', summary: 'Advance the operator console' },
+        objective: 'Make owned work visible.',
+        currentAction: { id: 'wake:886', source: 'telegram', title: 'Build pulse', startedAt: 1785617900 },
+        nextAction: { id: 'plan:step:4', source: 'active_plan', title: 'Live verify', status: 'current' },
+        initiative: { state: 'working', reasonCode: 'TURN_ACTIVE', attentionRequired: false, wakeId: 886, nextJudgmentAt: 1785625200 },
+        lastOutcome: { verified: true, observedAt: 1785617600, transition: 'ACTED', summary: 'Published pulse.', evidence: ['test evidence'] },
+      },
+    },
+  }), {
+    available: true,
+    disposition: 'working',
+    reasonCode: 'TURN_ACTIVE',
+    reasonSummary: 'Advance the operator console',
+    objective: 'Make owned work visible.',
+    currentAction: { id: 'wake:886', source: 'telegram', title: 'Build pulse', startedAt: 1785617900 },
+    nextAction: { id: 'plan:step:4', source: 'active_plan', title: 'Live verify', status: 'current' },
+    initiative: { state: 'working', reasonCode: 'TURN_ACTIVE', attentionRequired: false, wakeId: 886, nextJudgmentAt: 1785625200 },
+    lastOutcome: { verified: true, observedAt: 1785617600, transition: 'ACTED', summary: 'Published pulse.', evidence: ['test evidence'] },
+    updatedAt: 1785618000.25,
   });
 });
