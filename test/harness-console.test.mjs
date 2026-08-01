@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   harnessAccessSurface,
   findHarnessSeatCollision,
+  isHarnessLaunchPending,
   removeHarnessSeat,
   upsertHarnessSeat,
 } from '../src/utils/harnessConsole.mjs';
@@ -43,4 +44,14 @@ test('interactive harness modes stay embedded while an engine shell opens a term
   assert.equal(harnessAccessSurface('console'), 'embedded');
   assert.equal(harnessAccessSurface('watch'), 'embedded');
   assert.equal(harnessAccessSurface('shell'), 'terminal');
+});
+
+test('pending harness launches are scoped to their seat and optional mode', () => {
+  const pending = { seatId: mira.id, mode: 'console' };
+
+  assert.equal(isHarnessLaunchPending(pending, mira.id), true);
+  assert.equal(isHarnessLaunchPending(pending, mira.id, 'console'), true);
+  assert.equal(isHarnessLaunchPending(pending, mira.id, 'watch'), false);
+  assert.equal(isHarnessLaunchPending(pending, 'kevin@mac:22/crane'), false);
+  assert.equal(isHarnessLaunchPending(null, mira.id), false);
 });

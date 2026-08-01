@@ -247,21 +247,20 @@ kbd {
 
 /* ---------- Persistent agent console ---------- */
 .agent-console {
-  --ac-bg: oklch(12.5% 0.012 285);
-  --ac-surface: oklch(14.5% 0.015 285);
-  --ac-panel: oklch(17% 0.018 285);
-  --ac-panel-raised: oklch(20% 0.022 285);
-  --ac-line: oklch(24% 0.025 285);
-  --ac-line-bright: oklch(31% 0.045 285);
-  --ac-text: oklch(88% 0.014 285);
-  --ac-text-strong: oklch(94% 0.012 285);
-  --ac-muted: oklch(56% 0.028 285);
-  --ac-muted-strong: oklch(67% 0.03 285);
-  --ac-signal: oklch(58% 0.16 262);
-  --ac-signal-dark: oklch(35% 0.1 262);
-  --ac-signal-bright: oklch(84% 0.15 205);
-  --ac-live: oklch(77% 0.14 160);
-  --ac-danger: oklch(70% 0.17 25);
+  --ac-bg: theme('colors.nock.bg');
+  --ac-surface: theme('colors.nock.bg-elevated');
+  --ac-panel: theme('colors.nock.card');
+  --ac-line: theme('colors.nock.border');
+  --ac-line-bright: theme('colors.nock.border-bright');
+  --ac-text: theme('colors.nock.text');
+  --ac-text-strong: theme('colors.nock.text');
+  --ac-muted: theme('colors.nock.text-muted');
+  --ac-muted-strong: theme('colors.nock.text-dim');
+  --ac-signal: theme('colors.nock.accent-blue');
+  --ac-signal-dark: theme('colors.nock.border-bright');
+  --ac-signal-bright: theme('colors.nock.accent-cyan');
+  --ac-live: theme('colors.nock.green');
+  --ac-danger: theme('colors.nock.red');
 
   container-type: inline-size;
   font-family: Sora, system-ui, sans-serif;
@@ -295,7 +294,7 @@ kbd {
 .ac-button:hover { transform: translateY(-1px); }
 .ac-button:active { transform: translateY(0); }
 .ac-button:disabled { cursor: not-allowed; opacity: 0.45; transform: none; }
-.ac-button-signal { border-color: var(--ac-signal); background: var(--ac-signal); color: var(--ac-text-strong); box-shadow: 0 0 18px -8px var(--ac-signal); }
+.ac-button-signal { border-color: var(--ac-signal); background: var(--ac-signal); color: var(--ac-bg); box-shadow: 0 0 18px -8px var(--ac-signal); }
 .ac-button-signal:hover { background: var(--ac-signal-bright); border-color: var(--ac-signal-bright); color: var(--ac-bg); }
 .ac-button-quiet { color: var(--ac-muted-strong); background: var(--ac-surface); }
 .ac-button-quiet:hover { border-color: var(--ac-muted); color: var(--ac-text-strong); }

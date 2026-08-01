@@ -17,3 +17,8 @@ export function findHarnessSeatCollision(seats, candidateId, editingSeatId = '')
 export function harnessAccessSurface(mode) {
   return mode === 'shell' ? 'terminal' : 'embedded';
 }
+
+export function isHarnessLaunchPending(pendingLaunch, seatId, mode = '') {
+  if (!pendingLaunch || pendingLaunch.seatId !== seatId) return false;
+  return !mode || pendingLaunch.mode === mode;
+}

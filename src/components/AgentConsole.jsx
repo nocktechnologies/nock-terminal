@@ -21,6 +21,7 @@ import {
 import {
   findHarnessSeatCollision,
   harnessAccessSurface,
+  isHarnessLaunchPending,
   removeHarnessSeat,
   upsertHarnessSeat,
 } from '../utils/harnessConsole.mjs';
@@ -86,10 +87,9 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [embeddedSession, setEmbeddedSession] = useState(null);
-  const [launchingMode, setLaunchingMode] = useState('');
+  const [pendingLaunch, setPendingLaunch] = useState(null);
   const [launchError, setLaunchError] = useState('');
   const selectedSeatIdRef = useRef(selectedSeatId);
-  selectedSeatIdRef.current = selectedSeatId;
 
   const selectedSeat = useMemo(
     () => seats.find((seat) => seat.id === selectedSeatId) || seats[0] || null,
@@ -100,6 +100,8 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const loading = selectedSeat?.id === loadingSeatId;
   const presentation = statusPresentation(snapshot, loading, seatError);
   const StatusIcon = presentation.Icon;
+  const selectedSeatLaunchPending = isHarnessLaunchPending(pendingLaunch, selectedSeat?.id);
+  const launchingMode = selectedSeatLaunchPending ? pendingLaunch.mode : '';
 
   const loadSeats = useCallback(async () => {
     try {
@@ -154,20 +156,25 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   }, [active, refreshSeat, selectedSeat?.id]);
 
   useEffect(() => {
+    selectedSeatIdRef.current = selectedSeatId;
     setEmbeddedSession((current) => (
+      current && current.seatId !== selectedSeatId ? null : current
+    ));
+    setPendingLaunch((current) => (
       current && current.seatId !== selectedSeatId ? null : current
     ));
     setLaunchError('');
   }, [selectedSeatId]);
 
   const openHarnessAccess = useCallback(async (seat, mode) => {
-    if (!seat?.id || launchingMode) return;
+    if (!seat?.id) return;
     if (harnessAccessSurface(mode) === 'terminal') {
       onOpenTerminal(seat, mode);
       return;
     }
+    if (isHarnessLaunchPending(pendingLaunch, seat.id)) return;
 
-    setLaunchingMode(mode);
+    setPendingLaunch({ seatId: seat.id, mode });
     setLaunchError('');
     try {
       const launch = await window.nockTerminal.harness.launch(seat.id, mode);
@@ -188,9 +195,11 @@ export default function AgentConsole({ active, onOpenTerminal }) {
     } catch {
       setLaunchError(`Nock Terminal could not open ${seat.label}. Check the saved SSH connection.`);
     } finally {
-      setLaunchingMode('');
+      setPendingLaunch((current) => (
+        isHarnessLaunchPending(current, seat.id, mode) ? null : current
+      ));
     }
-  }, [launchingMode, onOpenTerminal]);
+  }, [onOpenTerminal, pendingLaunch]);
 
   const beginAdd = () => {
     setEditingSeatId('');
@@ -382,7 +391,7 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                             key={mode}
                             type="button"
                             onClick={() => openHarnessAccess(selectedSeat, mode)}
-                            disabled={Boolean(launchingMode)}
+                            disabled={selectedSeatLaunchPending}
                             className={`ac-mode-button ${embeddedSession?.mode === mode ? 'ac-mode-button-active' : ''}`}
                             aria-pressed={embeddedSession?.mode === mode}
                           >
@@ -416,7 +425,7 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                           <p className="mt-2 max-w-md text-center text-[11px] leading-5 text-[var(--ac-muted)]">Attach interactively to watch and speak, or open the same harness stream in protected read-only mode.</p>
                           <div className="mt-4 flex flex-wrap justify-center gap-2">
                             {EMBEDDED_ACCESS_MODES.map(({ mode, Icon, title }) => (
-                              <button key={mode} type="button" onClick={() => openHarnessAccess(selectedSeat, mode)} disabled={Boolean(launchingMode)} className={mode === 'console' ? 'ac-button ac-button-signal' : 'ac-button ac-button-quiet'}>
+                              <button key={mode} type="button" onClick={() => openHarnessAccess(selectedSeat, mode)} disabled={selectedSeatLaunchPending} className={mode === 'console' ? 'ac-button ac-button-signal' : 'ac-button ac-button-quiet'}>
                                 <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                                 {launchingMode === mode ? 'Connecting…' : title}
                               </button>

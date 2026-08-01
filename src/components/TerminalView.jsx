@@ -174,7 +174,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
       });
 
       if (!result.success) {
-        term.writeln(`\x1b[31mFailed to create terminal: ${result.error}\x1b[0m`);
+        if (!disposed) term.writeln(`\x1b[31mFailed to create terminal: ${result.error}\x1b[0m`);
         return;
       }
       ptyCreated = true;
