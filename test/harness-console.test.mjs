@@ -215,6 +215,7 @@ test('presence exposes engine-published public activity without inferring though
 test('presence timestamps never throw for malformed runtime values', () => {
   assert.equal(presenceDateTime(1785618000.25), '2026-08-01T21:00:00.250Z');
   assert.equal(presenceDateTime(Number.NaN), undefined);
+  assert.equal(presenceDateTime(Number.MAX_VALUE), undefined);
   assert.equal(presenceDateTime('1785618000'), undefined);
   assert.equal(presenceDateTime(undefined), undefined);
 });

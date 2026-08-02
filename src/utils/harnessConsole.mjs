@@ -101,7 +101,8 @@ export function harnessPresence(snapshot) {
 
 export function presenceDateTime(value) {
   if (!Number.isFinite(value)) return undefined;
-  return new Date(value * 1000).toISOString();
+  const date = new Date(value * 1000);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
 }
 
 export function harnessQueueActions(wake, capabilities = {}) {
