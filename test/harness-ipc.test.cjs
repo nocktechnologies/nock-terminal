@@ -184,6 +184,34 @@ test('rejects a second mutating control while one is in flight for the seat', as
   assert.equal((await first).success, true);
 });
 
+test('rejects a second operator message while one is in flight for the seat', async () => {
+  const ipc = createIpcHarness();
+  let resolveMessage;
+  let calls = 0;
+  const pendingMessage = new Promise((resolve) => { resolveMessage = resolve; });
+  registerHarnessIPC({
+    ipcMain: ipc.ipcMain,
+    service: {
+      message: () => {
+        calls += 1;
+        return pendingMessage;
+      },
+    },
+    getSettingsSnapshot: () => ({ harnessSeats: [seat] }),
+  });
+
+  const first = ipc.invoke('harness:message', { seatId: seat.id, text: 'Keep moving.' });
+  const secondPending = ipc.invoke('harness:message', { seatId: seat.id, text: 'And report back.' });
+  await Promise.resolve();
+  const observedCalls = calls;
+  resolveMessage({ success: true, disposition: 'steered' });
+  const second = await secondPending;
+
+  assert.equal(observedCalls, 1);
+  assert.equal(second.code, 'HARNESS_MESSAGE_IN_FLIGHT');
+  assert.equal((await first).success, true);
+});
+
 test('coalesces concurrent snapshot requests for the same seat', async () => {
   const ipc = createIpcHarness();
   let resolveSnapshot;

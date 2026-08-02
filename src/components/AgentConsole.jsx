@@ -39,6 +39,7 @@ import {
   harnessQueueActions,
   isCurrentHarnessSeat,
   isHarnessLaunchPending,
+  presenceDateTime,
   removeHarnessSeat,
   upsertHarnessSeat,
 } from '../utils/harnessConsole.mjs';
@@ -980,7 +981,7 @@ function AgentPresencePanel({
           const EventIcon = presentation.Icon;
           return (
             <div key={item.id} className={`ac-presence-event ac-presence-event-${presentation.tone}`}>
-              <time dateTime={new Date(item.at * 1000).toISOString()}>{formatPresenceTime(item.at)}</time>
+              <time dateTime={presenceDateTime(item.at)}>{formatPresenceTime(item.at)}</time>
               <span className="ac-presence-node" aria-hidden="true"><EventIcon /></span>
               <div className="min-w-0">
                 <div className="ac-presence-event-label">

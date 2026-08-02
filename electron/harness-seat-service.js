@@ -1,6 +1,6 @@
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const { normalizeHarnessSeat } = require('./harness-seat-utils');
+const { hasControlCharacters, normalizeHarnessSeat } = require('./harness-seat-utils');
 
 const execFileAsync = promisify(execFile);
 const SNAPSHOT_TIMEOUT_MS = 8000;
@@ -51,13 +51,6 @@ const PRESENCE_KINDS = new Set([
 
 function boundedText(value, limit) {
   return typeof value === 'string' ? value.trim().slice(0, limit) : '';
-}
-
-function hasControlCharacters(value) {
-  return [...String(value)].some((character) => {
-    const code = character.codePointAt(0);
-    return code < 32 || code === 127;
-  });
 }
 
 const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'g');

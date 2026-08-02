@@ -99,6 +99,11 @@ export function harnessPresence(snapshot) {
   };
 }
 
+export function presenceDateTime(value) {
+  if (!Number.isFinite(value)) return undefined;
+  return new Date(value * 1000).toISOString();
+}
+
 export function harnessQueueActions(wake, capabilities = {}) {
   const dead = wake?.state === 'dead';
   return {

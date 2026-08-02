@@ -6,6 +6,7 @@ import {
   harnessAgentPulse,
   harnessControlState,
   harnessPresence,
+  presenceDateTime,
   harnessQueueActions,
   findHarnessSeatCollision,
   isCurrentHarnessSeat,
@@ -209,4 +210,11 @@ test('presence exposes engine-published public activity without inferring though
   assert.equal(presence.events.length, 2);
   assert.equal(presence.events.at(-1).summary, 'I verified the new residence.');
   assert.deepEqual(harnessPresence(null), { available: false, events: [] });
+});
+
+test('presence timestamps never throw for malformed runtime values', () => {
+  assert.equal(presenceDateTime(1785618000.25), '2026-08-01T21:00:00.250Z');
+  assert.equal(presenceDateTime(Number.NaN), undefined);
+  assert.equal(presenceDateTime('1785618000'), undefined);
+  assert.equal(presenceDateTime(undefined), undefined);
 });

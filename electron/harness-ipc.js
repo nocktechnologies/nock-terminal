@@ -1,16 +1,10 @@
 const { CONTROL_ACTIONS } = require('./harness-seat-service');
+const { hasControlCharacters } = require('./harness-seat-utils');
 
 const HARNESS_MODES = new Set(['console', 'watch', 'shell']);
 
 function error(code, message) {
   return { success: false, code, error: message };
-}
-
-function hasControlCharacters(value) {
-  return [...String(value)].some((character) => {
-    const code = character.codePointAt(0);
-    return code < 32 || code === 127;
-  });
 }
 
 function requestSeat(payload, getSettingsSnapshot) {
