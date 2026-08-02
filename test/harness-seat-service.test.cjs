@@ -304,6 +304,24 @@ test('sends an operator message and preserves the engine steer-or-queue verdict'
   assert.equal(calls[0].options.timeout, 8000);
 });
 
+test('sanitizes the remote message confirmation before returning it to the renderer', async () => {
+  const service = new HarnessSeatService({
+    runSsh: async () => ({
+      stdout: `${JSON.stringify({
+        schemaVersion: 1,
+        ok: true,
+        disposition: 'queued',
+        message: '\u001b[31mQueued\u0000 safely',
+      })}\n`,
+      stderr: '',
+    }),
+  });
+
+  const result = await service.message(seat, 'Continue.');
+
+  assert.equal(result.message, 'Queued safely');
+});
+
 test('fetches a snapshot through non-interactive bounded SSH', async () => {
   const calls = [];
   const service = new HarnessSeatService({

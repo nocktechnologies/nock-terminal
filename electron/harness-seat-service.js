@@ -512,7 +512,7 @@ function parseHarnessMessageResponse(text) {
         ok: response.ok,
         disposition: ['steered', 'queued'].includes(disposition) ? disposition : 'unknown',
         code: boundedText(response.code, 80),
-        message: boundedText(response.message, 500),
+        message: boundedDisplayText(response.message, 500),
       };
     } catch {
       // Ignore bounded remote diagnostics before the typed response.
