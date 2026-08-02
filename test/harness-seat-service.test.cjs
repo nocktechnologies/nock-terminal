@@ -5,6 +5,7 @@ const {
   HarnessSeatService,
   buildHarnessControlDescriptor,
   buildHarnessLaunchDescriptor,
+  buildHarnessMessageDescriptor,
   parseHarnessSnapshot,
 } = require('../electron/harness-seat-service');
 
@@ -29,7 +30,7 @@ __NOCK_QUEUE__
 # 886 working    message/telegram a=1  :: {"prompt": "Build the console"}
 (1 rows; counts={'completed': 884, 'purged': 1, 'working': 1})
 __NOCK_CONTROL__
-{"schemaVersion":1,"ok":true,"action":"status","message":"Operator control state is current.","state":{"seatState":"working:message","paused":false,"turn":{"active":true,"id":"turn-123","batch":886,"class":"message","steerable":true},"queueCounts":{"working":1},"capabilities":{"pause":true,"resume":false,"cancelTurn":true,"queueRetry":true,"queueAcknowledge":true},"pulse":{"schemaVersion":1,"updatedAt":1785618000.25,"disposition":"working","reason":{"code":"TURN_ACTIVE","summary":"Advance the operator console"},"objective":"Make Mira visibly own and advance durable work.","currentAction":{"id":"wake:886","source":"telegram","title":"Advance the operator console","startedAt":1785617900},"nextAction":{"id":"plan:step:4","source":"active_plan","title":"Verify the live Agent Pulse","status":"current"},"initiative":{"state":"working","reasonCode":"TURN_ACTIVE","attentionRequired":false,"wakeId":886,"nextJudgmentAt":1785625200},"lastOutcome":{"verified":true,"observedAt":1785617600,"snapshotId":"drive:892","transition":"ACTED","selectedCandidate":{"id":"nock:9","title":"Agent Pulse"},"summary":"Implemented the authoritative pulse contract.","evidence":["tests/test_agent_pulse.py"]}}}}
+{"schemaVersion":1,"ok":true,"action":"status","message":"Operator control state is current.","state":{"seatState":"working:message","paused":false,"turn":{"active":true,"id":"turn-123","batch":886,"class":"message","steerable":true},"queueCounts":{"working":1},"capabilities":{"pause":true,"resume":false,"cancelTurn":true,"queueRetry":true,"queueAcknowledge":true},"pulse":{"schemaVersion":1,"updatedAt":1785618000.25,"disposition":"working","reason":{"code":"TURN_ACTIVE","summary":"Advance the operator console"},"objective":"Make Mira visibly own and advance durable work.","currentAction":{"id":"wake:886","source":"telegram","title":"Advance the operator console","startedAt":1785617900},"nextAction":{"id":"plan:step:4","source":"active_plan","title":"Verify the live Agent Pulse","status":"current"},"initiative":{"state":"working","reasonCode":"TURN_ACTIVE","attentionRequired":false,"wakeId":886,"nextJudgmentAt":1785625200},"lastOutcome":{"verified":true,"observedAt":1785617600,"snapshotId":"drive:892","transition":"ACTED","selectedCandidate":{"id":"nock:9","title":"Agent Pulse"},"summary":"Implemented the authoritative pulse contract.","evidence":["tests/test_agent_pulse.py"]}},"presence":{"schemaVersion":1,"events":[{"id":"event-1","at":1785617900,"kind":"turn_started","summary":"Started Advance the operator console","wakeId":886,"turnId":"turn-123","source":"telegram"},{"id":"event-2","at":1785617950,"kind":"tool_started","summary":"Using Bash","wakeId":886,"turnId":"turn-123","source":"telegram"},{"id":"event-3","at":1785617990,"kind":"progress","summary":"I found the stale plan and am checking its owner.","wakeId":886,"turnId":"turn-123","source":"telegram"}]}}}
 __NOCK_MANIFEST__
 {"runtime":"claude","model":"claude-opus-4-8[1m]","home":"/home/nock/Dev/mira-home","work_dir":"/home/nock/Dev/mira-home","turn_budget":{"enabled":true,"hard_s":1200}}
 `;
@@ -111,6 +112,38 @@ test('parses harness status, queue, and residence evidence into a bounded snapsh
           evidence: ['tests/test_agent_pulse.py'],
         },
       },
+      presence: {
+        schemaVersion: 1,
+        events: [
+          {
+            id: 'event-1',
+            at: 1785617900,
+            kind: 'turn_started',
+            summary: 'Started Advance the operator console',
+            wakeId: 886,
+            turnId: 'turn-123',
+            source: 'telegram',
+          },
+          {
+            id: 'event-2',
+            at: 1785617950,
+            kind: 'tool_started',
+            summary: 'Using Bash',
+            wakeId: 886,
+            turnId: 'turn-123',
+            source: 'telegram',
+          },
+          {
+            id: 'event-3',
+            at: 1785617990,
+            kind: 'progress',
+            summary: 'I found the stale plan and am checking its owner.',
+            wakeId: 886,
+            turnId: 'turn-123',
+            source: 'telegram',
+          },
+        ],
+      },
     },
     manifest: {
       runtime: 'claude',
@@ -162,6 +195,33 @@ test('rejects an unversioned pulse and bounds every published pulse field', () =
   assert.equal(parseHarnessSnapshot(excessEvidence, seat).control.pulse.lastOutcome.evidence.length, 20);
 });
 
+test('presence drops unknown kinds and caps every event at the SSH boundary', () => {
+  const controlLine = snapshotOutput.match(/__NOCK_CONTROL__\n([^\n]+)/)[1];
+  const response = JSON.parse(controlLine);
+  response.state.presence.events = [
+    { id: 'private', at: 10, kind: 'thinking', summary: 'must not cross' },
+    ...Array.from({ length: 30 }, (_, index) => ({
+      id: `event-${index}`,
+      at: 100 + index,
+      kind: 'progress',
+      summary: `public-${index}-${'x'.repeat(900)}`,
+      wakeId: index + 1,
+      turnId: 't'.repeat(300),
+      source: 's'.repeat(200),
+    })),
+  ];
+  const output = snapshotOutput.replace(controlLine, JSON.stringify(response));
+
+  const presence = parseHarnessSnapshot(output, seat).control.presence;
+
+  assert.equal(presence.events.length, 24);
+  assert.equal(presence.events[0].id, 'event-6');
+  assert.equal(presence.events.at(-1).summary.length, 600);
+  assert.equal(presence.events.at(-1).turnId.length, 160);
+  assert.equal(presence.events.at(-1).source.length, 80);
+  assert.equal(presence.events.some((event) => event.id === 'private'), false);
+});
+
 test('builds quoted console, watch, and shell launches only from normalized seats', () => {
   const consoleLaunch = buildHarnessLaunchDescriptor(seat, 'console');
   const watchLaunch = buildHarnessLaunchDescriptor(seat, 'watch');
@@ -207,6 +267,41 @@ test('builds only allowlisted typed control commands with quoted review notes', 
   assert.equal(buildHarnessControlDescriptor(seat, 'pause', null).success, false);
   assert.equal(buildHarnessControlDescriptor(seat, 'queue-retry', { wakeId: -4 }).success, false);
   assert.equal(buildHarnessControlDescriptor(seat, 'queue-acknowledge', { wakeId: 4, note: 'short' }).success, false);
+});
+
+test('builds a bounded quoted message command for the seat-local speak seam', () => {
+  const message = buildHarnessMessageDescriptor(seat, "Check Kevin's latest note; don't stop.");
+
+  assert.equal(message.success, true);
+  assert.match(message.remoteCommand, /\.\/scripts\/speak 'mira' --text/);
+  assert.match(message.remoteCommand, /Kevin'"'"'s latest note/);
+  assert.equal(buildHarnessMessageDescriptor(seat, '').success, false);
+  assert.equal(buildHarnessMessageDescriptor(seat, 'x'.repeat(2001)).success, false);
+  assert.equal(buildHarnessMessageDescriptor(seat, 'first\nsecond').success, false);
+  assert.equal(buildHarnessMessageDescriptor({ ...seat, host: 'bad;host' }, 'hello').success, false);
+});
+
+test('sends an operator message and preserves the engine steer-or-queue verdict', async () => {
+  const calls = [];
+  const service = new HarnessSeatService({
+    runSsh: async (args, options) => {
+      calls.push({ args, options });
+      return {
+        stdout: '{"schemaVersion":1,"ok":true,"disposition":"steered","message":"Message steered into the active turn."}\n',
+        stderr: '',
+      };
+    },
+  });
+
+  const result = await service.message(seat, 'Keep moving on the current item.');
+
+  assert.deepEqual(result, {
+    success: true,
+    disposition: 'steered',
+    message: 'Message steered into the active turn.',
+  });
+  assert.match(calls[0].args.at(-1), /scripts\/speak/);
+  assert.equal(calls[0].options.timeout, 8000);
 });
 
 test('fetches a snapshot through non-interactive bounded SSH', async () => {

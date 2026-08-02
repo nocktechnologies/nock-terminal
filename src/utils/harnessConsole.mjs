@@ -88,6 +88,17 @@ export function harnessAgentPulse(snapshot) {
   };
 }
 
+export function harnessPresence(snapshot) {
+  const presence = snapshot?.control?.available === true ? snapshot.control.presence : null;
+  if (!presence || presence.schemaVersion !== 1 || !Array.isArray(presence.events)) {
+    return { available: false, events: [] };
+  }
+  return {
+    available: true,
+    events: presence.events,
+  };
+}
+
 export function harnessQueueActions(wake, capabilities = {}) {
   const dead = wake?.state === 'dead';
   return {

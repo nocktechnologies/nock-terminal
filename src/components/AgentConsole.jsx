@@ -9,6 +9,7 @@ import {
   Eye,
   Gauge,
   HardDrive,
+  MessageSquareText,
   Octagon,
   Pause,
   Play,
@@ -17,12 +18,14 @@ import {
   RefreshCw,
   RotateCcw,
   Server,
+  Send,
   Settings2,
   ShieldCheck,
   Target,
   Terminal,
   TriangleAlert,
   Trash2,
+  Wrench,
   Wifi,
   WifiOff,
   X,
@@ -32,6 +35,7 @@ import {
   harnessAccessSurface,
   harnessAgentPulse,
   harnessControlState,
+  harnessPresence,
   harnessQueueActions,
   isCurrentHarnessSeat,
   isHarnessLaunchPending,
@@ -98,6 +102,15 @@ function formatPulseTime(value, fallback = 'not scheduled') {
   });
 }
 
+function formatPresenceTime(value) {
+  if (!Number.isFinite(value)) return '--:--:--';
+  return new Date(value * 1000).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
 function pulseTone(disposition) {
   if (disposition === 'working') return 'live';
   if (disposition === 'ready') return 'signal';
@@ -125,6 +138,9 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const [cancelArmed, setCancelArmed] = useState(false);
   const [acknowledgingWakeId, setAcknowledgingWakeId] = useState(null);
   const [ackNote, setAckNote] = useState('');
+  const [messageDraft, setMessageDraft] = useState('');
+  const [messagePending, setMessagePending] = useState(false);
+  const [messageFeedback, setMessageFeedback] = useState(null);
   const selectedSeatIdRef = useRef(selectedSeatId);
   const controlInFlightSeatsRef = useRef(new Set());
 
@@ -141,6 +157,7 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   const launchingMode = selectedSeatLaunchPending ? pendingLaunch.mode : '';
   const controlState = harnessControlState(snapshot);
   const agentPulse = harnessAgentPulse(snapshot);
+  const presence = harnessPresence(snapshot);
   const controlCapabilities = {
     queueRetry: controlState.canQueueRetry,
     queueAcknowledge: controlState.canQueueAcknowledge,
@@ -162,9 +179,9 @@ export default function AgentConsole({ active, onOpenTerminal }) {
     }
   }, []);
 
-  const refreshSeat = useCallback(async (seatId) => {
+  const refreshSeat = useCallback(async (seatId, { background = false } = {}) => {
     if (!seatId) return;
-    setLoadingSeatId(seatId);
+    if (!background) setLoadingSeatId(seatId);
     try {
       const result = await window.nockTerminal.harness.snapshot(seatId);
       if (result?.success && result.snapshot) {
@@ -185,7 +202,9 @@ export default function AgentConsole({ active, onOpenTerminal }) {
         [seatId]: 'Nock Terminal could not reach this harness seat. Check the SSH connection.',
       }));
     } finally {
-      setLoadingSeatId((current) => current === seatId ? '' : current);
+      if (!background) {
+        setLoadingSeatId((current) => current === seatId ? '' : current);
+      }
     }
   }, []);
 
@@ -196,7 +215,10 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   useEffect(() => {
     if (!active || !selectedSeat?.id) return undefined;
     refreshSeat(selectedSeat.id);
-    const interval = setInterval(() => refreshSeat(selectedSeat.id), 12_000);
+    const interval = setInterval(
+      () => refreshSeat(selectedSeat.id, { background: true }),
+      4_000,
+    );
     return () => clearInterval(interval);
   }, [active, refreshSeat, selectedSeat?.id]);
 
@@ -214,6 +236,9 @@ export default function AgentConsole({ active, onOpenTerminal }) {
     setCancelArmed(false);
     setAcknowledgingWakeId(null);
     setAckNote('');
+    setMessageDraft('');
+    setMessagePending(false);
+    setMessageFeedback(null);
   }, [selectedSeatId]);
 
   useEffect(() => {
@@ -286,6 +311,39 @@ export default function AgentConsole({ active, onOpenTerminal }) {
       setPendingControl((current) => current?.seatId === seat.id ? null : current);
     }
   }, [refreshSeat, selectedSeat]);
+
+  const sendHarnessMessage = useCallback(async (event) => {
+    event.preventDefault();
+    const text = messageDraft.trim();
+    const seat = selectedSeat;
+    if (!seat?.id || !text || text.length > 2000 || messagePending) return;
+    setMessagePending(true);
+    setMessageFeedback(null);
+    try {
+      const result = await window.nockTerminal.harness.message(seat.id, text);
+      if (!isCurrentHarnessSeat(selectedSeatIdRef.current, seat.id)) return;
+      if (!result?.success) {
+        setMessageFeedback({ tone: 'error', message: result?.error || 'The harness did not confirm that message.' });
+        return;
+      }
+      setMessageDraft('');
+      setMessageFeedback({
+        tone: 'success',
+        message: result.disposition === 'steered'
+          ? 'Inside the active turn.'
+          : 'Queued as the next operator turn.',
+      });
+      await refreshSeat(seat.id, { background: true });
+    } catch {
+      if (isCurrentHarnessSeat(selectedSeatIdRef.current, seat.id)) {
+        setMessageFeedback({ tone: 'error', message: 'The harness link failed. No delivery was confirmed.' });
+      }
+    } finally {
+      if (isCurrentHarnessSeat(selectedSeatIdRef.current, seat.id)) {
+        setMessagePending(false);
+      }
+    }
+  }, [messageDraft, messagePending, refreshSeat, selectedSeat]);
 
   const beginAdd = () => {
     setEditingSeatId('');
@@ -461,7 +519,18 @@ export default function AgentConsole({ active, onOpenTerminal }) {
                 <AgentPulsePanel pulse={agentPulse} />
 
                 <div className="px-7 py-7">
-                  <SectionLabel number="02" title="Live channel" detail="Speak and watch without leaving Agent Console." />
+                  <SectionLabel number="02" title="Live channel" detail="Public progress, direct steering, and the full PTY when you want it." />
+                  <AgentPresencePanel
+                    presence={presence}
+                    agentLabel={selectedSeat.label}
+                    turnActive={controlState.turnActive}
+                    steerable={controlState.steerable}
+                    messageDraft={messageDraft}
+                    messagePending={messagePending}
+                    messageFeedback={messageFeedback}
+                    onMessageChange={setMessageDraft}
+                    onMessageSubmit={sendHarnessMessage}
+                  />
                   <div className="ac-live-frame mt-4">
                     <div className="ac-live-toolbar">
                       <div className="flex min-w-0 items-center gap-3">
@@ -849,6 +918,119 @@ function AgentPulsePanel({ pulse }) {
           </div>
         </>
       )}
+    </section>
+  );
+}
+
+const PRESENCE_PRESENTATION = {
+  turn_started: { label: 'Turn', Icon: Radio, tone: 'signal' },
+  progress: { label: 'Mira', Icon: MessageSquareText, tone: 'voice' },
+  tool_started: { label: 'Tool', Icon: Wrench, tone: 'tool' },
+  tool_finished: { label: 'Tool', Icon: Check, tone: 'quiet' },
+  operator_steered: { label: 'Kevin', Icon: ArrowRight, tone: 'operator' },
+  operator_queued: { label: 'Kevin', Icon: Clock3, tone: 'operator' },
+  still_working: { label: 'Active', Icon: Activity, tone: 'live' },
+  milestone: { label: 'Done', Icon: Check, tone: 'live' },
+  waiting: { label: 'Waiting', Icon: Clock3, tone: 'warning' },
+  error: { label: 'Attention', Icon: TriangleAlert, tone: 'danger' },
+};
+
+function AgentPresencePanel({
+  presence,
+  agentLabel,
+  turnActive,
+  steerable,
+  messageDraft,
+  messagePending,
+  messageFeedback,
+  onMessageChange,
+  onMessageSubmit,
+}) {
+  const feedRef = useRef(null);
+  const events = presence.events.slice(-12);
+  const latestId = events.at(-1)?.id;
+
+  useEffect(() => {
+    if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
+  }, [latestId]);
+
+  return (
+    <section className="ac-presence mt-4" aria-labelledby="agent-presence-title">
+      <div className="ac-presence-heading">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className={`ac-presence-radio ${turnActive ? 'ac-presence-radio-live' : ''}`} aria-hidden="true">
+            <Radio className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
+            <div id="agent-presence-title" className="font-display text-sm font-semibold text-[var(--ac-text-strong)]">Presence stream</div>
+            <div className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.16em] text-[var(--ac-muted)]">
+              Public working notes · engine-observed tools · no private reasoning
+            </div>
+          </div>
+        </div>
+        <div className={`ac-presence-state ${turnActive ? 'ac-presence-state-live' : ''}`}>
+          <span aria-hidden="true" />
+          {turnActive ? 'On task' : 'Standing by'}
+        </div>
+      </div>
+
+      <div ref={feedRef} className="ac-presence-feed" role="log" aria-live="polite" aria-relevant="additions text">
+        {events.length > 0 ? events.map((item) => {
+          const presentation = PRESENCE_PRESENTATION[item.kind] || PRESENCE_PRESENTATION.progress;
+          const EventIcon = presentation.Icon;
+          return (
+            <div key={item.id} className={`ac-presence-event ac-presence-event-${presentation.tone}`}>
+              <time dateTime={new Date(item.at * 1000).toISOString()}>{formatPresenceTime(item.at)}</time>
+              <span className="ac-presence-node" aria-hidden="true"><EventIcon /></span>
+              <div className="min-w-0">
+                <div className="ac-presence-event-label">
+                  {item.kind === 'progress' ? agentLabel : presentation.label}
+                  {item.wakeId ? <span>wake #{item.wakeId}</span> : null}
+                </div>
+                <div className="ac-presence-event-copy">{item.summary}</div>
+              </div>
+            </div>
+          );
+        }) : (
+          <div className="ac-presence-empty">
+            <Activity className="h-4 w-4" aria-hidden="true" />
+            <span>
+              {presence.available
+                ? `No public activity from ${agentLabel} yet. The next turn will write here.`
+                : 'This seat needs the Presence-enabled harness update.'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <form className="ac-presence-composer" onSubmit={onMessageSubmit}>
+        <label htmlFor="agent-presence-message" className="sr-only">Speak to {agentLabel}</label>
+        <input
+          id="agent-presence-message"
+          type="text"
+          value={messageDraft}
+          maxLength={2000}
+          onChange={(event) => onMessageChange(event.target.value)}
+          placeholder={steerable ? `Speak into ${agentLabel}'s active turn…` : `Queue the next turn for ${agentLabel}…`}
+          className="ac-presence-input"
+          disabled={messagePending || !presence.available}
+        />
+        <div className="ac-presence-delivery" aria-live="polite">
+          {messageFeedback ? (
+            <span className={`ac-presence-feedback ac-presence-feedback-${messageFeedback.tone}`}>{messageFeedback.message}</span>
+          ) : (
+            <span>{steerable ? 'Enter steers live' : 'Enter queues durably'}</span>
+          )}
+        </div>
+        <button
+          type="submit"
+          className="ac-presence-send"
+          disabled={messagePending || !presence.available || !messageDraft.trim()}
+        >
+          <Send className="h-3.5 w-3.5" aria-hidden="true" />
+          {messagePending ? 'Sending…' : 'Speak'}
+        </button>
+      </form>
     </section>
   );
 }
