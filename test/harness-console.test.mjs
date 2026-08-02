@@ -5,6 +5,8 @@ import {
   harnessAccessSurface,
   harnessAgentPulse,
   harnessControlState,
+  harnessPresence,
+  presenceDateTime,
   harnessQueueActions,
   findHarnessSeatCollision,
   isCurrentHarnessSeat,
@@ -188,4 +190,32 @@ test('agent pulse exposes the bounded engine-authored work chain without inferen
     lastOutcome: { verified: true, observedAt: 1785617600, transition: 'ACTED', summary: 'Published pulse.', evidence: ['test evidence'] },
     updatedAt: 1785618000.25,
   });
+});
+
+test('presence exposes engine-published public activity without inferring thoughts', () => {
+  const presence = harnessPresence({
+    control: {
+      available: true,
+      presence: {
+        schemaVersion: 1,
+        events: [
+          { id: 'event-1', at: 100, kind: 'turn_started', summary: 'Started the migration', wakeId: 9 },
+          { id: 'event-2', at: 110, kind: 'progress', summary: 'I verified the new residence.', wakeId: 9 },
+        ],
+      },
+    },
+  });
+
+  assert.equal(presence.available, true);
+  assert.equal(presence.events.length, 2);
+  assert.equal(presence.events.at(-1).summary, 'I verified the new residence.');
+  assert.deepEqual(harnessPresence(null), { available: false, events: [] });
+});
+
+test('presence timestamps never throw for malformed runtime values', () => {
+  assert.equal(presenceDateTime(1785618000.25), '2026-08-01T21:00:00.250Z');
+  assert.equal(presenceDateTime(Number.NaN), undefined);
+  assert.equal(presenceDateTime(Number.MAX_VALUE), undefined);
+  assert.equal(presenceDateTime('1785618000'), undefined);
+  assert.equal(presenceDateTime(undefined), undefined);
 });

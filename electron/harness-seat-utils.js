@@ -13,6 +13,13 @@ function cleanString(value, maxLength) {
   return normalized;
 }
 
+function hasControlCharacters(value) {
+  return [...String(value)].some((character) => {
+    const code = character.codePointAt(0);
+    return code < 32 || code === 127;
+  });
+}
+
 function normalizeHarnessSeat(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
 
@@ -59,6 +66,7 @@ function normalizeHarnessSeats(value) {
 }
 
 module.exports = {
+  hasControlCharacters,
   MAX_HARNESS_SEATS,
   normalizeHarnessSeat,
   normalizeHarnessSeats,

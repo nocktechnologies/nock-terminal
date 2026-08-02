@@ -45,6 +45,7 @@ test('registers the harness console IPC contract', () => {
     'harness:control',
     'harness:launch',
     'harness:list',
+    'harness:message',
     'harness:snapshot',
   ]);
 });
@@ -67,6 +68,10 @@ test('resolves renderer requests only against configured seats', async () => {
         calls.push(['control', configuredSeat, action, options]);
         return { success: true, control: { ok: true, action } };
       },
+      message: (configuredSeat, text) => {
+        calls.push(['message', configuredSeat, text]);
+        return { success: true, disposition: 'queued' };
+      },
     },
     getSettingsSnapshot: () => ({ harnessSeats: [seat], defaultShell: '/bin/zsh' }),
   });
@@ -75,11 +80,13 @@ test('resolves renderer requests only against configured seats', async () => {
   assert.equal((await ipc.invoke('harness:snapshot', { seatId: seat.id })).success, true);
   assert.equal((await ipc.invoke('harness:launch', { seatId: seat.id, mode: 'console' })).command, 'trusted command');
   assert.equal((await ipc.invoke('harness:control', { seatId: seat.id, action: 'pause' })).success, true);
+  assert.equal((await ipc.invoke('harness:message', { seatId: seat.id, text: 'Keep moving.' })).success, true);
   assert.equal((await ipc.invoke('harness:snapshot', { seatId: 'unknown' })).code, 'HARNESS_SEAT_NOT_FOUND');
   assert.equal((await ipc.invoke('harness:launch', { seatId: seat.id, mode: 'restart' })).code, 'IPC_VALIDATION_ERROR');
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
   assert.deepEqual(calls[1][3], { shell: '/bin/zsh' });
   assert.deepEqual(calls[2], ['control', seat, 'pause', {}]);
+  assert.deepEqual(calls[3], ['message', seat, 'Keep moving.']);
 });
 
 test('rejects malformed harness request payloads before calling the service', async () => {
@@ -90,6 +97,7 @@ test('rejects malformed harness request payloads before calling the service', as
       snapshot: async () => assert.fail('service must not run for invalid payloads'),
       launch: () => assert.fail('service must not run for invalid payloads'),
       control: () => assert.fail('service must not run for invalid payloads'),
+      message: () => assert.fail('service must not run for invalid payloads'),
     },
     getSettingsSnapshot: () => ({ harnessSeats: [seat] }),
   });
@@ -107,6 +115,16 @@ test('rejects malformed harness request payloads before calling the service', as
     { seatId: seat.id, action: 'queue-acknowledge', wakeId: 8, note: 'x'.repeat(501) },
   ]) {
     assert.equal((await ipc.invoke('harness:control', payload)).code, 'IPC_VALIDATION_ERROR');
+  }
+
+  for (const payload of [
+    { seatId: seat.id },
+    { seatId: seat.id, text: '' },
+    { seatId: seat.id, text: 'x'.repeat(2001) },
+    { seatId: seat.id, text: 'first\nsecond' },
+    { seatId: seat.id, text: 42 },
+  ]) {
+    assert.equal((await ipc.invoke('harness:message', payload)).code, 'IPC_VALIDATION_ERROR');
   }
 });
 
@@ -163,6 +181,34 @@ test('rejects a second mutating control while one is in flight for the seat', as
 
   assert.equal(observedCalls, 1);
   assert.equal(second.code, 'HARNESS_CONTROL_IN_FLIGHT');
+  assert.equal((await first).success, true);
+});
+
+test('rejects a second operator message while one is in flight for the seat', async () => {
+  const ipc = createIpcHarness();
+  let resolveMessage;
+  let calls = 0;
+  const pendingMessage = new Promise((resolve) => { resolveMessage = resolve; });
+  registerHarnessIPC({
+    ipcMain: ipc.ipcMain,
+    service: {
+      message: () => {
+        calls += 1;
+        return pendingMessage;
+      },
+    },
+    getSettingsSnapshot: () => ({ harnessSeats: [seat] }),
+  });
+
+  const first = ipc.invoke('harness:message', { seatId: seat.id, text: 'Keep moving.' });
+  const secondPending = ipc.invoke('harness:message', { seatId: seat.id, text: 'And report back.' });
+  await Promise.resolve();
+  const observedCalls = calls;
+  resolveMessage({ success: true, disposition: 'steered' });
+  const second = await secondPending;
+
+  assert.equal(observedCalls, 1);
+  assert.equal(second.code, 'HARNESS_MESSAGE_IN_FLIGHT');
   assert.equal((await first).success, true);
 });
 

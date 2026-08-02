@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     list: () => ipcRenderer.invoke('harness:list'),
     snapshot: (seatId) => ipcRenderer.invoke('harness:snapshot', { seatId }),
     launch: (seatId, mode) => ipcRenderer.invoke('harness:launch', { seatId, mode }),
+    message: (seatId, text) => ipcRenderer.invoke('harness:message', { seatId, text }),
     control: (seatId, action, options = {}) => ipcRenderer.invoke('harness:control', {
       seatId,
       action,

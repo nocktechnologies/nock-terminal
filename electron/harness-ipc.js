@@ -1,4 +1,5 @@
 const { CONTROL_ACTIONS } = require('./harness-seat-service');
+const { hasControlCharacters } = require('./harness-seat-utils');
 
 const HARNESS_MODES = new Set(['console', 'watch', 'shell']);
 
@@ -24,6 +25,7 @@ function requestSeat(payload, getSettingsSnapshot) {
 function registerHarnessIPC({ ipcMain, service, getSettingsSnapshot }) {
   const snapshotInFlight = new Map();
   const controlInFlight = new Map();
+  const messageInFlight = new Set();
 
   ipcMain.handle('harness:list', () => {
     const seats = getSettingsSnapshot()?.harnessSeats;
@@ -87,6 +89,22 @@ function registerHarnessIPC({ ipcMain, service, getSettingsSnapshot }) {
     });
     controlInFlight.set(resolved.seat.id, pending);
     return pending;
+  });
+
+  ipcMain.handle('harness:message', (_, payload) => {
+    const resolved = requestSeat(payload, getSettingsSnapshot);
+    if (resolved.error) return resolved.error;
+    const text = typeof payload.text === 'string' ? payload.text.trim() : '';
+    if (text.length < 1 || text.length > 2000 || hasControlCharacters(text)) {
+      return error('IPC_VALIDATION_ERROR', 'Harness messages must contain 1–2000 characters.');
+    }
+    if (messageInFlight.has(resolved.seat.id)) {
+      return error('HARNESS_MESSAGE_IN_FLIGHT', 'Another operator message is still awaiting confirmation for this seat.');
+    }
+    messageInFlight.add(resolved.seat.id);
+    return Promise.resolve(service.message(resolved.seat, text)).finally(() => {
+      messageInFlight.delete(resolved.seat.id);
+    });
   });
 }
 

@@ -1,6 +1,6 @@
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const { normalizeHarnessSeat } = require('./harness-seat-utils');
+const { hasControlCharacters, normalizeHarnessSeat } = require('./harness-seat-utils');
 
 const execFileAsync = promisify(execFile);
 const SNAPSHOT_TIMEOUT_MS = 8000;
@@ -36,9 +36,33 @@ const PULSE_INITIATIVE_STATES = new Set([
   'attention_required',
 ]);
 const MAX_PULSE_EPOCH_SECONDS = 4102444800;
+const PRESENCE_KINDS = new Set([
+  'turn_started',
+  'progress',
+  'tool_started',
+  'tool_finished',
+  'operator_steered',
+  'operator_queued',
+  'still_working',
+  'milestone',
+  'waiting',
+  'error',
+]);
 
 function boundedText(value, limit) {
   return typeof value === 'string' ? value.trim().slice(0, limit) : '';
+}
+
+const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'g');
+
+function boundedDisplayText(value, limit) {
+  if (typeof value !== 'string') return '';
+  const withoutAnsi = value.replace(ANSI_ESCAPE, '');
+  const printable = [...withoutAnsi].map((character) => {
+    const code = character.codePointAt(0);
+    return code < 32 || code === 127 ? ' ' : character;
+  }).join('');
+  return printable.trim().replace(/\s+/g, ' ').slice(0, limit);
 }
 
 function finiteNumber(value) {
@@ -131,6 +155,30 @@ function sanitizeAgentPulse(pulse) {
     },
     lastOutcome: sanitizePulseOutcome(pulse.lastOutcome),
   };
+}
+
+function sanitizePresence(presence) {
+  if (!presence || typeof presence !== 'object' || Array.isArray(presence)) return null;
+  if (presence.schemaVersion !== 1 || !Array.isArray(presence.events)) return null;
+  const events = [];
+  for (const raw of presence.events.slice(-40)) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const id = boundedDisplayText(raw.id, 160);
+    const kind = boundedText(raw.kind, 40).toLowerCase();
+    const summary = boundedDisplayText(raw.summary, 600);
+    const at = epochSeconds(raw.at);
+    if (!id || !PRESENCE_KINDS.has(kind) || !summary || at === null) continue;
+    events.push({
+      id,
+      at,
+      kind,
+      summary,
+      wakeId: Number.isSafeInteger(raw.wakeId) && raw.wakeId > 0 ? raw.wakeId : null,
+      turnId: boundedDisplayText(raw.turnId, 160) || null,
+      source: boundedDisplayText(raw.source, 80) || null,
+    });
+  }
+  return { schemaVersion: 1, events: events.slice(-24) };
 }
 
 function quotePosix(value) {
@@ -263,6 +311,7 @@ function emptyControlState() {
       queueAcknowledge: false,
     },
     pulse: null,
+    presence: null,
   };
 }
 
@@ -294,6 +343,7 @@ function sanitizeControlPayloadState(state) {
       queueAcknowledge: capabilities.queueAcknowledge === true,
     },
     pulse: sanitizeAgentPulse(state.pulse),
+    presence: sanitizePresence(state.presence),
   };
 }
 
@@ -418,6 +468,50 @@ function buildHarnessControlDescriptor(input, action, options = {}) {
     remoteCommand,
     sshArgs: baseSshArgs(seat, remoteCommand),
   };
+}
+
+function buildHarnessMessageDescriptor(input, text) {
+  const seat = normalizeHarnessSeat(input);
+  const message = typeof text === 'string' ? text.trim() : '';
+  if (!seat || message.length < 1 || message.length > 2000 || hasControlCharacters(message)) {
+    return {
+      success: false,
+      code: 'IPC_VALIDATION_ERROR',
+      error: 'Harness messages must contain 1–2000 characters.',
+    };
+  }
+  const remoteCommand = [
+    `cd -- ${quotePosix(seat.enginePath)} || exit 71`,
+    `./scripts/speak ${quotePosix(seat.agent)} --text ${quotePosix(message)} 2>/dev/null || true`,
+  ].join('; ');
+  return {
+    success: true,
+    seatId: seat.id,
+    destination: sshDestination(seat),
+    remoteCommand,
+    sshArgs: baseSshArgs(seat, remoteCommand),
+  };
+}
+
+function parseHarnessMessageResponse(text) {
+  const lines = String(text || '').trim().split(/\r?\n/).reverse();
+  for (const line of lines) {
+    if (!line.trim().startsWith('{')) continue;
+    try {
+      const response = JSON.parse(line);
+      if (response?.schemaVersion !== 1 || typeof response?.ok !== 'boolean') continue;
+      const disposition = boundedText(response.disposition, 40).toLowerCase();
+      return {
+        ok: response.ok,
+        disposition: ['steered', 'queued'].includes(disposition) ? disposition : 'unknown',
+        code: boundedText(response.code, 80),
+        message: boundedDisplayText(response.message, 500),
+      };
+    } catch {
+      // Ignore bounded remote diagnostics before the typed response.
+    }
+  }
+  return null;
 }
 
 function buildHarnessLaunchDescriptor(input, mode, { shell = '', platform = process.platform } = {}) {
@@ -547,6 +641,51 @@ class HarnessSeatService {
     }
   }
 
+  async message(input, text) {
+    const descriptor = buildHarnessMessageDescriptor(input, text);
+    if (!descriptor.success) return descriptor;
+    try {
+      const { stdout = '' } = await this.runSsh(descriptor.sshArgs, {
+        timeout: SNAPSHOT_TIMEOUT_MS,
+        maxBuffer: SNAPSHOT_MAX_BUFFER,
+        windowsHide: true,
+      });
+      const response = parseHarnessMessageResponse(stdout);
+      if (!response) {
+        return {
+          success: false,
+          code: 'HARNESS_MESSAGE_UNCONFIRMED',
+          error: 'The harness did not confirm that operator message.',
+        };
+      }
+      if (!response.ok) {
+        return {
+          success: false,
+          code: response.code || 'HARNESS_MESSAGE_REFUSED',
+          error: response.message || 'The harness refused that operator message.',
+        };
+      }
+      return {
+        success: true,
+        disposition: response.disposition,
+        message: response.message,
+      };
+    } catch (error) {
+      if (error?.killed || error?.signal === 'SIGTERM' || error?.code === 'ETIMEDOUT') {
+        return {
+          success: false,
+          code: 'HARNESS_SSH_TIMEOUT',
+          error: 'The message was not confirmed before the SSH deadline.',
+        };
+      }
+      return {
+        success: false,
+        code: 'HARNESS_SSH_UNREACHABLE',
+        error: `SSH could not reach ${descriptor.destination}. The message was not confirmed.`,
+      };
+    }
+  }
+
   launch(input, mode, options) {
     return buildHarnessLaunchDescriptor(input, mode, options);
   }
@@ -557,6 +696,7 @@ module.exports = {
   HarnessSeatService,
   buildHarnessControlDescriptor,
   buildHarnessLaunchDescriptor,
+  buildHarnessMessageDescriptor,
   parseHarnessSnapshot,
   snapshotSshArgs,
 };
