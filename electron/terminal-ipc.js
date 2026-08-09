@@ -26,14 +26,15 @@ function registerTerminalIPC({
   terminalManager,
   projectProfiles,
   getAllowedProjectRoots,
-  getAllowedTerminalCwdRoots,
+  getTerminalOnlyCwdRoots,
   getDefaultTerminalCwd,
   getSettingsSnapshot,
   onTerminalLaunched,
 }) {
   ipcMain.handle('terminal:create', async (_, payload) => {
     const projectRoots = sanitizeDevRoots(getAllowedProjectRoots());
-    const allowedRoots = sanitizeDevRoots(getAllowedTerminalCwdRoots());
+    const terminalOnlyRoots = sanitizeDevRoots(getTerminalOnlyCwdRoots());
+    const allowedRoots = sanitizeDevRoots([...terminalOnlyRoots, ...projectRoots]);
     const defaultCwd = getDefaultTerminalCwd?.() || '';
     const settings = getSettingsSnapshot();
     const requestedProjectPath = profileProjectPath(payload);

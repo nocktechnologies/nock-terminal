@@ -361,7 +361,7 @@ class ManagedAgentService {
     }
   }
 
-  _seat(agentId, probes) {
+  _managedSeat(agentId) {
     const id = normalizeId(agentId);
     const paths = this._paths(id);
     if (!isWithin(this.agentsRoot, paths.residence) || !isWithin(this.runRoot, paths.runtimeDir)) {
@@ -380,16 +380,25 @@ class ManagedAgentService {
       ]) this._assertDirectory(directory, path.basename(directory));
       const metadata = readJson(paths.metadata);
       const manifest = readJson(paths.manifest);
-      if (!isPlainObject(metadata) || metadata.managed !== true || metadata.id !== id || manifest?.agent !== id) {
+      if (!isPlainObject(metadata)
+        || metadata.managed !== true
+        || metadata.id !== id
+        || !isPlainObject(manifest)
+        || manifest.agent !== id
+        || !isPlainObject(manifest.runtime)) {
         throw new ManagedAgentError(`managed seat ${id} is invalid`, 'INVALID_SEAT');
       }
-      const seat = { id, paths, metadata, manifest };
-      this._validateManifest(seat, probes);
-      return seat;
+      return { id, paths, metadata, manifest };
     } catch (error) {
       if (error instanceof ManagedAgentError) throw error;
       throw new ManagedAgentError(`managed seat ${id} is invalid`, 'INVALID_SEAT');
     }
+  }
+
+  _seat(agentId, probes) {
+    const seat = this._managedSeat(agentId);
+    this._validateManifest(seat, probes);
+    return seat;
   }
 
   _invalidRow(entryName, residence, reason) {
@@ -841,35 +850,42 @@ class ManagedAgentService {
     }
   }
 
+  async _stop(agentId) {
+    const id = normalizeId(agentId);
+    if (await this._launchdLoaded(id)) await this._launchctl(['bootout', this._launchctlTarget(id)]);
+
+    try {
+      const seat = this._managedSeat(id);
+      seat.metadata = { ...seat.metadata, status: 'stopped' };
+      writeJsonAtomic(seat.paths.metadata, seat.metadata);
+      return this._row(seat, { status: 'stopped', controlReachable: false, serviceLoaded: false });
+    } catch {
+      return { success: true, agentId: id, status: 'stopped', configurationValid: false };
+    }
+  }
+
   async supervise(agentId, action) {
-    const probes = await this._probeSnapshot();
-    const seat = this._seat(agentId, probes);
     const verb = boundedText(action, 'action', { max: 16, required: true });
     if (!['start', 'stop'].includes(verb)) throw new ManagedAgentError('supervise action must be start or stop', 'VALIDATION_ERROR');
     if (this.platform !== 'darwin') throw new ManagedAgentError('launchd supervision is only available on macOS', 'UNSUPPORTED_PLATFORM');
+    if (verb === 'stop') return this._stop(agentId);
+    const seat = this._seat(agentId, await this._probeSnapshot());
 
     const snapshot = await this._statusSnapshot(seat);
     const domain = `gui/${this.uid}`;
     const target = this._launchctlTarget(seat.id);
-    if (verb === 'start') {
-      if (snapshot.controlReachable || ATTACHABLE_STATES.has(snapshot.status)) {
-        throw new ManagedAgentError(`managed seat ${seat.id} is already live`, 'LIVE_SEAT');
-      }
-      if (snapshot.status !== 'stopped' || seat.manifest.runtime.auth_identity === AUTH_PLACEHOLDER) {
-        throw new ManagedAgentError('validate the dedicated Claude authentication before starting this resident', 'AUTH_REQUIRED');
-      }
-      try { fs.rmSync(seat.paths.supervisorState, { force: true }); } catch {}
-      if (!snapshot.serviceLoaded) await this._launchctl(['bootstrap', domain, seat.paths.plist]);
-      await this._launchctl(['kickstart', '-k', target]);
-      seat.metadata = { ...seat.metadata, status: 'starting' };
-      writeJsonAtomic(seat.paths.metadata, seat.metadata);
-      return this._row(seat, { status: 'starting', controlReachable: false, serviceLoaded: true });
+    if (snapshot.controlReachable || ATTACHABLE_STATES.has(snapshot.status)) {
+      throw new ManagedAgentError(`managed seat ${seat.id} is already live`, 'LIVE_SEAT');
     }
-
-    if (snapshot.serviceLoaded) await this._launchctl(['bootout', target]);
-    seat.metadata = { ...seat.metadata, status: 'stopped' };
+    if (snapshot.status !== 'stopped' || seat.manifest.runtime.auth_identity === AUTH_PLACEHOLDER) {
+      throw new ManagedAgentError('validate the dedicated Claude authentication before starting this resident', 'AUTH_REQUIRED');
+    }
+    try { fs.rmSync(seat.paths.supervisorState, { force: true }); } catch {}
+    if (!snapshot.serviceLoaded) await this._launchctl(['bootstrap', domain, seat.paths.plist]);
+    await this._launchctl(['kickstart', '-k', target]);
+    seat.metadata = { ...seat.metadata, status: 'starting' };
     writeJsonAtomic(seat.paths.metadata, seat.metadata);
-    return this._row(seat, { status: 'stopped', controlReachable: false, serviceLoaded: false });
+    return this._row(seat, { status: 'starting', controlReachable: false, serviceLoaded: true });
   }
 
   _controlParams(action, params) {

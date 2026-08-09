@@ -198,6 +198,32 @@ test('manifest executable pins reject runtime substitution before resident contr
   }
 });
 
+test('stop remains available when resident configuration cannot be loaded', async () => {
+  const launchctlCalls = [];
+  const { root, service } = makeHarness({
+    runCommand(file, args) {
+      if (file === '/usr/bin/false') {
+        launchctlCalls.push(args);
+        return { status: 0, stdout: '', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    },
+  });
+  await service.create(draft());
+  const manifestPath = path.join(root, '.nock', 'agents', 'alpha', 'seat.json');
+  fs.rmSync(manifestPath);
+
+  const result = await service.supervise('alpha', 'stop');
+
+  assert.deepEqual(result, {
+    success: true,
+    agentId: 'alpha',
+    status: 'stopped',
+    configurationValid: false,
+  });
+  assert.ok(launchctlCalls.some(args => args[0] === 'bootout'));
+});
+
 test('managed inventory reuses the coalesced executable probe snapshot', async () => {
   const calls = { runtimePython: 0, tmux: 0, claude: 0 };
   const { service } = makeHarness({

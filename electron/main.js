@@ -77,11 +77,8 @@ function getAllowedProjectRoots() {
   ];
 }
 
-function getAllowedTerminalCwdRoots() {
-  return [
-    ...getAllowedProjectRoots(),
-    managedAgentService?.agentsRoot,
-  ];
+function getTerminalOnlyCwdRoots() {
+  return [managedAgentService?.agentsRoot];
 }
 
 function repairStoredSettings() {
@@ -528,7 +525,7 @@ function registerIPC() {
     terminalManager,
     projectProfiles,
     getAllowedProjectRoots,
-    getAllowedTerminalCwdRoots,
+    getTerminalOnlyCwdRoots,
     getDefaultTerminalCwd: () => app.getPath('home'),
     getSettingsSnapshot,
     // Opening a terminal in a repo marks it trusted for git pull/push/fetch (#8663).

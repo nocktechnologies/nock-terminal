@@ -36,7 +36,7 @@ Agent Console now has two deliberately separate operating modes:
 
 The v1 boundary is intentionally narrow. Codex/Gemini residents, SDK residents, remote provisioning, and generic runtime templates remain future adapter work.
 
-The first hardening pass pins generated manifests to the probed Claude and Python executables, refuses incomplete Claude auth identities, and keeps managed residences authorized only as terminal working directories rather than general project/file roots. Runtime probes are coalesced and cached so the four-second inventory refresh does not repeatedly spawn version checks.
+The first hardening pass pins generated manifests to the probed Claude and Python executables, refuses incomplete Claude auth identities, and keeps managed residences authorized only as terminal working directories rather than general project/file roots. Runtime probes are coalesced and cached so the four-second inventory refresh does not repeatedly spawn version checks, while Stop remains available if an installed executable drifts or disappears.
 
 ### May 24-25 NockCC Backlog Reconciliation, Phase H Closeout, And Release Truth
 

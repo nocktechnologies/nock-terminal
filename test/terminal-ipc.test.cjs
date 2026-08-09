@@ -59,7 +59,7 @@ const SHELL_FIXTURES = process.platform === 'win32'
 
 function registerHarness({
   allowedRoots = [],
-  allowedProjectRoots = allowedRoots,
+  terminalOnlyRoots = [],
   defaultTerminalCwd = '',
   settings = {},
   profiles = {},
@@ -102,8 +102,8 @@ function registerHarness({
     ipcMain: ipc.ipcMain,
     terminalManager,
     projectProfiles,
-    getAllowedProjectRoots: () => allowedProjectRoots,
-    getAllowedTerminalCwdRoots: () => allowedRoots,
+    getAllowedProjectRoots: () => allowedRoots,
+    getTerminalOnlyCwdRoots: () => terminalOnlyRoots,
     getDefaultTerminalCwd: () => defaultTerminalCwd,
     getSettingsSnapshot: () => settings,
     onTerminalLaunched: cwd => trustedCwds.push(cwd),
@@ -191,13 +191,13 @@ test('terminal:create validates payloads and delegates trusted launch options', 
 
 test('terminal:create allows managed residence CWDs without granting project trust', async () => {
   const sandbox = makeSandbox();
-  const projectPath = path.join(sandbox, 'project');
+  const projectPaths = Array.from({ length: 20 }, (_, index) => path.join(sandbox, `project-${index}`));
   const residencePath = path.join(sandbox, 'managed-agents', 'alpha');
-  fs.mkdirSync(projectPath, { recursive: true });
+  for (const projectPath of projectPaths) fs.mkdirSync(projectPath, { recursive: true });
   fs.mkdirSync(residencePath, { recursive: true });
   const ipc = registerHarness({
-    allowedRoots: [projectPath, residencePath],
-    allowedProjectRoots: [projectPath],
+    allowedRoots: projectPaths,
+    terminalOnlyRoots: [residencePath],
     settings: { defaultShell: SHELL_FIXTURES.settingsShell },
     profiles: { [residencePath]: { defaultShell: SHELL_FIXTURES.profileShell } },
   });
