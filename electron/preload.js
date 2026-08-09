@@ -68,6 +68,24 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     }),
   },
 
+  // Local residents are owned by the main process. The renderer receives only
+  // validated inventory rows and terminal descriptors, never filesystem or
+  // launchd primitives.
+  managedAgents: {
+    prerequisites: () => ipcRenderer.invoke('managedAgents:prerequisites'),
+    list: () => ipcRenderer.invoke('managedAgents:list'),
+    create: (draft) => ipcRenderer.invoke('managedAgents:create', draft),
+    update: (agentId, draft) => ipcRenderer.invoke('managedAgents:update', { agentId, draft }),
+    validate: (agentId) => ipcRenderer.invoke('managedAgents:validate', { agentId }),
+    authLaunch: (agentId) => ipcRenderer.invoke('managedAgents:authLaunch', { agentId }),
+    supervise: (agentId, action) => ipcRenderer.invoke('managedAgents:supervise', { agentId, action }),
+    control: (agentId, action, params = {}) => ipcRenderer.invoke('managedAgents:control', {
+      agentId,
+      action,
+      params,
+    }),
+  },
+
   // AI Chat
   ai: {
     ollama: {

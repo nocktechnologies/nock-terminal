@@ -17,6 +17,8 @@ As of the June 2026 discovery/resume waves and the July 2026 macOS packaged-smok
 - New task staging: the launcher can open a fresh agent terminal and place task text into it without auto-submitting the prompt.
 - New dispatch support: Codex and DeepSeek dispatch agents with `agent_runtime` configs are visible even when intentionally `enabled:false`; allowlisted agents can be sent brokered tasks through Mira or launched through the local dispatch script.
 - New stale-session cleanup: the app reconciles renderer tab state with main-process PTYs on startup and every minute, and the dashboard can manually clean orphaned or dead terminal sessions.
+- Agent Console remote seats: configured SSH harness seats retain status and control actions, interactive or read-only terminal access, agent pulse, and live presence.
+- Agent Console Local Residents: on macOS, Nock can create and supervise a local Claude Code resident backed by launchd and a dedicated tmux server. Each resident lives under `~/.nock/agents`, uses isolated Claude configuration/authentication, and is controlled through the resident engine console protocol.
 - Secret posture: Telegram and NockCC credentials are main-process-only, migrated out of plaintext settings into Electron `safeStorage` when available, and exposed to the renderer only as configured/not-configured status.
 - Session discovery and resume: transcript discovery covers Claude Code (full JSONL transcripts), recent Codex rollout files, and conditional Gemini prompt-log session presence. All three expose honest one-keystroke resume — `claude --resume <id>` and `codex resume <id>` for specific sessions, `gemini --resume latest` for the newest session in a project.
 - Strategic gap: live attach/reconnect beyond the proven CRM tmux path, full Gemini transcript replay, and dispatched-agent transcript replay are still roadmap work.
@@ -35,6 +37,8 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 - Launches Claude Code, Codex CLI, Gemini CLI, or custom agent aliases from project profiles; local agent-folder config commands are shown as metadata but are not auto-run unless discovery marks the path trusted.
 - Stages task text into newly launched agent terminals for human review before submit.
 - Sends brokered dispatch requests to Mira through NockCC AgentMessage, or opens a direct dispatch alias/script terminal with a generated payload file.
+- Observes configured remote SSH harness seats through Agent Console, including control state, pulse, presence, and protected console/watch access.
+- Creates and manages local Claude/tmux residents from Agent Console's Local Residents mode on macOS; v1 does not provision remote hosts or create Codex/Gemini residents.
 - Opens xterm.js terminal tabs through `node-pty`, including splits.
 - Keeps terminal sessions mounted while switching between dashboard, terminal, and settings views.
 - Cleans stale PTYs that lost their renderer tab or whose root pid disappeared, without killing quiet attached sessions.
@@ -109,6 +113,7 @@ docs/           Product audit, launch readiness, roadmap, historical specs
 - [docs/ROADMAP.md](docs/ROADMAP.md) lists product directions and prioritization.
 - [docs/AGENT_FOLDER_INTELLIGENCE.md](docs/AGENT_FOLDER_INTELLIGENCE.md) documents agent folder detection, state mapping, and launch behavior.
 - [docs/AGENT_DISPATCH.md](docs/AGENT_DISPATCH.md) documents Codex/DeepSeek dispatch discovery, brokered routing, direct scripts, and current limits.
+- [docs/AGENT_CONSOLE_V1.md](docs/AGENT_CONSOLE_V1.md) documents remote seat boundaries and the macOS Local Residents lifecycle.
 - [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md) documents the release gate and packaged smoke checklist.
 - [CHANGELOG.md](CHANGELOG.md) summarizes repo history.
 - [AGENTS.md](AGENTS.md) is the canonical agent instruction file; [CLAUDE.md](CLAUDE.md) points Claude users back to it with Claude-specific context.

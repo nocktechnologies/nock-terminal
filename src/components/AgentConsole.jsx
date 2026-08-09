@@ -44,6 +44,7 @@ import {
   upsertHarnessSeat,
 } from '../utils/harnessConsole.mjs';
 import { createTabId } from '../utils/tabOps.mjs';
+import ManagedResidentsPanel from './ManagedResidentsPanel';
 import TerminalView from './TerminalView';
 
 const EMPTY_FORM = {
@@ -120,7 +121,8 @@ function pulseTone(disposition) {
   return 'quiet';
 }
 
-export default function AgentConsole({ active, onOpenTerminal }) {
+export default function AgentConsole({ active, onOpenTerminal, onOpenManagedTerminal }) {
+  const [consoleMode, setConsoleMode] = useState('remote');
   const [seats, setSeats] = useState([]);
   const [selectedSeatId, setSelectedSeatId] = useState('');
   const [snapshots, setSnapshots] = useState({});
@@ -214,14 +216,14 @@ export default function AgentConsole({ active, onOpenTerminal }) {
   }, [loadSeats]);
 
   useEffect(() => {
-    if (!active || !selectedSeat?.id) return undefined;
+    if (!active || consoleMode !== 'remote' || !selectedSeat?.id) return undefined;
     refreshSeat(selectedSeat.id);
     const interval = setInterval(
       () => refreshSeat(selectedSeat.id, { background: true }),
       4_000,
     );
     return () => clearInterval(interval);
-  }, [active, refreshSeat, selectedSeat?.id]);
+  }, [active, consoleMode, refreshSeat, selectedSeat?.id]);
 
   useEffect(() => {
     selectedSeatIdRef.current = selectedSeatId;
@@ -434,20 +436,46 @@ export default function AgentConsole({ active, onOpenTerminal }) {
           <h1 className="font-display text-xl font-semibold tracking-tight text-[var(--ac-text-strong)]">Agent Console</h1>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {selectedSeat && (
+          <div className="flex items-center border border-[var(--ac-line)] p-0.5" role="group" aria-label="Agent Console mode">
+            <button
+              type="button"
+              onClick={() => setConsoleMode('remote')}
+              className={`ac-mode-button ${consoleMode === 'remote' ? 'ac-mode-button-active' : ''}`}
+              aria-pressed={consoleMode === 'remote'}
+            >
+              <Server className="h-3 w-3" aria-hidden="true" />
+              Remote seats
+            </button>
+            <button
+              type="button"
+              onClick={() => setConsoleMode('local')}
+              className={`ac-mode-button ${consoleMode === 'local' ? 'ac-mode-button-active' : ''}`}
+              aria-pressed={consoleMode === 'local'}
+            >
+              <HardDrive className="h-3 w-3" aria-hidden="true" />
+              Local residents
+            </button>
+          </div>
+          {consoleMode === 'remote' && selectedSeat && (
             <button type="button" onClick={() => refreshSeat(selectedSeat.id)} disabled={loading} className="ac-button ac-button-quiet" aria-label={`Refresh ${selectedSeat.label} status`}>
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
               Refresh
             </button>
           )}
-          <button type="button" onClick={beginAdd} className="ac-button ac-button-signal">
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            Add seat
-          </button>
+          {consoleMode === 'remote' && (
+            <button type="button" onClick={beginAdd} className="ac-button ac-button-signal">
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Add seat
+            </button>
+          )}
         </div>
       </header>
 
-      {editorOpen && (
+      {consoleMode === 'local' && (
+        <ManagedResidentsPanel active={active} onOpenTerminal={onOpenManagedTerminal} />
+      )}
+
+      {consoleMode === 'remote' && editorOpen && (
         <ConnectionEditor
           form={form}
           setForm={setForm}
@@ -463,7 +491,7 @@ export default function AgentConsole({ active, onOpenTerminal }) {
         />
       )}
 
-      {seats.length === 0 ? (
+      {consoleMode === 'remote' && (seats.length === 0 ? (
         <EmptyConsole onAdd={beginAdd} />
       ) : (
         <div className="flex min-h-0 flex-1">
@@ -801,7 +829,7 @@ export default function AgentConsole({ active, onOpenTerminal }) {
             </div>
           </section>
         </div>
-      )}
+      ))}
     </main>
   );
 }

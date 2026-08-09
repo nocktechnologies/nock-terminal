@@ -9,6 +9,7 @@ Current docs:
 - [Post-A/B/C Integration Audit](POST_ABC_INTEGRATION_AUDIT.md) - Nock `7533` checkpoint after the concrete hardening phases landed.
 - [Agent Folder Intelligence](AGENT_FOLDER_INTELLIGENCE.md) - agent-folder detection, local NockCC file-bus state mapping, command launcher behavior, and launch behavior.
 - [Agent Dispatch](AGENT_DISPATCH.md) - Codex/DeepSeek dispatch-agent discovery, Mira-brokered requests, direct dispatcher scripts, telemetry, and current limits.
+- [Agent Console v1](AGENT_CONSOLE_V1.md) - existing remote SSH harness seats and the macOS-only managed Local Residents lifecycle.
 - [Release Readiness](RELEASE_READINESS.md) - release gate, packaged smoke automation, signing/notarization requirements, artifact checksums, command launcher smoke checks, and signed installer smoke checklist.
 - [Brand Assets](BRAND_ASSETS.md) - current green Nock asset sources and app-surface mapping.
 

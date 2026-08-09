@@ -105,6 +105,14 @@ export default function App() {
     });
   }, []);
 
+  const showAgentConsoleError = useCallback((message) => {
+    setNotice({
+      id: createTabId('notice'),
+      title: 'Agent Console action failed',
+      message,
+    });
+  }, []);
+
   const cleanupStaleTerminals = useCallback(async () => {
     try {
       const liveTerminalIds = collectLiveTerminalIds(tabs);
@@ -305,6 +313,31 @@ export default function App() {
     }
   }, [openTab, showHarnessError]);
 
+  const openManagedTerminal = useCallback((launch) => {
+    if (!launch?.command || !launch?.cwd) {
+      showAgentConsoleError('The managed resident did not provide a valid terminal launch.');
+      return;
+    }
+    const agentId = launch.agentId || 'resident';
+    const title = launch.title || agentId;
+    openTab({
+      id: createTabId(),
+      sessionId: `managed:${agentId}:${launch.action || 'terminal'}`,
+      title,
+      branch: null,
+      status: 'active',
+      cwd: launch.cwd,
+      splitContent: null,
+      splitRatio: 0.5,
+      launchCommand: launch.command,
+      agentId,
+    }, {
+      project: title,
+      shell: launch.command,
+      cwd: launch.cwd,
+    });
+  }, [openTab, showAgentConsoleError]);
+
   const executePrompt = useCallback((promptText) => {
     const text = typeof promptText === 'string' ? promptText.trim() : '';
     if (!text) return;
@@ -463,7 +496,11 @@ export default function App() {
 
           {/* Persistent agent console */}
           <div className={`absolute inset-0 ${view === 'agent-console' ? 'z-10' : 'invisible pointer-events-none z-0'}`}>
-            <AgentConsole active={view === 'agent-console'} onOpenTerminal={openHarnessTerminal} />
+            <AgentConsole
+              active={view === 'agent-console'}
+              onOpenTerminal={openHarnessTerminal}
+              onOpenManagedTerminal={openManagedTerminal}
+            />
           </div>
 
           {/* Settings */}
