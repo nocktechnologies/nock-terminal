@@ -14,7 +14,7 @@ What is automated today:
 
 - Local release preflight through `npm run release:check`.
 - Pull-request and `main` CI coverage for tests, Vite build, bundle budgets, and unpacked packaged smoke on Linux and macOS.
-- A fail-closed pull-request Anvil security review using OpenAI's pinned Codex GitHub Action in read-only mode.
+- A fail-closed pull-request Anvil security review using OpenAI's commit-pinned Codex GitHub Action and exact Codex runtime version in read-only mode.
 - Tag-triggered release workflow that requires signing secrets, builds macOS/Windows/Linux artifacts, emits checksums, and uploads release assets.
 
 What is still manual or externally blocked:
