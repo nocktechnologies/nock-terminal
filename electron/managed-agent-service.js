@@ -37,6 +37,7 @@ const MAX_METADATA_BYTES = 128 * 1024;
 const CONTROL_ACTIONS = new Set(['status', 'pause', 'resume', 'restart', 'rotate', 'steer']);
 const LIVE_STATES = new Set(['starting', 'running', 'paused', 'terminal_failed']);
 const ATTACHABLE_STATES = new Set(['running', 'paused', 'terminal_failed']);
+const DEFAULT_PROBE_CACHE_TTL_MS = 60_000;
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
@@ -131,6 +132,12 @@ class ManagedAgentService {
     this.supportedModels = [...(options.supportedModels?.length ? options.supportedModels : SUPPORTED_MODELS)];
     this.probes = isPlainObject(options.probes) ? options.probes : {};
     this.runCommand = options.runCommand || this._execFile.bind(this);
+    this.probeCacheTtlMs = Number.isFinite(options.probeCacheTtlMs)
+      ? Math.max(1000, options.probeCacheTtlMs)
+      : DEFAULT_PROBE_CACHE_TTL_MS;
+    this.probeCache = null;
+    this.probeCacheAt = 0;
+    this.probePromise = null;
     const controlTimeoutMs = Number.isFinite(options.controlTimeoutMs) ? Math.max(100, options.controlTimeoutMs) : 2500;
     this.controlClient = new ResidentControlClient({ socketFactory: options.net, timeoutMs: controlTimeoutMs });
     this.randomUUID = options.randomUUID || crypto.randomUUID;
@@ -207,7 +214,7 @@ class ManagedAgentService {
     return fallback;
   }
 
-  async _probeSnapshot() {
+  async _collectProbeSnapshot() {
     const tmuxPath = findExecutable(['tmux'], this.configuredTmux);
     const claudePath = findExecutable(['claude'], this.configuredClaude);
     const [runtimePython, tmux, claude] = await Promise.all([
@@ -226,8 +233,25 @@ class ManagedAgentService {
     };
   }
 
-  async prerequisites() {
-    const probes = await this._probeSnapshot();
+  async _probeSnapshot({ refresh = false } = {}) {
+    const cacheFresh = this.probeCache && (Date.now() - this.probeCacheAt) < this.probeCacheTtlMs;
+    if (!refresh && cacheFresh) return this.probeCache;
+    if (this.probePromise) return this.probePromise;
+
+    this.probePromise = this._collectProbeSnapshot()
+      .then(snapshot => {
+        this.probeCache = snapshot;
+        this.probeCacheAt = Date.now();
+        return snapshot;
+      })
+      .finally(() => {
+        this.probePromise = null;
+      });
+    return this.probePromise;
+  }
+
+  async prerequisites({ refresh = true } = {}) {
+    const probes = await this._probeSnapshot({ refresh });
     const engineAvailable = Boolean(
       this.engineRoot
       && fs.existsSync(path.join(this.engineRoot, 'runtime', 'seat.py'))
@@ -262,9 +286,9 @@ class ManagedAgentService {
       throw new ManagedAgentError(`managed resident prerequisites missing: ${result.missing.join(', ')}`, 'PREREQUISITES_MISSING');
     }
     return {
-      runtimePython: { path: result.runtimePython.path, version: result.runtimePython.version },
-      tmux: { path: result.tmux.path, version: result.tmux.version },
-      claude: { path: result.claude.path, version: result.claude.version },
+      runtimePython: { ...result.runtimePython, available: true },
+      tmux: { ...result.tmux, available: true },
+      claude: { ...result.claude, available: true },
     };
   }
 
@@ -303,7 +327,7 @@ class ManagedAgentService {
     }
   }
 
-  _validateManifest(seat) {
+  _validateManifest(seat, probes) {
     const { manifest, paths } = seat;
     const exactPaths = [
       ['home', manifest.home, paths.residence],
@@ -325,15 +349,19 @@ class ManagedAgentService {
       || !manifest.workspaces.allowed_roots.some(root => isAbsolute(root) && isWithin(root, manifest.work_dir))) {
       throw new ManagedAgentError('managed manifest work directory is outside its allowed roots', 'INVALID_SEAT');
     }
-    if (!isAbsolute(manifest.runtime?.binary) || !executableExists(manifest.runtime.binary)) {
-      throw new ManagedAgentError('managed manifest runtime binary is unavailable', 'INVALID_SEAT');
+    if (!probes?.claude?.available
+      || manifest.runtime?.binary !== probes.claude.path
+      || !executableExists(manifest.runtime.binary)) {
+      throw new ManagedAgentError('managed manifest runtime binary does not match the probed Claude runtime', 'INVALID_SEAT');
     }
-    if (!isAbsolute(manifest.capsule_command?.[0]) || !executableExists(manifest.capsule_command[0])) {
-      throw new ManagedAgentError('managed manifest capsule runtime is unavailable', 'INVALID_SEAT');
+    if (!probes?.runtimePython?.available
+      || manifest.capsule_command?.[0] !== probes.runtimePython.path
+      || !executableExists(manifest.capsule_command[0])) {
+      throw new ManagedAgentError('managed manifest capsule runtime does not match the probed Python runtime', 'INVALID_SEAT');
     }
   }
 
-  _seat(agentId) {
+  _seat(agentId, probes) {
     const id = normalizeId(agentId);
     const paths = this._paths(id);
     if (!isWithin(this.agentsRoot, paths.residence) || !isWithin(this.runRoot, paths.runtimeDir)) {
@@ -356,7 +384,7 @@ class ManagedAgentService {
         throw new ManagedAgentError(`managed seat ${id} is invalid`, 'INVALID_SEAT');
       }
       const seat = { id, paths, metadata, manifest };
-      this._validateManifest(seat);
+      this._validateManifest(seat, probes);
       return seat;
     } catch (error) {
       if (error instanceof ManagedAgentError) throw error;
@@ -536,11 +564,12 @@ class ManagedAgentService {
     try {
       if (!fs.existsSync(this.agentsRoot)) return [];
       const entries = fs.readdirSync(this.agentsRoot, { withFileTypes: true }).filter(item => item.isDirectory());
-      const tmuxPath = findExecutable(['tmux'], this.configuredTmux);
+      const probes = await this._probeSnapshot();
+      const tmuxPath = probes.tmux.path;
       return Promise.all(entries.map(async entry => {
         const residence = path.join(this.agentsRoot, entry.name);
         try {
-          const seat = this._seat(entry.name);
+          const seat = this._seat(entry.name, probes);
           return this._row(seat, await this._statusSnapshot(seat), { tmuxPath });
         } catch (error) {
           return this._invalidRow(entry.name, residence, error.message);
@@ -717,7 +746,8 @@ class ManagedAgentService {
   }
 
   async update(agentId, draft) {
-    const seat = this._seat(agentId);
+    const probes = await this._requirePrerequisites();
+    const seat = this._seat(agentId, probes);
     await this._requireOffline(seat, 'updating', { unloaded: true });
     const base = this._draftFromSeat(seat);
     const merged = {
@@ -731,7 +761,6 @@ class ManagedAgentService {
       defaultWorkDirectory: seat.paths.residence,
       supportedModels: this.supportedModels,
     });
-    const probes = await this._requirePrerequisites();
     const authIdentity = seat.manifest.runtime.auth_identity;
     const status = authIdentity === AUTH_PLACEHOLDER ? 'needs_auth' : 'stopped';
     const metadata = buildMetadata(normalized, seat.paths, { previous: seat.metadata, authIdentity, status });
@@ -758,7 +787,8 @@ class ManagedAgentService {
   }
 
   async validate(agentId) {
-    const seat = this._seat(agentId);
+    const probes = await this._probeSnapshot();
+    const seat = this._seat(agentId, probes);
     await this._requireOffline(seat, 'validating authentication');
     const result = await this._run(seat.manifest.runtime.binary, ['auth', 'status', '--json'], {
       timeout: 30_000,
@@ -786,7 +816,8 @@ class ManagedAgentService {
   }
 
   async authLaunch(agentId) {
-    const seat = this._seat(agentId);
+    const probes = await this._probeSnapshot();
+    const seat = this._seat(agentId, probes);
     await this._requireOffline(seat, 'authenticating');
     const command = `CLAUDE_CONFIG_DIR=${shellQuote(seat.paths.configDir)} ${posixCommand([seat.manifest.runtime.binary, 'auth', 'login', '--claudeai'])}`;
     return {
@@ -811,7 +842,8 @@ class ManagedAgentService {
   }
 
   async supervise(agentId, action) {
-    const seat = this._seat(agentId);
+    const probes = await this._probeSnapshot();
+    const seat = this._seat(agentId, probes);
     const verb = boundedText(action, 'action', { max: 16, required: true });
     if (!['start', 'stop'].includes(verb)) throw new ManagedAgentError('supervise action must be start or stop', 'VALIDATION_ERROR');
     if (this.platform !== 'darwin') throw new ManagedAgentError('launchd supervision is only available on macOS', 'UNSUPPORTED_PLATFORM');
@@ -849,7 +881,8 @@ class ManagedAgentService {
   }
 
   async control(agentId, action, params = {}) {
-    const seat = this._seat(agentId);
+    const probes = await this._probeSnapshot();
+    const seat = this._seat(agentId, probes);
     const verb = boundedText(action, 'action', { max: 16, required: true });
     const requestId = String(this.randomUUID());
     const frame = await this.controlClient.send(seat.paths.controlSocket, verb, this._controlParams(verb, params), requestId);

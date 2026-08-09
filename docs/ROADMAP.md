@@ -1,6 +1,6 @@
 # Product Roadmap
 
-Updated: 2026-08-08
+Updated: 2026-08-09
 
 This roadmap follows the audit in `docs/PRODUCT_AUDIT_GTM_READINESS.md`. It assumes Nock Terminal should become a local-first cockpit for supervising coding agents, not a generic AI IDE.
 
@@ -35,6 +35,8 @@ Agent Console now has two deliberately separate operating modes:
 - **Local Residents** adds a macOS-only managed Claude Code template. Nock generates each residence under `~/.nock/agents`, isolates its Claude config/auth, supervises it with launchd, attaches through its dedicated tmux server, and sends lifecycle actions through the resident engine console protocol.
 
 The v1 boundary is intentionally narrow. Codex/Gemini residents, SDK residents, remote provisioning, and generic runtime templates remain future adapter work.
+
+The first hardening pass pins generated manifests to the probed Claude and Python executables, refuses incomplete Claude auth identities, and keeps managed residences authorized only as terminal working directories rather than general project/file roots. Runtime probes are coalesced and cached so the four-second inventory refresh does not repeatedly spawn version checks.
 
 ### May 24-25 NockCC Backlog Reconciliation, Phase H Closeout, And Release Truth
 

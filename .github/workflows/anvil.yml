@@ -17,81 +17,60 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
           fetch-depth: 0
+          persist-credentials: false
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: '20'
-
-      - name: Install Codex CLI
-        run: npm install -g @openai/codex@0.118.0
+      - name: Require OpenAI API credentials
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: test -n "$OPENAI_API_KEY"
 
       - name: Run Codex security review
         id: anvil
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: |
-          if [[ -z "${OPENAI_API_KEY:-}" || "${OPENAI_API_KEY}" != sk-* ]]; then
-            {
-              echo 'review<<ANVIL_REVIEW_EOF'
-              echo 'OPENAI_API_KEY secret is missing or not an OpenAI API key; skipped Anvil security review.'
-              echo 'ANVIL_REVIEW_EOF'
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+        uses: openai/codex-action@52fe01ec70a42f454c9d2ebd47598f9fd6893d56 # v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":read-only"
+          safety-strategy: drop-sudo
+          effort: high
+          output-file: ${{ runner.temp }}/anvil-output.md
+          prompt: |
+            Perform a security-focused adversarial review of this pull request.
 
-          auth_status="$(curl -sS -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${OPENAI_API_KEY}" \
-            https://api.openai.com/v1/models || true)"
-          if [ "$auth_status" != "200" ]; then
-            {
-              echo 'review<<ANVIL_REVIEW_EOF'
-              echo "OPENAI_API_KEY did not pass OpenAI auth preflight (HTTP ${auth_status}); skipped Anvil security review."
-              echo 'ANVIL_REVIEW_EOF'
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+            Base SHA: ${{ github.event.pull_request.base.sha }}
+            Head SHA: ${{ github.event.pull_request.head.sha }}
 
-          if ! NO_COLOR=1 codex debug models -c model="o4-mini" > /tmp/anvil-auth-check.txt 2>&1; then
-            {
-              echo 'review<<ANVIL_REVIEW_EOF'
-              echo 'Codex CLI auth preflight failed; skipped Anvil security review.'
-              echo 'ANVIL_REVIEW_EOF'
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+            Review only changes introduced by the pull request. Inspect the diff and enough surrounding code to prove reachability. Prioritize authentication and authorization bypasses, command or path injection, unsafe IPC, secret exposure, dependency and workflow supply-chain risk, and destructive failure modes.
 
-          NO_COLOR=1 codex review \
-            --base "$PR_BASE_REF" \
-            --title "Security-focused adversarial review for PR #${PR_NUMBER}: ${PR_TITLE}" \
-            -c model="o4-mini" \
-            -c 'sandbox_permissions=["disk-full-read-access"]' \
-            > /tmp/anvil-output.txt 2>&1 || true
-          {
-            echo 'review<<ANVIL_REVIEW_EOF'
-            head -c 60000 /tmp/anvil-output.txt
-            echo 'ANVIL_REVIEW_EOF'
-          } >> "$GITHUB_OUTPUT"
+            Report only concrete, actionable findings. For each finding include severity, file, line, exploit path, and the smallest correct remediation. Do not speculate or report style issues. If there are no security findings, say that explicitly. Do not modify the repository.
 
       - name: Post Anvil review comment
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          ANVIL_OUTPUT: ${{ runner.temp }}/anvil-output.md
+          ANVIL_OUTCOME: ${{ steps.anvil.outcome }}
         with:
           script: |
-            const output = `${{ steps.anvil.outputs.review }}`;
+            const fs = require('fs');
+            let output = '';
+            try {
+              output = fs.readFileSync(process.env.ANVIL_OUTPUT, 'utf8').trim();
+            } catch {
+              output = 'Security review failed before producing output. This check is blocking; inspect the workflow logs.';
+            }
+            const rendered = output.slice(0, 58000).split('\n').map(line => `    ${line}`).join('\n');
             const body = [
-              '## 🔨 Anvil Security Review (Codex)',
+              '## Anvil Security Review (Codex)',
               '',
-              '```',
-              output || 'No output captured — verify OPENAI_API_KEY secret is set on this repo.',
-              '```',
+              `Workflow outcome: **${process.env.ANVIL_OUTCOME || 'unknown'}**`,
               '',
-              '*Adversarial security audit powered by OpenAI Codex o4-mini. Does not replace human review.*',
+              rendered || '    No review output was produced.',
+              '',
+              '*Adversarial security audit powered by OpenAI Codex. Does not replace human review.*',
             ].join('\n');
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
