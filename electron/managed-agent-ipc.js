@@ -1,8 +1,12 @@
 'use strict';
 
-const path = require('node:path');
 const {
-  AGENT_ID_RE,
+  boundedText,
+  isAbsolute,
+  isPlainObject,
+  MAX_TEXT_LENGTH,
+  normalizeId,
+  normalizeRoots,
   PERMISSION_PRESETS,
   SUPPORTED_MODELS,
 } = require('./managed-agent-blueprint');
@@ -12,46 +16,30 @@ const CONTROL_ACTIONS = new Set(['status', 'pause', 'resume', 'restart', 'rotate
 const SUPERVISE_ACTIONS = new Set(['start', 'stop']);
 const PERMISSION_PRESET_NAMES = new Set(Object.keys(PERMISSION_PRESETS));
 const SUPPORTED_MODEL_NAMES = new Set(SUPPORTED_MODELS);
-const MAX_TEXT_LENGTH = 8192;
-const MAX_ROOTS = 16;
-
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
 
 function invalid(message) {
   return { ok: false, error: message };
 }
 
-function boundedString(value, field, { max = 1000, required = false, multiline = false } = {}) {
-  if (typeof value !== 'string') return invalid(`${field} must be a string`);
-  const normalized = value.trim();
-  if (required && !normalized) return invalid(`${field} is required`);
-  const invalidCharacters = multiline
-    ? /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/
-    : /[\u0000-\u001F\u007F]/;
-  if (normalized.length > max || invalidCharacters.test(normalized)) {
-    return invalid(`${field} is too long or contains control characters`);
+function validated(operation) {
+  try {
+    return { ok: true, value: operation() };
+  } catch (error) {
+    return invalid(error.message);
   }
-  return { ok: true, value: normalized };
+}
+
+function boundedString(value, field, options) {
+  return validated(() => boundedText(value, field, options));
 }
 
 function validateAgentId(value, field = 'agentId') {
-  const checked = boundedString(value, field, { max: 64, required: true });
-  if (!checked.ok || !AGENT_ID_RE.test(checked.value)) return invalid(`${field} must match ${AGENT_ID_RE}`);
-  return checked;
+  return validated(() => normalizeId(value, field));
 }
 
 function validateRoots(value, field, { required = false } = {}) {
   if (value === undefined || value === null) return required ? invalid(`${field} is required`) : { ok: true, value: [] };
-  if (!Array.isArray(value) || value.length > MAX_ROOTS) return invalid(`${field} must be an array of absolute paths`);
-  const roots = [];
-  for (let index = 0; index < value.length; index += 1) {
-    const checked = boundedString(value[index], `${field}[${index}]`, { max: 2000, required: true });
-    if (!checked.ok || !path.isAbsolute(checked.value)) return invalid(`${field}[${index}] must be absolute`);
-    roots.push(path.resolve(checked.value));
-  }
-  return { ok: true, value: [...new Set(roots)] };
+  return validated(() => normalizeRoots(value, field));
 }
 
 function validateDraft(draft, { update = false } = {}) {
@@ -77,7 +65,7 @@ function validateDraft(draft, { update = false } = {}) {
   const workspace = isPlainObject(draft.workspaces) ? draft.workspaces : {};
   if (draft.workDirectory !== undefined || workspace.workDirectory !== undefined) {
     const workDirectory = boundedString(draft.workDirectory ?? workspace.workDirectory, 'workDirectory', { max: 2000 });
-    if (!workDirectory.ok || (workDirectory.value && !path.isAbsolute(workDirectory.value))) return invalid('workDirectory must be absolute');
+    if (!workDirectory.ok || (workDirectory.value && !isAbsolute(workDirectory.value))) return invalid('workDirectory must be absolute');
   }
   const allowed = validateRoots(draft.allowedRoots ?? draft.workspaceRoots ?? workspace.allowedRoots, 'allowedRoots');
   if (!allowed.ok) return allowed;

@@ -320,9 +320,12 @@ function buildWrapper(engineRoot, runtimePython, paths) {
 set -u
 receipt=${shellQuote(paths.supervisorState)}
 rm -f "$receipt"
-cd ${shellQuote(engineRoot)}
-${shellQuote(runtimePython)} -m runtime.seat --manifest ${shellQuote(paths.manifest)}
-status=$?
+if cd ${shellQuote(engineRoot)}; then
+  ${shellQuote(runtimePython)} -m runtime.seat --manifest ${shellQuote(paths.manifest)}
+  status=$?
+else
+  status=78
+fi
 umask 077
 tmp="${'$'}{receipt}.${'$'}$"
 timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -336,9 +339,10 @@ esac
 }
 
 function buildLaunchdPlist(label, paths, engineRoot, runtimePython, tmuxPath, claudePath) {
-  const pathEntries = [...new Set([
-    path.dirname(runtimePython), path.dirname(tmuxPath), path.dirname(claudePath), '/usr/bin', '/bin',
-  ].filter(Boolean))];
+  const runtimeDirectories = [runtimePython, tmuxPath, claudePath]
+    .filter(Boolean)
+    .map(binary => path.dirname(binary));
+  const pathEntries = [...new Set([...runtimeDirectories, '/usr/bin', '/bin'])];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -364,6 +368,8 @@ module.exports = {
   AUTH_PLACEHOLDER,
   CONSOLE_PROTOCOL_HASH,
   DEFAULT_MODEL,
+  MAX_ROOTS,
+  MAX_TEXT_LENGTH,
   ManagedAgentError,
   PERMISSION_PRESETS,
   PLIST_LABEL_PREFIX,
@@ -382,6 +388,7 @@ module.exports = {
   isWithin,
   normalizeDraft,
   normalizeId,
+  normalizeRoots,
   posixCommand,
   sanitizeAuthStatus,
   shellQuote,

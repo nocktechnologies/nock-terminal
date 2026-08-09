@@ -238,7 +238,7 @@ class ManagedAgentService {
       { id: 'engine', label: 'Resident engine', available: engineAvailable, reason: engineAvailable ? '' : 'Resident engine checkout is missing.' },
       { id: 'python', label: 'Python runtime', available: probes.runtimePython.available && probes.runtimePython.jsonschema, reason: probes.runtimePython.available ? '' : 'Python 3 with jsonschema is required.' },
       { id: 'tmux', label: 'tmux', available: probes.tmux.available, reason: probes.tmux.available ? '' : 'tmux is not available.' },
-      { id: 'claude', label: 'Claude Code', available: probes.claude.available && Boolean(probes.claude.version), reason: probes.claude.available ? '' : 'Claude Code is not available.' },
+      { id: 'claude', label: 'Claude Code', available: probes.claude.available && Boolean(probes.claude.version), reason: probes.claude.available && probes.claude.version ? '' : 'Claude Code is unavailable or did not report a version.' },
       { id: 'launchd', label: 'macOS launchd', available: launchdAvailable, reason: launchdAvailable ? '' : 'Managed residents currently require macOS launchd.' },
     ];
     return {
@@ -386,9 +386,11 @@ class ManagedAgentService {
     };
   }
 
-  _launchDescriptor(seat, status) {
-    const tmuxPath = findExecutable(['tmux'], this.configuredTmux);
-    const argv = tmuxPath ? [tmuxPath, '-S', seat.paths.tmuxSocket, 'attach', '-t', `=${seat.paths.tmuxSession}`] : [];
+  _launchDescriptor(seat, status, tmuxPath) {
+    const resolvedTmuxPath = tmuxPath === undefined
+      ? findExecutable(['tmux'], this.configuredTmux)
+      : tmuxPath;
+    const argv = resolvedTmuxPath ? [resolvedTmuxPath, '-S', seat.paths.tmuxSocket, 'attach', '-t', `=${seat.paths.tmuxSession}`] : [];
     const canLaunch = Boolean(argv.length && socketExists(seat.paths.tmuxSocket) && ATTACHABLE_STATES.has(status));
     return {
       mode: 'terminal',
@@ -403,11 +405,11 @@ class ManagedAgentService {
     };
   }
 
-  _row(seat, snapshot = {}) {
+  _row(seat, snapshot = {}, { tmuxPath } = {}) {
     const status = snapshot.status || seat.metadata.status || 'invalid';
     const controlReachable = snapshot.controlReachable === true;
     const serviceLoaded = snapshot.serviceLoaded === true;
-    const launch = this._launchDescriptor(seat, status);
+    const launch = this._launchDescriptor(seat, status, tmuxPath);
     const authReady = seat.manifest.runtime.auth_identity !== AUTH_PLACEHOLDER;
     const offlineEditable = !controlReachable && !serviceLoaded && ['needs_auth', 'stopped'].includes(status);
     const capabilities = {
@@ -534,11 +536,12 @@ class ManagedAgentService {
     try {
       if (!fs.existsSync(this.agentsRoot)) return [];
       const entries = fs.readdirSync(this.agentsRoot, { withFileTypes: true }).filter(item => item.isDirectory());
+      const tmuxPath = findExecutable(['tmux'], this.configuredTmux);
       return Promise.all(entries.map(async entry => {
         const residence = path.join(this.agentsRoot, entry.name);
         try {
           const seat = this._seat(entry.name);
-          return this._row(seat, await this._statusSnapshot(seat));
+          return this._row(seat, await this._statusSnapshot(seat), { tmuxPath });
         } catch (error) {
           return this._invalidRow(entry.name, residence, error.message);
         }

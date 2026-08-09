@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, Loader2, X } from 'lucide-react';
 import {
   DEFAULT_MODEL,
@@ -34,6 +34,8 @@ export default function AgentCreateWizard({
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const formRef = useRef(null);
+  const previousFocusRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -42,7 +44,21 @@ export default function AgentCreateWizard({
     setSubmitError('');
   }, [initialValues, open]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+    previousFocusRef.current = document.activeElement;
+    const frame = requestAnimationFrame(() => {
+      formRef.current?.querySelector('input:not(:disabled), select:not(:disabled), textarea:not(:disabled)')?.focus();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      previousFocusRef.current?.focus?.();
+    };
+  }, [open]);
+
   if (!open) return null;
+
+  const selectedPreset = PERMISSION_PRESETS[values.permissionPreset] || PERMISSION_PRESETS.supervised;
 
   const update = (key, value) => {
     setValues((current) => ({ ...current, [key]: value }));
@@ -70,7 +86,14 @@ export default function AgentCreateWizard({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60" role="dialog" aria-modal="true" aria-label={mode === 'edit' ? 'Edit resident' : 'Create resident'}>
-      <form onSubmit={submit} className="flex h-full w-full max-w-xl flex-col border-l border-nock-border bg-nock-bg shadow-2xl">
+      <form
+        ref={formRef}
+        onSubmit={submit}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !submitting) onClose();
+        }}
+        className="flex h-full w-full max-w-xl flex-col border-l border-nock-border bg-nock-bg shadow-2xl"
+      >
         <header className="flex items-center justify-between border-b border-nock-border px-5 py-4">
           <div>
             <p className="font-mono text-[9px] uppercase tracking-widest text-nock-accent-cyan">// Managed residence</p>
@@ -141,7 +164,7 @@ export default function AgentCreateWizard({
             </div>
             <div className="mt-3 border border-nock-border bg-nock-card/40 px-3 py-2.5">
               <p className="font-mono text-[9px] uppercase tracking-widest text-nock-text-muted">Claude default mode</p>
-              <p className="mt-1 font-mono text-xs text-nock-text">{PERMISSION_PRESETS[values.permissionPreset].defaultMode}</p>
+              <p className="mt-1 font-mono text-xs text-nock-text">{selectedPreset.defaultMode}</p>
             </div>
           </section>
         </div>

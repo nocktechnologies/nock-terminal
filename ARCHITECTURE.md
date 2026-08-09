@@ -125,10 +125,10 @@ When configured:
 
 ## Known Architectural Gaps
 
-- Claude Code transcript discovery is still hard-coded around `~/.claude/projects`; Codex and Gemini need first-class transcript/session discovery and resume/attach adapters.
+- Transcript discovery supports Claude Code JSONL, bounded Codex rollout JSONL, and conditional Gemini prompt-log presence. Session-id resume is available for Claude and Codex, while Gemini can resume only the latest project session; full Gemini transcript replay, arbitrary Gemini-session resume, and live attach remain unsupported.
 - Dispatch completion is request-level only. Brokered dispatch can poll NockCC live `status_update` messages by `context.request_id`, but the app does not yet render the full resulting NockCC reply thread or dispatched-agent transcript.
 - Discovered agent-folder state remains read-only and local-file-bus based. CRM tmux attach and managed local Claude residents are specific supported paths; arbitrary reconnect, remote provisioning, Codex/Gemini residents, and file-bus handoff still need runtime-specific adapters.
 - Monaco is lazy-loaded and now budgeted in CI, but targeted worker/language loading is still worth tightening if startup or update size becomes a problem.
-- The app has CI for tests, dependency audit, renderer builds, and bundle budgets, but no automated packaged Electron smoke test, crash reporting, or update channel validation.
+- The app has CI for tests, dependency audit, renderer builds, bundle budgets, and unpacked Electron smoke on Linux and macOS. Signed installer smoke on clean target systems, crash reporting, and update-channel validation remain open.
 
 See [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_GTM_READINESS.md) for severity and launch impact.

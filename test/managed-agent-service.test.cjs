@@ -88,7 +88,9 @@ test('create validates absolute roots, provisions a private seat transactionally
   assert.equal(settings.permissions.defaultMode, 'acceptEdits');
   assert.ok(Buffer.byteLength(source, 'utf8') >= 256);
   assert.ok(Buffer.byteLength(source, 'utf8') <= 8192);
-  assert.match(fs.readFileSync(path.join(residence, 'bin', 'run-resident.sh'), 'utf8'), /3\|78\) exit 0/);
+  const wrapper = fs.readFileSync(path.join(residence, 'bin', 'run-resident.sh'), 'utf8');
+  assert.match(wrapper, /if cd .*; then/);
+  assert.match(wrapper, /3\|78\) exit 0/);
   assert.match(plist, /<key>SuccessfulExit<\/key><false\/>/);
   assert.match(plist, /<key>ProgramArguments<\/key><array><string>.*run-resident\.sh<\/string><\/array>/);
   assert.equal(metadata.createdAt, row.metadata.createdAt);

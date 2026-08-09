@@ -67,8 +67,22 @@ test('IPC rejects unsafe ids, non-absolute workspace roots, arbitrary models, an
   const invalidUpdate = await ipc.invoke('managedAgents:update', {
     agentId: 'alpha', draft: { displayName: 'Alpha', allowedRoots: ['relative'] },
   });
+  const unsupportedSupervise = await ipc.invoke('managedAgents:supervise', {
+    agentId: 'alpha', action: 'restart',
+  });
+  const unexpectedParams = await ipc.invoke('managedAgents:control', {
+    agentId: 'alpha', action: 'pause', params: { text: 'nope' },
+  });
 
-  for (const result of [invalidId, relativeRoot, arbitraryModel, malformedControl, invalidUpdate]) {
+  for (const result of [
+    invalidId,
+    relativeRoot,
+    arbitraryModel,
+    malformedControl,
+    invalidUpdate,
+    unsupportedSupervise,
+    unexpectedParams,
+  ]) {
     assert.equal(result.success, false);
     assert.equal(result.code, 'IPC_VALIDATION_ERROR');
   }

@@ -51,6 +51,7 @@ export default function ManagedResidentsPanel({ active, onOpenTerminal }) {
   const [editingAgent, setEditingAgent] = useState(null);
   const [steerText, setSteerText] = useState('');
   const refreshInFlightRef = useRef(false);
+  const activeActionRef = useRef('');
   const api = window.nockTerminal?.managedAgents;
 
   const refresh = useCallback(async ({ background = false, checkPrerequisites = true } = {}) => {
@@ -109,8 +110,10 @@ export default function ManagedResidentsPanel({ active, onOpenTerminal }) {
   const createDisabledReason = activeAction ? 'Wait for the current resident action to finish.' : createBlockedReason;
 
   const run = useCallback(async (agent, action, operation) => {
-    if (activeAction) return null;
-    setActiveAction(`${agent.key}:${action}`);
+    if (activeActionRef.current) throw new Error('Wait for the current resident action to finish.');
+    const actionKey = `${agent.key}:${action}`;
+    activeActionRef.current = actionKey;
+    setActiveAction(actionKey);
     setNotice(null);
     try {
       const result = unwrapManagedResponse(await operation());
@@ -121,9 +124,10 @@ export default function ManagedResidentsPanel({ active, onOpenTerminal }) {
       setNotice({ tone: 'error', text: describeAgentError(error) });
       throw error;
     } finally {
+      activeActionRef.current = '';
       setActiveAction('');
     }
-  }, [activeAction, refresh]);
+  }, [refresh]);
 
   const createResident = useCallback(
     (draft) => run({ key: 'create', displayName: draft.displayName }, 'create', () => api.create(draft)),
