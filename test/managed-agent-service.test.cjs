@@ -209,6 +209,12 @@ test('stop remains available when resident configuration cannot be loaded', asyn
       return { status: 0, stdout: '', stderr: '' };
     },
   });
+  await assert.rejects(
+    service.supervise('alpha', 'stop'),
+    error => error.code === 'INVALID_SEAT',
+  );
+  assert.deepEqual(launchctlCalls, []);
+
   await service.create(draft());
   const manifestPath = path.join(root, '.nock', 'agents', 'alpha', 'seat.json');
   fs.rmSync(manifestPath);

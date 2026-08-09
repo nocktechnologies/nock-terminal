@@ -361,15 +361,30 @@ class ManagedAgentService {
     }
   }
 
-  _managedSeat(agentId) {
+  _managedOwnership(agentId) {
     const id = normalizeId(agentId);
     const paths = this._paths(id);
     if (!isWithin(this.agentsRoot, paths.residence) || !isWithin(this.runRoot, paths.runtimeDir)) {
       throw new ManagedAgentError('managed residence path escaped its root', 'INVALID_SEAT');
     }
     try {
+      this._assertDirectory(paths.residence, path.basename(paths.residence));
+      const metadata = readJson(paths.metadata);
+      if (!isPlainObject(metadata) || metadata.managed !== true || metadata.id !== id) {
+        throw new ManagedAgentError(`managed seat ${id} is invalid`, 'INVALID_SEAT');
+      }
+      return { id, paths, metadata };
+    } catch (error) {
+      if (error instanceof ManagedAgentError) throw error;
+      throw new ManagedAgentError(`managed seat ${id} is invalid`, 'INVALID_SEAT');
+    }
+  }
+
+  _managedSeat(agentId) {
+    const ownership = this._managedOwnership(agentId);
+    const { id, paths, metadata } = ownership;
+    try {
       for (const directory of [
-        paths.residence,
         path.join(paths.residence, 'identity'),
         path.join(paths.residence, 'bin'),
         path.join(paths.residence, 'config'),
@@ -378,12 +393,8 @@ class ManagedAgentService {
         paths.stateDir,
         paths.runtimeDir,
       ]) this._assertDirectory(directory, path.basename(directory));
-      const metadata = readJson(paths.metadata);
       const manifest = readJson(paths.manifest);
-      if (!isPlainObject(metadata)
-        || metadata.managed !== true
-        || metadata.id !== id
-        || !isPlainObject(manifest)
+      if (!isPlainObject(manifest)
         || manifest.agent !== id
         || !isPlainObject(manifest.runtime)) {
         throw new ManagedAgentError(`managed seat ${id} is invalid`, 'INVALID_SEAT');
@@ -851,13 +862,14 @@ class ManagedAgentService {
   }
 
   async _stop(agentId) {
-    const id = normalizeId(agentId);
+    const ownership = this._managedOwnership(agentId);
+    const { id, paths } = ownership;
     if (await this._launchdLoaded(id)) await this._launchctl(['bootout', this._launchctlTarget(id)]);
 
+    ownership.metadata = { ...ownership.metadata, status: 'stopped' };
+    writeJsonAtomic(paths.metadata, ownership.metadata);
     try {
       const seat = this._managedSeat(id);
-      seat.metadata = { ...seat.metadata, status: 'stopped' };
-      writeJsonAtomic(seat.paths.metadata, seat.metadata);
       return this._row(seat, { status: 'stopped', controlReachable: false, serviceLoaded: false });
     } catch {
       return { success: true, agentId: id, status: 'stopped', configurationValid: false };
