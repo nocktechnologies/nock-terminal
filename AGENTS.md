@@ -4,7 +4,7 @@ Nock Terminal is a cross-platform Electron cockpit for local agentic coding work
 
 ## Product Posture
 
-- Be honest about current capabilities: Claude Code transcript discovery, recent Codex rollout transcript discovery, conditional Gemini prompt-log session presence, one-keystroke Claude/Codex/Gemini session resume, local agent-folder discovery from existing `config.json` files, local NockCC file-bus state checks, Claude/Codex/Gemini process and context adapters, Claude/Codex/Gemini/custom terminal launch profiles, Codex/DeepSeek dispatch-agent discovery, Mira-brokered/direct dispatch requests with request-level completion-thread rendering, Ollama chat, Monaco editing, git/file controls, prompt library, session history, Telegram, NockCC heartbeats, and first-run onboarding.
+- Be honest about current capabilities: Claude Code transcript discovery, recent Codex rollout transcript discovery, conditional Gemini prompt-log session presence, one-keystroke Claude/Codex/Gemini session resume, local agent-folder discovery from existing `config.json` files, local NockCC file-bus state checks, Claude/Codex/Gemini process and context adapters, Claude/Codex/Gemini/custom terminal launch profiles, Codex/DeepSeek dispatch-agent discovery, Mira-brokered/direct dispatch requests with request-level completion-thread rendering, remote SSH harness-seat control/pulse/presence, macOS-only managed local Claude/tmux residents, Ollama chat, Monaco editing, git/file controls, prompt library, session history, Telegram, NockCC heartbeats, and first-run onboarding.
 - Treat live attach/reconnect beyond the proven CRM tmux path, full Gemini transcript replay, and dispatched-agent transcript replay as strategic direction until the code has real adapters for those flows.
 - The best product wedge is local-first agent observability and orchestration, not a generic AI IDE clone.
 - Maintain a quiet, dense, cockpit-like UI for repeated developer work.
@@ -61,6 +61,8 @@ Nock Terminal is a cross-platform Electron cockpit for local agentic coding work
 - Resumes discovered sessions with one keystroke: `claude --resume <id>` and `codex resume <id>` for rows with safe session ids, `gemini --resume latest` for the newest session in a project.
 - Opens PTY-backed terminal tabs, applies global/project shell settings, supports splits, keeps terminals mounted across view switches, reconciles stale/orphaned PTYs, and launches `claude` from a new tab.
 - Sends brokered Codex/DeepSeek dispatch requests to Mira via NockCC AgentMessage, or launches direct CRM dispatch scripts with generated payload files.
+- Presents configured remote SSH harness seats in Agent Console with control state, pulse, presence, and console/watch access.
+- Manages local Claude/tmux residents in Agent Console's macOS-only Local Residents mode. Nock generates residences under `~/.nock/agents`, isolates Claude configuration/authentication, supervises them with launchd, and uses the resident engine console protocol for lifecycle control.
 - Provides sidebar file browsing, git status markers, Monaco editing with unsaved-change protection, and project context checks for `CLAUDE.md`, `AGENTS.md`, Codex config, and `.nock/config.toml`.
 - Shows first-run onboarding for dev roots, agent binaries, sessions, context files, and Ollama status.
 - Provides AI chat against Ollama models, plus Claude-oriented Kit/Mara entries.
@@ -78,7 +80,7 @@ The May 15, 2026 audit/remediation pass found that the repo is dogfoodable and p
 - Closed since the May audit: Codex rollout and Gemini prompt-log transcript discovery, one-keystroke Claude/Codex/Gemini session resume, request-level dispatch completion-thread rendering, and unpacked packaged-smoke CI on Linux and macOS.
 - Remaining launch gaps: live attach/reconnect beyond the proven CRM tmux path, full Gemini and dispatched-agent transcript replay, signed installer smoke on clean target OSes, update distribution, crash/error reporting, and a sharper public demo.
 
-Start with `docs/PRODUCT_AUDIT_GTM_READINESS.md`, `docs/ROADMAP.md`, `docs/AGENT_DISPATCH.md`, and `docs/RELEASE_READINESS.md` before major product work.
+Start with `docs/PRODUCT_AUDIT_GTM_READINESS.md`, `docs/ROADMAP.md`, `docs/AGENT_CONSOLE_V1.md`, `docs/AGENT_DISPATCH.md`, and `docs/RELEASE_READINESS.md` before major product work.
 
 ## Session Closeout
 

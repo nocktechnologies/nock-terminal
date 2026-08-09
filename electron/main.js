@@ -27,6 +27,8 @@ const { AgentDispatchService } = require('./agent-dispatch');
 const { registerDispatchIPC } = require('./dispatch-ipc');
 const { HarnessSeatService } = require('./harness-seat-service');
 const { registerHarnessIPC } = require('./harness-ipc');
+const { ManagedAgentService } = require('./managed-agent-service');
+const { registerManagedAgentIPC } = require('./managed-agent-ipc');
 const { registerFileIPC } = require('./file-ipc');
 const { registerLocalDataIPC } = require('./local-data-ipc');
 const { createNockCCActivityIPC } = require('./nockcc-activity-ipc');
@@ -72,6 +74,7 @@ function getAllowedProjectRoots() {
   return [
     ...(settings.devRoots || []),
     ...(fileService?.grantedRoots || []),
+    managedAgentService?.agentsRoot,
   ];
 }
 
@@ -144,6 +147,7 @@ let promptStore = null;
 let nockccClient = null;
 let agentDispatchService = null;
 let harnessSeatService = null;
+let managedAgentService = null;
 let nockccActivityController = null;
 
 const isDev = !app.isPackaged;
@@ -498,6 +502,7 @@ function initServices() {
   nockccClient = new NockCCClient(serviceSettingsStore);
   agentDispatchService = new AgentDispatchService(serviceSettingsStore);
   harnessSeatService = new HarnessSeatService();
+  managedAgentService = new ManagedAgentService();
 }
 
 function registerIPC() {
@@ -541,6 +546,11 @@ function registerIPC() {
     ipcMain,
     service: harnessSeatService,
     getSettingsSnapshot,
+  });
+
+  registerManagedAgentIPC({
+    ipcMain,
+    managedAgentService,
   });
 
   registerOllamaIPC({

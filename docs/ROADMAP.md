@@ -1,6 +1,6 @@
 # Product Roadmap
 
-Updated: 2026-06-12
+Updated: 2026-08-08
 
 This roadmap follows the audit in `docs/PRODUCT_AUDIT_GTM_READINESS.md`. It assumes Nock Terminal should become a local-first cockpit for supervising coding agents, not a generic AI IDE.
 
@@ -26,6 +26,15 @@ Do not lead with "Codex app" or "Claude app." Lead with the workflow:
 - **Dense, calm, repeated-use UI**: this is an operator console, not a marketing dashboard.
 
 ## Near-Term Roadmap
+
+### August 8 Agent Console Local Residents
+
+Agent Console now has two deliberately separate operating modes:
+
+- **Remote Seats** preserves the existing configured SSH harness-seat workflow: status and control actions, interactive/read-only access, agent pulse, and live presence. These seats must already exist; Nock does not provision remote hosts.
+- **Local Residents** adds a macOS-only managed Claude Code template. Nock generates each residence under `~/.nock/agents`, isolates its Claude config/auth, supervises it with launchd, attaches through its dedicated tmux server, and sends lifecycle actions through the resident engine console protocol.
+
+The v1 boundary is intentionally narrow. Codex/Gemini residents, SDK residents, remote provisioning, and generic runtime templates remain future adapter work.
 
 ### May 24-25 NockCC Backlog Reconciliation, Phase H Closeout, And Release Truth
 
@@ -159,6 +168,8 @@ Current adapter posture:
 - Codex dispatch agents: CRM brokered/direct dispatch is implemented for allowlisted agents; local dispatch-run history has a shared status normalizer, brokered runs poll live NockCC `status_update` messages by `context.request_id`, and operators can expand a brokered run to inspect its request-level AgentMessage thread. Full dispatched-agent transcript replay remains future work.
 - DeepSeek dispatch agents: API-backed CRM brokered/direct dispatch is implemented for allowlisted agents; there is no standalone DeepSeek CLI launcher.
 - Gemini CLI: process detection, `GEMINI.md` context checks, profile-driven terminal launch, conditional prompt-log session-presence discovery, and latest-session resume (`gemini --resume latest`) are implemented; full transcript replay, arbitrary-session resume, and live attach remain future work.
+- Remote SSH harness seats: configured seats expose status/control, console/watch access, pulse, and presence through Agent Console; installation and remote provisioning remain external.
+- Managed local residents: macOS-only Claude Code seats use generated residences, dedicated auth/config, launchd supervision, dedicated tmux attach, and the resident engine console protocol; no Codex, Gemini, SDK, or remote resident template is implemented.
 
 Gemini context reference: https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/gemini-md.md
 

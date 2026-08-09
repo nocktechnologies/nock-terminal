@@ -11,7 +11,7 @@ const { ManagedAgentService } = require('../electron/managed-agent-service');
 
 const MODEL = 'claude-opus-4-8[1m]';
 
-function makeHarness({ spawn, net } = {}) {
+function makeHarness({ runCommand, net } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nock-managed-agent-'));
   const engineRoot = path.join(root, 'engine');
   fs.mkdirSync(path.join(engineRoot, 'runtime'), { recursive: true });
@@ -36,7 +36,7 @@ function makeHarness({ spawn, net } = {}) {
       tmux: () => ({ available: true, version: '3.4', error: '' }),
       claude: () => ({ available: true, version: '2.1.226', error: '' }),
     },
-    ...(spawn ? { spawn } : {}),
+    ...(runCommand ? { runCommand } : {}),
     ...(net ? { net } : {}),
     randomUUID: () => '11111111-1111-4111-8111-111111111111',
   });
@@ -63,11 +63,11 @@ function draft(overrides = {}) {
   };
 }
 
-test('create validates absolute roots, provisions a private seat transactionally, and compiles permissions', () => {
+test('create validates absolute roots, provisions a private seat transactionally, and compiles permissions', async () => {
   const { root, service } = makeHarness();
-  assert.throws(() => service.create(draft({ allowedRoots: ['relative/project'] })), /absolute/);
+  await assert.rejects(service.create(draft({ allowedRoots: ['relative/project'] })), /absolute/);
 
-  const row = service.create(draft());
+  const row = await service.create(draft({ workDirectory: '' }));
   assert.equal(row.id, 'managed:alpha');
   assert.equal(row.agentId, 'alpha');
   assert.equal(row.kind, 'agent');
@@ -92,18 +92,18 @@ test('create validates absolute roots, provisions a private seat transactionally
   assert.match(plist, /<key>SuccessfulExit<\/key><false\/>/);
   assert.match(plist, /<key>ProgramArguments<\/key><array><string>.*run-resident\.sh<\/string><\/array>/);
   assert.equal(metadata.createdAt, row.metadata.createdAt);
-  assert.throws(() => service.create(draft()), /already exists/);
+  await assert.rejects(service.create(draft()), /already exists/);
 });
 
-test('create removes every staged artifact when engine preflight fails', () => {
+test('create removes every staged artifact when engine preflight fails', async () => {
   const { root, service } = makeHarness({
-    spawn(_file, args) {
+    runCommand(_file, args) {
       if (args.includes('--check')) return { status: 78, stdout: '', stderr: 'manifest invalid' };
       return { status: 0, stdout: '', stderr: '' };
     },
   });
 
-  assert.throws(() => service.create(draft()), /preflight failed/);
+  await assert.rejects(service.create(draft()), /preflight failed/);
   assert.equal(fs.existsSync(path.join(root, '.nock', 'agents', 'alpha')), false);
   assert.equal(fs.existsSync(path.join(root, '.nock', 'run', 'alpha')), false);
   assert.equal(fs.existsSync(path.join(root, 'Library', 'LaunchAgents', 'io.nock.terminal.resident.alpha.plist')), false);
@@ -112,7 +112,7 @@ test('create removes every staged artifact when engine preflight fails', () => {
 test('auth fingerprinting and validation expose no email or credential-shaped data', async () => {
   let authStatusCalls = 0;
   const { root, service } = makeHarness({
-    spawn(file, args, options) {
+    runCommand(file, args, options) {
       if (args.join(' ') === 'auth status --json') {
         authStatusCalls += 1;
         assert.equal(file, '/usr/bin/true');
@@ -134,7 +134,7 @@ test('auth fingerprinting and validation expose no email or credential-shaped da
       return { status: 0, stdout: 'Python 3.12.1', stderr: '' };
     },
   });
-  service.create(draft());
+  await service.create(draft());
   const expected = ManagedAgentService.authFingerprint({
     authMethod: 'claude.ai',
     apiProvider: 'first-party',
@@ -179,7 +179,7 @@ test('control uses the manifest socket, bounded NDJSON, and a stable UUID mutati
       },
     },
   });
-  service.create(draft());
+  await service.create(draft());
   const result = await service.control('alpha', 'restart');
   const request = JSON.parse(writes[0]);
   assert.equal(result.success, true);
@@ -194,7 +194,7 @@ test('control uses the manifest socket, bounded NDJSON, and a stable UUID mutati
 test('update preserves the residence, creation metadata, and auth fingerprint while regenerating the blueprint', async () => {
   const { root, service } = makeHarness({
     net: { createConnection() { throw new Error('no live control socket'); } },
-    spawn(file, args) {
+    runCommand(file, args) {
       if (file === '/usr/bin/false' && args[0] === 'print') {
         return { status: 1, stdout: '', stderr: 'not loaded' };
       }
@@ -204,7 +204,7 @@ test('update preserves the residence, creation metadata, and auth fingerprint wh
       return { status: 0, stdout: 'Python 3.12.1', stderr: '' };
     },
   });
-  service.create(draft());
+  await service.create(draft());
   await service.validate('alpha');
   const beforeMetadata = JSON.parse(fs.readFileSync(path.join(root, '.nock', 'agents', 'alpha', 'nock-agent.json'), 'utf8'));
   const beforeManifest = JSON.parse(fs.readFileSync(path.join(root, '.nock', 'agents', 'alpha', 'seat.json'), 'utf8'));
@@ -233,7 +233,7 @@ test('update preserves the residence, creation metadata, and auth fingerprint wh
 
 test('inventory surfaces terminal/config supervisor exits as operator-action states', async () => {
   const { root, service } = makeHarness();
-  service.create(draft());
+  await service.create(draft());
   const residence = path.join(root, '.nock', 'agents', 'alpha');
   fs.writeFileSync(
     path.join(residence, 'state', 'nock-supervisor.json'),

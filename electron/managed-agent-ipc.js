@@ -23,11 +23,14 @@ function invalid(message) {
   return { ok: false, error: message };
 }
 
-function boundedString(value, field, { max = 1000, required = false } = {}) {
+function boundedString(value, field, { max = 1000, required = false, multiline = false } = {}) {
   if (typeof value !== 'string') return invalid(`${field} must be a string`);
   const normalized = value.trim();
   if (required && !normalized) return invalid(`${field} is required`);
-  if (normalized.length > max || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(normalized)) {
+  const invalidCharacters = multiline
+    ? /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/
+    : /[\u0000-\u001F\u007F]/;
+  if (normalized.length > max || invalidCharacters.test(normalized)) {
     return invalid(`${field} is too long or contains control characters`);
   }
   return { ok: true, value: normalized };
@@ -57,8 +60,10 @@ function validateDraft(draft, { update = false } = {}) {
     const id = validateAgentId(draft.agentId ?? draft.id, 'agentId');
     if (!id.ok) return id;
   }
-  const displayName = boundedString(draft.displayName ?? draft.name, 'displayName', { max: 120, required: true });
-  if (!displayName.ok) return displayName;
+  if (!update || draft.displayName !== undefined || draft.name !== undefined) {
+    const displayName = boundedString(draft.displayName ?? draft.name, 'displayName', { max: 120, required: true });
+    if (!displayName.ok) return displayName;
+  }
   if (draft.model !== undefined) {
     const model = boundedString(draft.model, 'model', { max: 120, required: true });
     if (!model.ok) return model;
@@ -87,7 +92,7 @@ function validateDraft(draft, { update = false } = {}) {
     }
   }
   if (draft.purpose !== undefined) {
-    const checked = boundedString(draft.purpose, 'purpose', { max: 500 });
+    const checked = boundedString(draft.purpose, 'purpose', { max: 500, multiline: true });
     if (!checked.ok) return checked;
   }
   return { ok: true, value: draft };
@@ -108,7 +113,7 @@ function validateControlPayload(payload) {
   const params = payload.params === undefined ? {} : payload.params;
   if (!isPlainObject(params)) return invalid('managedAgents:control params must be an object');
   if (base.value.action === 'steer') {
-    const text = boundedString(params.text, 'managedAgents:control params.text', { max: MAX_TEXT_LENGTH, required: true });
+    const text = boundedString(params.text, 'managedAgents:control params.text', { max: MAX_TEXT_LENGTH, required: true, multiline: true });
     if (!text.ok) return text;
     return { ok: true, value: { ...base.value, params: { text: text.value } } };
   }

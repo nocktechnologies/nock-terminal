@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { execFile } = require('node:child_process');
 const {
   AGENT_ID_RE,
   AUTH_PLACEHOLDER,
@@ -130,7 +130,7 @@ class ManagedAgentService {
     this.launchctlPath = options.launchctlPath || '/bin/launchctl';
     this.supportedModels = [...(options.supportedModels?.length ? options.supportedModels : SUPPORTED_MODELS)];
     this.probes = isPlainObject(options.probes) ? options.probes : {};
-    this.spawn = options.spawn || spawnSync;
+    this.runCommand = options.runCommand || this._execFile.bind(this);
     const controlTimeoutMs = Number.isFinite(options.controlTimeoutMs) ? Math.max(100, options.controlTimeoutMs) : 2500;
     this.controlClient = new ResidentControlClient({ socketFactory: options.net, timeoutMs: controlTimeoutMs });
     this.randomUUID = options.randomUUID || crypto.randomUUID;
@@ -148,9 +148,22 @@ class ManagedAgentService {
     return isAbsolute(candidate) ? path.resolve(candidate) : '';
   }
 
-  _run(file, args, options = {}) {
+  _execFile(file, args, options) {
+    return new Promise(resolve => {
+      execFile(file, args, options, (error, stdout, stderr) => {
+        resolve({
+          error: error || null,
+          status: error ? (Number.isInteger(error.code) ? error.code : null) : 0,
+          stdout: stdout || '',
+          stderr: stderr || '',
+        });
+      });
+    });
+  }
+
+  async _run(file, args, options = {}) {
     try {
-      return this.spawn(file, args, {
+      return await this.runCommand(file, args, {
         shell: false,
         encoding: 'utf8',
         timeout: options.timeout ?? 1500,
@@ -162,54 +175,59 @@ class ManagedAgentService {
     }
   }
 
-  _probeExecutable(file, args, parser) {
+  async _probeExecutable(file, args, parser) {
     if (!file || !isAbsolute(file) || !executableExists(file)) {
       return { path: file || '', available: false, version: '', error: 'missing' };
     }
-    const result = this._run(file, args, { timeout: 5000 });
+    const result = await this._run(file, args, { timeout: 5000 });
     const output = `${result.stdout || ''}\n${result.stderr || ''}`;
     if (result.error || result.status !== 0) return { path: file, available: false, version: '', error: 'probe-failed' };
     return { path: file, available: true, version: parser(output), error: '' };
   }
 
-  _probePython(file) {
-    if (this.probes.runtimePython) return { path: file, ...this.probes.runtimePython(file) };
-    const version = this._probeExecutable(file, ['--version'], parseVersion);
+  async _probePython(file) {
+    if (this.probes.runtimePython) return { path: file, ...await this.probes.runtimePython(file) };
+    const version = await this._probeExecutable(file, ['--version'], parseVersion);
     if (!version.available || !/^3\./.test(version.version)) {
       return { path: file || '', available: false, version: version.version, jsonschema: false, error: 'python3-missing' };
     }
-    const dependency = this._run(file, ['-c', 'import jsonschema; print(jsonschema.__version__)'], { timeout: 5000 });
+    const dependency = await this._run(file, ['-c', 'import jsonschema; print(jsonschema.__version__)'], { timeout: 5000 });
     const jsonschema = !dependency.error && dependency.status === 0 && Boolean(String(dependency.stdout || '').trim());
     return { path: file, available: jsonschema, version: version.version, jsonschema, error: jsonschema ? '' : 'jsonschema-missing' };
   }
 
-  _runtimePythonProbe() {
+  async _runtimePythonProbe() {
     const candidates = executableCandidates(['python3'], this.configuredPython);
     let fallback = { path: this.configuredPython || '', available: false, version: '', jsonschema: false, error: 'missing' };
     for (const candidate of candidates) {
-      const probe = this._probePython(candidate);
+      const probe = await this._probePython(candidate);
       if (!fallback.path) fallback = probe;
       if (probe.available && probe.jsonschema) return probe;
     }
     return fallback;
   }
 
-  _probeSnapshot() {
+  async _probeSnapshot() {
     const tmuxPath = findExecutable(['tmux'], this.configuredTmux);
     const claudePath = findExecutable(['claude'], this.configuredClaude);
-    return {
-      runtimePython: this._runtimePythonProbe(),
-      tmux: this.probes.tmux
-        ? { path: tmuxPath, ...this.probes.tmux(tmuxPath) }
+    const [runtimePython, tmux, claude] = await Promise.all([
+      this._runtimePythonProbe(),
+      this.probes.tmux
+        ? Promise.resolve(this.probes.tmux(tmuxPath)).then(result => ({ path: tmuxPath, ...result }))
         : this._probeExecutable(tmuxPath, ['-V'], parseVersion),
-      claude: this.probes.claude
-        ? { path: claudePath, ...this.probes.claude(claudePath) }
+      this.probes.claude
+        ? Promise.resolve(this.probes.claude(claudePath)).then(result => ({ path: claudePath, ...result }))
         : this._probeExecutable(claudePath, ['--version'], parseVersion),
+    ]);
+    return {
+      runtimePython,
+      tmux,
+      claude,
     };
   }
 
-  prerequisites() {
-    const probes = this._probeSnapshot();
+  async prerequisites() {
+    const probes = await this._probeSnapshot();
     const engineAvailable = Boolean(
       this.engineRoot
       && fs.existsSync(path.join(this.engineRoot, 'runtime', 'seat.py'))
@@ -228,6 +246,7 @@ class ManagedAgentService {
       ready: items.every(item => item.available),
       missing: items.filter(item => !item.available).map(item => item.label),
       items,
+      supportedModels: [...this.supportedModels],
       engineRoot: this.engineRoot || null,
       roots: { agents: this.agentsRoot, run: this.runRoot, launchAgents: this.launchAgentsRoot },
       runtimePython: { path: probes.runtimePython.path || null, version: probes.runtimePython.version || null, jsonschema: probes.runtimePython.jsonschema === true },
@@ -237,8 +256,8 @@ class ManagedAgentService {
     };
   }
 
-  _requirePrerequisites() {
-    const result = this.prerequisites();
+  async _requirePrerequisites() {
+    const result = await this.prerequisites();
     if (!result.ready) {
       throw new ManagedAgentError(`managed resident prerequisites missing: ${result.missing.join(', ')}`, 'PREREQUISITES_MISSING');
     }
@@ -378,7 +397,7 @@ class ManagedAgentService {
       capability: 'resident-live-attach',
       command: argv.length ? posixCommand(argv) : '',
       argv,
-      cwd: seat.manifest.work_dir,
+      cwd: seat.paths.residence,
       canLaunch,
       disabledReason: canLaunch ? '' : 'Resident tmux session is not reachable',
     };
@@ -455,9 +474,9 @@ class ManagedAgentService {
     return `gui/${this.uid}/${PLIST_LABEL_PREFIX}${agentId}`;
   }
 
-  _launchdLoaded(agentId) {
+  async _launchdLoaded(agentId) {
     if (this.platform !== 'darwin' || !executableExists(this.launchctlPath)) return false;
-    const result = this._run(this.launchctlPath, ['print', this._launchctlTarget(agentId)], { timeout: 3000 });
+    const result = await this._run(this.launchctlPath, ['print', this._launchctlTarget(agentId)], { timeout: 3000 });
     return !result.error && result.status === 0;
   }
 
@@ -480,14 +499,14 @@ class ManagedAgentService {
           return {
             status,
             controlReachable: true,
-            serviceLoaded: this._launchdLoaded(seat.id),
+            serviceLoaded: await this._launchdLoaded(seat.id),
             failureReason: status === 'terminal_failed' ? String(frame.result?.terminal_reason || 'Resident entered terminal-failed state.') : '',
           };
         }
       } catch {}
     }
 
-    const serviceLoaded = this._launchdLoaded(seat.id);
+    const serviceLoaded = await this._launchdLoaded(seat.id);
     const receipt = this._supervisorReceipt(seat);
     let status = seat.metadata.status;
     let failureReason = '';
@@ -514,17 +533,16 @@ class ManagedAgentService {
   async list() {
     try {
       if (!fs.existsSync(this.agentsRoot)) return [];
-      const rows = [];
-      for (const entry of fs.readdirSync(this.agentsRoot, { withFileTypes: true }).filter(item => item.isDirectory())) {
+      const entries = fs.readdirSync(this.agentsRoot, { withFileTypes: true }).filter(item => item.isDirectory());
+      return Promise.all(entries.map(async entry => {
         const residence = path.join(this.agentsRoot, entry.name);
         try {
           const seat = this._seat(entry.name);
-          rows.push(this._row(seat, await this._statusSnapshot(seat)));
+          return this._row(seat, await this._statusSnapshot(seat));
         } catch (error) {
-          rows.push(this._invalidRow(entry.name, residence, error.message));
+          return this._invalidRow(entry.name, residence, error.message);
         }
-      }
-      return rows;
+      }));
     } catch {
       return [this._invalidRow('managed-agents-root', this.agentsRoot, 'Managed agent inventory is unreadable.')];
     }
@@ -563,8 +581,8 @@ class ManagedAgentService {
     return buildLaunchdPlist(`${PLIST_LABEL_PREFIX}${id}`, paths, this.engineRoot, probes.runtimePython.path, probes.tmux.path, probes.claude.path);
   }
 
-  _preflight(manifestPath, probes) {
-    const result = this._run(
+  async _preflight(manifestPath, probes) {
+    const result = await this._run(
       probes.runtimePython.path,
       ['-m', 'runtime.seat', '--manifest', manifestPath, '--check'],
       { timeout: 30_000, cwd: this.engineRoot, env: process.env },
@@ -575,7 +593,7 @@ class ManagedAgentService {
     }
   }
 
-  create(draft) {
+  async create(draft) {
     const id = normalizeId(draft?.agentId ?? draft?.id);
     const paths = this._paths(id);
     const normalized = normalizeDraft(draft, {
@@ -583,7 +601,7 @@ class ManagedAgentService {
       defaultWorkDirectory: paths.residence,
       supportedModels: this.supportedModels,
     });
-    const probes = this._requirePrerequisites();
+    const probes = await this._requirePrerequisites();
     ensureDirectory(this.agentsRoot);
     ensureDirectory(this.runRoot);
     ensureDirectory(this.launchAgentsRoot);
@@ -602,7 +620,7 @@ class ManagedAgentService {
       this._writeResidence(residenceTemp, normalized, paths, manifest, metadata, probes);
       ensureDirectory(runtimeTemp);
       writeAtomic(plistTemp, this._plistContent(id, paths, probes));
-      this._preflight(path.join(residenceTemp, 'seat.json'), probes);
+      await this._preflight(path.join(residenceTemp, 'seat.json'), probes);
       for (const [source, target] of [
         [residenceTemp, paths.residence],
         [runtimeTemp, paths.runtimeDir],
@@ -639,7 +657,7 @@ class ManagedAgentService {
     };
   }
 
-  _replaceFiles(entries, validate) {
+  async _replaceFiles(entries, validate) {
     const staged = entries.map(entry => ({
       ...entry,
       staged: `${entry.target}.${this.randomUUID()}.next`,
@@ -650,7 +668,7 @@ class ManagedAgentService {
     let committed = false;
     try {
       for (const entry of staged) writeAtomic(entry.staged, entry.content, entry.mode);
-      validate?.(staged);
+      await validate?.(staged);
       for (const entry of staged) {
         if (fs.existsSync(entry.target)) {
           fs.renameSync(entry.target, entry.backup);
@@ -710,7 +728,7 @@ class ManagedAgentService {
       defaultWorkDirectory: seat.paths.residence,
       supportedModels: this.supportedModels,
     });
-    const probes = this._requirePrerequisites();
+    const probes = await this._requirePrerequisites();
     const authIdentity = seat.manifest.runtime.auth_identity;
     const status = authIdentity === AUTH_PLACEHOLDER ? 'needs_auth' : 'stopped';
     const metadata = buildMetadata(normalized, seat.paths, { previous: seat.metadata, authIdentity, status });
@@ -725,9 +743,9 @@ class ManagedAgentService {
       { target: seat.paths.plist, content: this._plistContent(seat.id, seat.paths, probes), mode: 0o600 },
     ];
     try {
-      this._replaceFiles(entries, staged => {
+      await this._replaceFiles(entries, async staged => {
         const manifestEntry = staged.find(entry => entry.manifest);
-        this._preflight(manifestEntry.staged, probes);
+        await this._preflight(manifestEntry.staged, probes);
       });
     } catch (error) {
       if (error instanceof ManagedAgentError) throw error;
@@ -739,7 +757,7 @@ class ManagedAgentService {
   async validate(agentId) {
     const seat = this._seat(agentId);
     await this._requireOffline(seat, 'validating authentication');
-    const result = this._run(seat.manifest.runtime.binary, ['auth', 'status', '--json'], {
+    const result = await this._run(seat.manifest.runtime.binary, ['auth', 'status', '--json'], {
       timeout: 30_000,
       env: { ...process.env, CLAUDE_CONFIG_DIR: seat.paths.configDir },
     });
@@ -757,7 +775,7 @@ class ManagedAgentService {
     const nextStatus = sanitized.loggedIn ? 'stopped' : 'needs_auth';
     const manifest = { ...seat.manifest, runtime: { ...seat.manifest.runtime, auth_identity: authIdentity } };
     const metadata = { ...seat.metadata, status: nextStatus, runtime: { ...seat.metadata.runtime, authIdentity } };
-    this._replaceFiles([
+    await this._replaceFiles([
       { target: seat.paths.manifest, content: `${JSON.stringify(manifest, null, 2)}\n`, mode: 0o600 },
       { target: seat.paths.metadata, content: `${JSON.stringify(metadata, null, 2)}\n`, mode: 0o600 },
     ]);
@@ -771,7 +789,7 @@ class ManagedAgentService {
     return {
       success: true,
       agentId: seat.id,
-      cwd: seat.manifest.work_dir,
+      cwd: seat.paths.residence,
       title: `Authenticate ${seat.metadata.displayName}`,
       launchCommand: command,
       command,
@@ -781,8 +799,8 @@ class ManagedAgentService {
     };
   }
 
-  _launchctl(args) {
-    const result = this._run(this.launchctlPath, args, { timeout: 10_000 });
+  async _launchctl(args) {
+    const result = await this._run(this.launchctlPath, args, { timeout: 10_000 });
     if (result.error || result.status !== 0) {
       const detail = String(result.stderr || '').trim().slice(0, 240);
       throw new ManagedAgentError(`launchd operation failed${detail ? `: ${detail}` : ''}`, 'SUPERVISION_FAILED');
@@ -806,14 +824,14 @@ class ManagedAgentService {
         throw new ManagedAgentError('validate the dedicated Claude authentication before starting this resident', 'AUTH_REQUIRED');
       }
       try { fs.rmSync(seat.paths.supervisorState, { force: true }); } catch {}
-      if (!snapshot.serviceLoaded) this._launchctl(['bootstrap', domain, seat.paths.plist]);
-      this._launchctl(['kickstart', '-k', target]);
+      if (!snapshot.serviceLoaded) await this._launchctl(['bootstrap', domain, seat.paths.plist]);
+      await this._launchctl(['kickstart', '-k', target]);
       seat.metadata = { ...seat.metadata, status: 'starting' };
       writeJsonAtomic(seat.paths.metadata, seat.metadata);
       return this._row(seat, { status: 'starting', controlReachable: false, serviceLoaded: true });
     }
 
-    if (snapshot.serviceLoaded) this._launchctl(['bootout', target]);
+    if (snapshot.serviceLoaded) await this._launchctl(['bootout', target]);
     seat.metadata = { ...seat.metadata, status: 'stopped' };
     writeJsonAtomic(seat.paths.metadata, seat.metadata);
     return this._row(seat, { status: 'stopped', controlReachable: false, serviceLoaded: false });
@@ -822,7 +840,7 @@ class ManagedAgentService {
   _controlParams(action, params) {
     if (!CONTROL_ACTIONS.has(action)) throw new ManagedAgentError('control action is not supported', 'VALIDATION_ERROR');
     if (!isPlainObject(params)) throw new ManagedAgentError('control params must be an object', 'VALIDATION_ERROR');
-    if (action === 'steer') return { text: boundedText(params.text, 'params.text', { required: true }) };
+    if (action === 'steer') return { text: boundedText(params.text, 'params.text', { required: true, multiline: true }) };
     if (Object.keys(params).length) throw new ManagedAgentError(`${action} does not accept params`, 'VALIDATION_ERROR');
     return {};
   }

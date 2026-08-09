@@ -84,7 +84,7 @@ test('IPC validates and delegates update, supervision, and control payloads', as
   });
   const update = await ipc.invoke('managedAgents:update', {
     agentId: 'alpha',
-    draft: { displayName: 'Alpha', model: 'claude-opus-4-8[1m]', allowedRoots: ['/tmp/project'], permissionPreset: 'standard' },
+    draft: { permissionPreset: 'standard' },
   });
   const supervise = await ipc.invoke('managedAgents:supervise', { agentId: 'alpha', action: 'stop' });
   const control = await ipc.invoke('managedAgents:control', { agentId: 'alpha', action: 'steer', params: { text: 'hello' } });
@@ -93,7 +93,7 @@ test('IPC validates and delegates update, supervision, and control payloads', as
   assert.deepEqual(supervise, { success: true });
   assert.deepEqual(control, { success: true });
   assert.deepEqual(calls, [
-    ['update', 'alpha', { displayName: 'Alpha', model: 'claude-opus-4-8[1m]', allowedRoots: ['/tmp/project'], permissionPreset: 'standard' }],
+    ['update', 'alpha', { permissionPreset: 'standard' }],
     ['supervise', 'alpha', 'stop'],
     ['control', 'alpha', 'steer', { text: 'hello' }],
   ]);

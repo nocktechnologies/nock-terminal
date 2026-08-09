@@ -28,7 +28,6 @@ test('normalizes the managed resident service contract without inventing capabil
   });
 
   assert.equal(agent.id, 'mira');
-  assert.equal(agent.ownership, 'managed');
   assert.equal(agent.permission.defaultMode, 'acceptEdits');
   assert.equal(agent.capabilities.authenticate, true);
   assert.equal(agent.capabilities.start, false);
@@ -36,19 +35,14 @@ test('normalizes the managed resident service contract without inventing capabil
   assert.deepEqual(agent.allowedRoots, ['/Users/kevin/Dev/mira']);
 });
 
-test('managed inventory wins over its matching discovered resident session', () => {
-  const inventory = buildAgentInventory(
-    [{ id: 'managed:mira', agentId: 'mira', displayName: 'Mira', status: 'stopped', agent: { name: 'mira' } }],
-    [
-      { id: 'resident:/seats/mira.json', kind: 'agent', name: 'Mira', agent: { name: 'mira', runtime: 'resident' } },
-      { id: 'agent:/agents/ash', kind: 'agent', name: 'Ash', agent: { name: 'ash', runtime: 'codex' } },
-    ]
-  );
+test('managed inventory deduplicates rows and sorts by display name', () => {
+  const inventory = buildAgentInventory([
+    { id: 'managed:mira', agentId: 'mira', displayName: 'Mira', status: 'stopped', agent: { name: 'mira' } },
+    { id: 'managed:ash', agentId: 'ash', displayName: 'Ash', status: 'stopped', agent: { name: 'ash' } },
+    { id: 'managed:mira', agentId: 'mira', displayName: 'Mira duplicate', status: 'stopped', agent: { name: 'mira' } },
+  ]);
 
-  assert.equal(inventory.length, 2);
-  assert.equal(inventory[0].ownership, 'managed');
-  assert.equal(inventory.some((agent) => agent.name === 'mira' && agent.ownership === 'imported'), false);
-  assert.equal(inventory.some((agent) => agent.name === 'ash' && agent.ownership === 'imported'), true);
+  assert.deepEqual(inventory.map((agent) => agent.id), ['ash', 'mira']);
 });
 
 test('builds resident drafts with normalized roots and validates identity', () => {

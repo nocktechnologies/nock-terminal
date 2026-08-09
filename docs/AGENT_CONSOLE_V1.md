@@ -2,8 +2,17 @@
 
 ## Product boundary
 
-Agent Console is Nock Terminal's local control plane for agent harnesses. It is
-not a second terminal emulator and it does not copy Hermes' profile model.
+Agent Console is Nock Terminal's control plane for persistent agent harnesses.
+It is not a second terminal emulator and it does not copy Hermes' profile
+model. The console has two modes with different ownership boundaries:
+
+- **Remote Seats** preserves the existing SSH-backed harness view. It reads
+  status, control, pulse, and presence data and opens interactive or read-only
+  access to seats that are already installed on remote hosts.
+- **Local Residents** creates and manages Nock-owned residents on this Mac.
+
+Remote Seats does not provision, install, or rewrite a remote harness. Local
+Residents does not turn the remote SSH surface into a deployment system.
 
 The first managed template is intentionally narrow:
 
@@ -14,8 +23,8 @@ The first managed template is intentionally narrow:
 - console channel only;
 - dedicated Claude configuration and authentication per seat.
 
-All already-discovered agents remain visible. Agents not created by Nock are
-read-only and keep their existing attach/launch behavior.
+The first Local Residents template is intentionally narrow. It does not add
+Codex, Gemini, SDK, or generic runtime resident support.
 
 ## Ownership model
 
@@ -144,9 +153,16 @@ metadata. Nock never pane-scrapes, uses `send-keys`, or writes engine state.
 
 ## v1 UI
 
-Agent Console is a first-class navigation view with:
+Agent Console is a first-class navigation view. Remote Seats retains:
 
-- compact managed/imported inventory;
+- configured SSH seat inventory and connection editing;
+- bounded status and control actions;
+- interactive console and protected watch access;
+- agent pulse and live presence.
+
+Local Residents adds:
+
+- compact managed inventory;
 - lifecycle and prerequisite state;
 - one selected-agent inspector;
 - Create Resident flow;
@@ -155,8 +171,8 @@ Agent Console is a first-class navigation view with:
 - visible ownership, harness, runtime, model, permission preset, residence,
   workspace, and failure reason.
 
-Controls are capability-driven. Imported or remote seats never show enabled
-mutation controls.
+Controls are capability-driven. Local resident actions never mutate a remote
+seat, and remote controls never write a local managed residence.
 
 ## Deliberate non-goals
 

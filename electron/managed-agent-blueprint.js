@@ -47,14 +47,17 @@ function isWithin(root, candidate) {
   return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
-function boundedText(value, field, { max = MAX_TEXT_LENGTH, required = false } = {}) {
+function boundedText(value, field, { max = MAX_TEXT_LENGTH, required = false, multiline = false } = {}) {
   if (typeof value !== 'string') {
     if (!required && (value === undefined || value === null)) return '';
     throw new ManagedAgentError(`${field} must be a string`, 'VALIDATION_ERROR');
   }
   const normalized = value.trim();
   if (required && !normalized) throw new ManagedAgentError(`${field} is required`, 'VALIDATION_ERROR');
-  if (normalized.length > max || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(normalized)) {
+  const invalidCharacters = multiline
+    ? /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/
+    : /[\u0000-\u001F\u007F]/;
+  if (normalized.length > max || invalidCharacters.test(normalized)) {
     throw new ManagedAgentError(`${field} is too long or contains control characters`, 'VALIDATION_ERROR');
   }
   return normalized;
@@ -108,7 +111,7 @@ function normalizeDraft(draft, { agentId, defaultWorkDirectory, supportedModels 
   }
 
   const workspace = isPlainObject(draft.workspaces) ? draft.workspaces : {};
-  const workDirectory = normalizeRoot(draft.workDirectory ?? workspace.workDirectory ?? defaultWorkDirectory, 'workDirectory');
+  const workDirectory = normalizeRoot(draft.workDirectory || workspace.workDirectory || defaultWorkDirectory, 'workDirectory');
   const configuredRoots = normalizeRoots(draft.allowedRoots ?? draft.workspaceRoots ?? workspace.allowedRoots, 'allowedRoots');
   const allowedRoots = [...new Set([workDirectory, ...configuredRoots])];
   const deniedRoots = normalizeRoots(draft.deniedRoots ?? workspace.deniedRoots, 'deniedRoots');
@@ -122,7 +125,7 @@ function normalizeDraft(draft, { agentId, defaultWorkDirectory, supportedModels 
     allowedRoots,
     deniedRoots,
     identity: normalizeIdentity({ ...draft, displayName }),
-    purpose: boundedText(draft.purpose, 'purpose', { max: 500 }),
+    purpose: boundedText(draft.purpose, 'purpose', { max: 500, multiline: true }),
   };
 }
 

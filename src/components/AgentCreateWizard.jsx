@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Check, Loader2, X } from 'lucide-react';
-import { DEFAULT_MODEL, PERMISSION_PRESETS, validateResidentDraft } from '../utils/agentConsole.mjs';
+import {
+  DEFAULT_MODEL,
+  PERMISSION_PRESETS,
+  validateResidentDraft,
+} from '../utils/agentConsole.mjs';
 
 const INITIAL_VALUES = {
   id: '',
@@ -24,6 +28,7 @@ export default function AgentCreateWizard({
   blockedReason = '',
   mode = 'create',
   initialValues = INITIAL_VALUES,
+  supportedModels = [DEFAULT_MODEL],
 }) {
   const [values, setValues] = useState(INITIAL_VALUES);
   const [errors, setErrors] = useState({});
@@ -47,7 +52,7 @@ export default function AgentCreateWizard({
 
   const submit = async (event) => {
     event.preventDefault();
-    const result = validateResidentDraft(values);
+    const result = validateResidentDraft(values, supportedModels);
     setErrors(result.errors);
     if (!result.valid || submitting || blockedReason) return;
     setSubmitting(true);
@@ -124,7 +129,9 @@ export default function AgentCreateWizard({
             <SectionLabel>Runtime</SectionLabel>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="Model" error={errors.model}>
-                <input value={values.model} onChange={(event) => update('model', event.target.value)} className={INPUT_CLASS} autoComplete="off" />
+                <select value={values.model} onChange={(event) => update('model', event.target.value)} className={INPUT_CLASS}>
+                  {supportedModels.map((model) => <option key={model} value={model}>{model}</option>)}
+                </select>
               </Field>
               <Field label="Permission preset">
                 <select value={values.permissionPreset} onChange={(event) => update('permissionPreset', event.target.value)} className={INPUT_CLASS}>

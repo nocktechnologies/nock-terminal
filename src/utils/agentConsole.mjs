@@ -19,11 +19,6 @@ const LIFECYCLE_LABELS = {
   paused: 'Paused',
   terminal_failed: 'Terminal failed',
   invalid: 'Invalid',
-  idle: 'Idle',
-  offline: 'Offline',
-  stale: 'Stale',
-  dispatch: 'Dispatch',
-  disabled: 'Disabled',
 };
 
 function text(value, fallback = '') {
@@ -58,22 +53,16 @@ export function normalizeManagedAgent(raw = {}) {
   const id = text(raw.agentId || agent.name, 'invalid-managed-agent');
   const status = lifecycle(raw.status || agent.lifecycle);
   const preset = PERMISSION_PRESETS[agent.permissionPreset] ? agent.permissionPreset : 'supervised';
-  const session = raw.launch?.canLaunch === true ? raw : null;
 
   return {
     id,
-    sourceId: text(raw.id, `managed:${id}`),
     key: `managed:${agentKey(id)}`,
-    ownership: 'managed',
     displayName: text(raw.displayName || raw.name, id),
-    name: id,
     lifecycle: status,
     lifecycleLabel: LIFECYCLE_LABELS[status] || status.replace(/_/g, ' '),
     harness: text(metadata.template, 'claude-code-tmux-resident'),
     runtime: text(metadata.runtime?.adapter, 'claude-code-interactive'),
     model: text(agent.model || metadata.runtime?.model, DEFAULT_MODEL),
-    local: true,
-    locationLabel: 'Local',
     role: text(identity.role),
     purpose: text(metadata.purpose),
     partner: text(identity.partner, 'Local operator'),
@@ -85,61 +74,15 @@ export function normalizeManagedAgent(raw = {}) {
     permission: PERMISSION_PRESETS[preset],
     failureReason: text(raw.failureReason),
     capabilities: managedCapabilities(raw),
-    session,
     raw,
   };
 }
 
-export function normalizeImportedSession(session = {}) {
-  const name = text(session.agent?.name || session.name || session.id, 'Unknown agent');
-  const liveAttach = session.sessionContract?.liveAttach || {};
-  const remote = session.location === 'remote'
-    || session.agent?.location === 'remote'
-    || (liveAttach.state === 'conditional'
-      && /not reachable from this machine/i.test(liveAttach.disabledReason || session.launch?.disabledReason || ''));
-  const status = lifecycle(session.agent?.lifecycle || session.status);
-  return {
-    id: text(session.id, name),
-    sourceId: text(session.id, name),
-    key: `imported:${text(session.id, agentKey(name))}`,
-    ownership: 'imported',
-    displayName: text(session.name, name),
-    name,
-    lifecycle: status,
-    lifecycleLabel: LIFECYCLE_LABELS[status] || status.replace(/_/g, ' '),
-    harness: text(session.agent?.harness, session.agent?.runtime === 'resident' ? 'resident harness' : 'discovered'),
-    runtime: text(session.agent?.runtime || session.sessionContract?.adapterId, 'unknown'),
-    model: text(session.agent?.model, 'Unspecified'),
-    local: !remote,
-    locationLabel: remote ? 'Remote' : 'Local',
-    workDirectory: text(session.agent?.workingDirectory || session.path),
-    residencePath: text(session.path),
-    allowedRoots: [],
-    deniedRoots: [],
-    permissionPreset: '',
-    permission: null,
-    failureReason: text(session.launch?.disabledReason || liveAttach.disabledReason),
-    session,
-    raw: session,
-    capabilities: { attach: session.launch?.canLaunch === true },
-  };
-}
-
-export function buildAgentInventory(managedRows = [], sessions = []) {
-  const managed = (Array.isArray(managedRows) ? managedRows : [])
+export function buildAgentInventory(managedRows = []) {
+  return (Array.isArray(managedRows) ? managedRows : [])
     .map(normalizeManagedAgent)
-    .filter((agent, index, rows) => rows.findIndex(candidate => candidate.key === agent.key) === index);
-  const managedIds = new Set(managed.flatMap(agent => [
-    agentKey(agent.id), agentKey(agent.name), agentKey(agent.sourceId),
-  ]).filter(Boolean));
-  const imported = (Array.isArray(sessions) ? sessions : [])
-    .filter(session => session?.kind === 'agent')
-    .map(normalizeImportedSession)
-    .filter(agent => !managedIds.has(agentKey(agent.id)) && !managedIds.has(agentKey(agent.name)));
-  return [...managed, ...imported].sort((left, right) => {
-    if (left.ownership !== right.ownership) return left.ownership === 'managed' ? -1 : 1;
-    return left.displayName.localeCompare(right.displayName);
-  });
+    .filter((agent, index, rows) => rows.findIndex(candidate => candidate.key === agent.key) === index)
+    .sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
 
 export function normalizePrerequisites(raw) {
@@ -173,7 +116,7 @@ export function buildResidentDraft(values = {}) {
   };
 }
 
-export function validateResidentDraft(values = {}) {
+export function validateResidentDraft(values = {}, supportedModels = [DEFAULT_MODEL]) {
   const draft = buildResidentDraft(values);
   const errors = {};
   if (!/^[a-z][a-z0-9-]{1,63}$/.test(draft.id)) {
@@ -183,7 +126,7 @@ export function validateResidentDraft(values = {}) {
   if (!draft.role) errors.role = 'Role is required.';
   if (!draft.purpose) errors.purpose = 'Purpose is required.';
   if (!draft.partner) errors.partner = 'Partner is required.';
-  if (!draft.model) errors.model = 'Model is required.';
+  if (!supportedModels.includes(draft.model)) errors.model = 'Choose a supported Claude model.';
   if (draft.workDirectory && !draft.workDirectory.startsWith('/')) errors.workDirectory = 'Work directory must be an absolute path.';
   if (draft.allowedRoots.some(root => !root.startsWith('/'))) errors.allowedRoots = 'Allowed roots must be absolute paths.';
   if (draft.deniedRoots.some(root => !root.startsWith('/'))) errors.deniedRoots = 'Denied roots must be absolute paths.';
