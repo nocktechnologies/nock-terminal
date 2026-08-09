@@ -59,6 +59,7 @@ const SHELL_FIXTURES = process.platform === 'win32'
 
 function registerHarness({
   allowedRoots = [],
+  terminalOnlyRoots = [],
   defaultTerminalCwd = '',
   settings = {},
   profiles = {},
@@ -89,6 +90,7 @@ function registerHarness({
     },
   };
   const profileLookups = [];
+  const trustedCwds = [];
   const projectProfiles = {
     get(projectPath) {
       profileLookups.push(projectPath);
@@ -101,11 +103,13 @@ function registerHarness({
     terminalManager,
     projectProfiles,
     getAllowedProjectRoots: () => allowedRoots,
+    getTerminalOnlyCwdRoots: () => terminalOnlyRoots,
     getDefaultTerminalCwd: () => defaultTerminalCwd,
     getSettingsSnapshot: () => settings,
+    onTerminalLaunched: cwd => trustedCwds.push(cwd),
   });
 
-  return { ...ipc, calls, profileLookups };
+  return { ...ipc, calls, profileLookups, trustedCwds };
 }
 
 test('registerTerminalIPC registers the renderer terminal command contract', () => {
@@ -172,6 +176,7 @@ test('terminal:create validates payloads and delegates trusted launch options', 
 
   assert.deepEqual(result, { success: true, id: 'tab-1', pid: 1234 });
   assert.deepEqual(ipc.profileLookups, [projectPath]);
+  assert.deepEqual(ipc.trustedCwds, [path.resolve(projectPath)]);
   assert.deepEqual(ipc.calls, [{
     method: 'create',
     id: 'tab-1',
@@ -182,6 +187,28 @@ test('terminal:create validates payloads and delegates trusted launch options', 
       envVars: 'NODE_ENV=test',
     },
   }]);
+});
+
+test('terminal:create allows managed residence CWDs without granting project trust', async () => {
+  const sandbox = makeSandbox();
+  const projectPaths = Array.from({ length: 20 }, (_, index) => path.join(sandbox, `project-${index}`));
+  const residencePath = path.join(sandbox, 'managed-agents', 'alpha');
+  for (const projectPath of projectPaths) fs.mkdirSync(projectPath, { recursive: true });
+  fs.mkdirSync(residencePath, { recursive: true });
+  const ipc = registerHarness({
+    allowedRoots: projectPaths,
+    terminalOnlyRoots: [residencePath],
+    settings: { defaultShell: SHELL_FIXTURES.settingsShell },
+    profiles: { [residencePath]: { defaultShell: SHELL_FIXTURES.profileShell } },
+  });
+
+  const result = await ipc.invoke('terminal:create', { id: 'resident-1', cwd: residencePath });
+
+  assert.deepEqual(result, { success: true, id: 'resident-1', pid: 1234 });
+  assert.deepEqual(ipc.profileLookups, []);
+  assert.deepEqual(ipc.trustedCwds, []);
+  assert.equal(ipc.calls[0].cwd, path.resolve(residencePath));
+  assert.equal(ipc.calls[0].options.shell, SHELL_FIXTURES.settingsShell);
 });
 
 test('terminal:create falls back to the first allowed root when no standalone default exists', async () => {

@@ -2,7 +2,7 @@ const {
   errorPayload,
   validateTerminalCreatePayload,
 } = require('./ipc-validators');
-const { sanitizeDevRoots } = require('./security-utils');
+const { isPathWithinRoots, sanitizeDevRoots } = require('./security-utils');
 
 function safePayload(payload) {
   return payload && typeof payload === 'object' ? payload : {};
@@ -26,15 +26,19 @@ function registerTerminalIPC({
   terminalManager,
   projectProfiles,
   getAllowedProjectRoots,
+  getTerminalOnlyCwdRoots,
   getDefaultTerminalCwd,
   getSettingsSnapshot,
   onTerminalLaunched,
 }) {
   ipcMain.handle('terminal:create', async (_, payload) => {
-    const allowedRoots = sanitizeDevRoots(getAllowedProjectRoots());
+    const projectRoots = sanitizeDevRoots(getAllowedProjectRoots());
+    const terminalOnlyRoots = sanitizeDevRoots(getTerminalOnlyCwdRoots());
+    const allowedRoots = sanitizeDevRoots([...terminalOnlyRoots, ...projectRoots]);
     const defaultCwd = getDefaultTerminalCwd?.() || '';
     const settings = getSettingsSnapshot();
-    const projectPath = profileProjectPath(payload);
+    const requestedProjectPath = profileProjectPath(payload);
+    const projectPath = isPathWithinRoots(requestedProjectPath, projectRoots) ? requestedProjectPath : '';
     const profile = projectPath ? projectProfiles.get(projectPath) : {};
     const validated = validateTerminalCreatePayload(payload, {
       allowedRoots,
@@ -53,7 +57,7 @@ function registerTerminalIPC({
     // Opening a terminal in a repo is the explicit trust signal that enables
     // git pull/push/fetch on it (Nock #8663). Best-effort — never block the
     // terminal on trust bookkeeping.
-    if (result && result.success && cwd && typeof onTerminalLaunched === 'function') {
+    if (result && result.success && cwd && isPathWithinRoots(cwd, projectRoots) && typeof onTerminalLaunched === 'function') {
       try {
         onTerminalLaunched(cwd);
       } catch {

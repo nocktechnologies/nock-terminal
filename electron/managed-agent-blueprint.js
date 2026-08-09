@@ -164,18 +164,34 @@ function pythonString(value) {
   return String(value);
 }
 
+function requiredAuthField(status, field) {
+  const value = typeof status[field] === 'string' ? status[field].trim() : '';
+  if (!value || ['none', 'unknown', 'null', 'undefined'].includes(value.toLowerCase())) {
+    throw new ManagedAgentError(`Claude auth status is missing ${field}`, 'AUTH_STATUS_INVALID');
+  }
+  return value;
+}
+
 function authFingerprint(status) {
   if (!isPlainObject(status)) throw new ManagedAgentError('auth status must be an object', 'AUTH_STATUS_INVALID');
+  const identity = {
+    authMethod: requiredAuthField(status, 'authMethod'),
+    apiProvider: requiredAuthField(status, 'apiProvider'),
+    orgId: status.orgId,
+    subscriptionType: requiredAuthField(status, 'subscriptionType'),
+  };
   const material = ['authMethod', 'apiProvider', 'orgId', 'subscriptionType']
-    .map(field => pythonString(status[field]))
+    .map(field => pythonString(identity[field]))
     .join('|');
   return `authfp:${crypto.createHash('sha256').update(material).digest('hex').slice(0, 32)}`;
 }
 
 function sanitizeAuthStatus(status) {
+  if (!isPlainObject(status)) throw new ManagedAgentError('auth status must be an object', 'AUTH_STATUS_INVALID');
+  const loggedIn = status.loggedIn === true;
   return {
-    loggedIn: status?.loggedIn === true,
-    authIdentity: authFingerprint(status || {}),
+    loggedIn,
+    authIdentity: loggedIn ? authFingerprint(status) : AUTH_PLACEHOLDER,
   };
 }
 

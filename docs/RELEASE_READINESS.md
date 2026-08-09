@@ -1,6 +1,6 @@
 # Release Readiness
 
-Updated: 2026-07-11
+Updated: 2026-08-09
 
 Nock Terminal has a release pipeline, but public distribution should stay gated until the checks below pass on a tagged release and the signed installers are smoked on each target OS.
 
@@ -14,6 +14,7 @@ What is automated today:
 
 - Local release preflight through `npm run release:check`.
 - Pull-request and `main` CI coverage for tests, Vite build, bundle budgets, and unpacked packaged smoke on Linux and macOS.
+- A fail-closed pull-request Anvil security review using OpenAI's commit-pinned Codex GitHub Action and exact Codex runtime version in read-only mode.
 - Tag-triggered release workflow that requires signing secrets, builds macOS/Windows/Linux artifacts, emits checksums, and uploads release assets.
 
 What is still manual or externally blocked:
@@ -63,6 +64,7 @@ The packaged smoke builds an unpacked app with `electron-builder --dir`, launche
 
 Required GitHub secrets:
 
+- `OPENAI_API_KEY` (Anvil pull-request security review)
 - `MACOS_CERTIFICATE`
 - `MACOS_CERTIFICATE_PASSWORD`
 - `APPLE_ID`
@@ -97,6 +99,7 @@ Before a public beta announcement, install the generated artifacts on clean mach
 - NockCC heartbeat reports active project and agent session counts when configured.
 - Telegram/notification settings remain opt-in, stored credentials stay main-process-only, and the Settings screen exposes only configured/not-configured secret status.
 - NockCC API key configuration remains main-process-only; renderer settings reads, exports, and compatibility secure-read calls must not return raw credentials.
+- Managed local residents reject altered Claude/Python executable paths for execution, require a complete non-secret Claude auth identity before becoming startable, retain the launchd Stop path for seats with a trusted ownership record during manifest/executable drift, and can open their residence in a terminal without granting it general project/file trust.
 
 ## Signed Artifact Evidence Ledger
 
