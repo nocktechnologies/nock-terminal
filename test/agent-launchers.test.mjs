@@ -116,7 +116,7 @@ test('resolves project and agent-folder launches', () => {
   assert.match(agentLaunch.disabledReason, /requires confirmation/i);
 });
 
-test('does not trust caller-provided tmux mode without discovery evidence', () => {
+test('preserves discovered attach action labels for agent folders', () => {
   const attachAgent = {
     ...agent,
     launch: {
@@ -125,7 +125,6 @@ test('does not trust caller-provided tmux mode without discovery evidence', () =
       action: 'attach',
       actionLabel: 'Attach',
       capability: 'live-attach',
-      terminalMode: 'tmux',
       canLaunch: true,
     },
   };
@@ -135,26 +134,6 @@ test('does not trust caller-provided tmux mode without discovery evidence', () =
   assert.equal(launch.action, 'attach');
   assert.equal(launch.actionLabel, 'Attach');
   assert.equal(launch.capability, 'live-attach');
-  assert.equal(launch.terminalMode, undefined);
-});
-
-test('opts deterministic CRM attaches into tmux input handling', () => {
-  const attachAgent = {
-    ...agent,
-    launch: {
-      command: 'tmux set-option -t crm-default-mira mouse on \\; attach -t crm-default-mira',
-      cwd: agent.path,
-      action: 'attach',
-      actionLabel: 'Attach',
-      capability: 'live-attach',
-      canLaunch: true,
-    },
-    sessionContract: {
-      liveAttach: { evidence: 'crm-tmux-session-name' },
-    },
-  };
-
-  assert.equal(resolveSessionLaunch(attachAgent, {}).terminalMode, 'tmux');
 });
 
 test('preserves disabled discovered attach launches even when a command is present', () => {

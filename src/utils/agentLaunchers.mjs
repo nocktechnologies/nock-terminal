@@ -47,16 +47,6 @@ function trimString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function trustedTmuxTerminalMode(session) {
-  const launch = session?.launch;
-  const evidence = session?.sessionContract?.liveAttach?.evidence;
-  return launch?.action === 'attach'
-    && launch?.capability === 'live-attach'
-    && evidence === 'crm-tmux-session-name'
-    ? 'tmux'
-    : undefined;
-}
-
 export function getAgentLauncher(agentId) {
   return LAUNCHER_BY_ID.get(agentId) || LAUNCHER_BY_ID.get(DEFAULT_AGENT_ID);
 }
@@ -149,7 +139,6 @@ export function resolveSessionLaunch(session, profile = {}, agentId) {
       action: trimString(session?.launch?.action) || 'launch',
       actionLabel: trimString(session?.launch?.actionLabel) || 'Launch',
       capability: trimString(session?.launch?.capability) || 'folder-launch',
-      terminalMode: trustedTmuxTerminalMode(session),
       canLaunch,
       disabledReason,
     };

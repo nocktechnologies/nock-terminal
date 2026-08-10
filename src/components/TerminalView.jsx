@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { pitchBlack } from '../utils/themes';
 import { sanitizeStagedTerminalInput } from '../utils/agentLaunchers.mjs';
+import { decodeOsc52Clipboard } from '../utils/terminalClipboard.mjs';
 
 const LAUNCH_COMMAND_DELAY_MS = 500;
 const STAGED_INPUT_DELAY_MS = 1400;
@@ -12,12 +13,12 @@ export default function TerminalView({
   active,
   launchCommand,
   initialInput,
-  terminalMode = '',
   destroyOnUnmount = false,
 }) {
   const containerRef = useRef(null);
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
+  const activeRef = useRef(active);
   const [initialized, setInitialized] = useState(false);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, selection } | null
   const copyShortcutLabel = /Mac/i.test(navigator.platform) ? 'Cmd+C' : 'Ctrl+Shift+C';
@@ -127,6 +128,14 @@ export default function TerminalView({
       term.loadAddon(fitAddon);
       term.loadAddon(webLinksAddon);
 
+      term.parser.registerOscHandler(52, (data) => {
+        const text = decodeOsc52Clipboard(data);
+        if (text !== null && activeRef.current && document.hasFocus()) {
+          window.nockTerminal.clipboard.write(text);
+        }
+        return true;
+      });
+
       // Copy selected text with the platform shortcut. Bare Ctrl+C still
       // reaches the PTY as SIGINT when there is no selection.
       // Ctrl+V is handled natively by xterm via the browser paste event on its
@@ -155,11 +164,12 @@ export default function TerminalView({
       term.open(containerRef.current);
       fitAddon.fit();
 
-      // Non-tmux TUIs have no alternate-screen scrollback, so prevent xterm
-      // from translating wheel movement into accidental arrow-key input.
-      // Managed tmux sessions enable tmux mouse mode and own their scrollback.
+      // Mouse-reporting programs such as tmux own wheel behavior. Other TUIs
+      // have no alternate-screen scrollback, so do not translate wheel input
+      // into accidental arrow-key navigation.
       const handleWheel = (e) => {
-        if (terminalMode === 'tmux' || term.buffer.active.type !== 'alternate') return;
+        const mouseTracking = term.modes.mouseTrackingMode !== 'none';
+        if (mouseTracking || term.buffer.active.type !== 'alternate') return;
         e.preventDefault();
         e.stopPropagation();
       };
@@ -261,7 +271,11 @@ export default function TerminalView({
     // initialInput is staged once at tab creation; re-running this effect on
     // its change would destroy and recreate the live terminal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId, cwd, launchCommand, terminalMode, destroyOnUnmount]);
+  }, [tabId, cwd, launchCommand, destroyOnUnmount]);
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   // Refit on visibility change or window resize
   useEffect(() => {

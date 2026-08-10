@@ -100,7 +100,7 @@ Before a public beta announcement, install the generated artifacts on clean mach
 - Telegram/notification settings remain opt-in, stored credentials stay main-process-only, and the Settings screen exposes only configured/not-configured secret status.
 - NockCC API key configuration remains main-process-only; renderer settings reads, exports, and compatibility secure-read calls must not return raw credentials.
 - Managed local residents reject altered Claude/Python executable paths for execution, require a complete non-secret Claude auth identity before becoming startable, retain the launchd Stop path for seats with a trusted ownership record during manifest/executable drift, and can open their residence in a terminal without granting it general project/file trust.
-- Terminal usability validation is partially complete: a disposable trusted CRM attach confirmed tmux mouse mode, wheel entry into copy mode, and backward scrollback; macOS Cmd+C and the right-click Copy action both wrote selected terminal probes to the system pasteboard. A packaged managed-resident auth smoke must still confirm selection and copying of the emitted OAuth URL without completing or persisting credentials.
+- Terminal usability validation is complete for the installed arm64 development artifact: a disposable trusted CRM attach confirmed selection copying, and Mira's remote resident session confirmed wheel scrollback plus Claude OAuth-prompt `c` copying through OSC 52. The OAuth URL reached the macOS pasteboard without being opened and authentication was cancelled. Signed release-candidate artifacts still require the platform evidence recorded below.
 
 ## Signed Artifact Evidence Ledger
 

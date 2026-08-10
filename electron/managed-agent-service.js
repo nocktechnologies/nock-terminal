@@ -451,7 +451,6 @@ class ManagedAgentService {
       action: 'attach',
       actionLabel: 'Attach',
       capability: 'resident-live-attach',
-      terminalMode: 'tmux',
       command: argv.length ? posixCommand(argv) : '',
       argv,
       cwd: seat.paths.residence,

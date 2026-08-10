@@ -116,7 +116,6 @@ test('discovers agent folders from existing config.json files', async () => {
   assert.equal(mira.launch.action, 'attach');
   assert.equal(mira.launch.actionLabel, 'Attach');
   assert.equal(mira.launch.capability, 'live-attach');
-  assert.equal(mira.launch.terminalMode, 'tmux');
   assert.equal(mira.sessionContract.adapterId, 'local-agent-folder');
   assert.equal(mira.sessionContract.liveAttach.state, 'supported');
   assert.equal(mira.sessionContract.liveAttach.command, 'tmux set-option -t crm-default-mira mouse on \\; attach -t crm-default-mira');

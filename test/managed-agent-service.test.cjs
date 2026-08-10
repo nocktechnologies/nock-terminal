@@ -74,7 +74,6 @@ test('create validates absolute roots, provisions a private seat transactionally
   assert.equal(row.kind, 'agent');
   assert.equal(row.managed, true);
   assert.equal(row.agent.permissions.defaultMode, 'acceptEdits');
-  assert.equal(row.launch.terminalMode, 'tmux');
   assert.deepEqual(row.launch.argv.slice(-8), [
     'set-option', '-g', 'mouse', 'on', ';', 'attach', '-t', '=nock-resident-alpha',
   ]);

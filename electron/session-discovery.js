@@ -916,7 +916,6 @@ class SessionDiscovery {
           action: terminalLaunch.action,
           actionLabel: terminalLaunch.actionLabel,
           capability: terminalLaunch.capability,
-          terminalMode: terminalLaunch.terminalMode,
         },
         sessionContract,
       };
@@ -1060,7 +1059,6 @@ class SessionDiscovery {
         action: 'attach',
         actionLabel: 'Attach',
         capability: 'live-attach',
-        terminalMode: 'tmux',
         canLaunch: crmAttachAvailable,
         disabledReason: crmAttachAvailable
           ? ''
