@@ -2,9 +2,10 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { pitchBlack } from '../utils/themes';
 import { sanitizeStagedTerminalInput } from '../utils/agentLaunchers.mjs';
 import {
-  decodeAuthorizedOsc52Clipboard,
-  OSC52_COPY_WINDOW_MS,
+  decodeOsc52ClipboardRequest,
+  OSC52_PROMPT_WINDOW_MS,
 } from '../utils/terminalClipboard.mjs';
+import TerminalClipboardDialog from './TerminalClipboardDialog';
 
 const LAUNCH_COMMAND_DELAY_MS = 500;
 const STAGED_INPUT_DELAY_MS = 1400;
@@ -25,6 +26,7 @@ export default function TerminalView({
   const osc52CopyArmedUntilRef = useRef(0);
   const [initialized, setInitialized] = useState(false);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, selection } | null
+  const [pendingOsc52Copy, setPendingOsc52Copy] = useState(null);
   const copyShortcutLabel = /Mac/i.test(navigator.platform) ? 'Cmd+C' : 'Ctrl+Shift+C';
 
   // Paste clipboard content to the active pty
@@ -133,14 +135,14 @@ export default function TerminalView({
       term.loadAddon(webLinksAddon);
 
       term.parser.registerOscHandler(52, (data) => {
-        const text = decodeAuthorizedOsc52Clipboard(data, {
+        const text = decodeOsc52ClipboardRequest(data, {
           active: activeRef.current,
           focused: document.hasFocus(),
           armedUntil: osc52CopyArmedUntilRef.current,
         });
         osc52CopyArmedUntilRef.current = 0;
         if (text !== null) {
-          window.nockTerminal.clipboard.write(text);
+          setPendingOsc52Copy(text);
         }
         return true;
       });
@@ -230,7 +232,7 @@ export default function TerminalView({
       // Wire input: terminal → pty
       term.onData((data) => {
         osc52CopyArmedUntilRef.current = data === 'c'
-          ? Date.now() + OSC52_COPY_WINDOW_MS
+          ? Date.now() + OSC52_PROMPT_WINDOW_MS
           : 0;
         window.nockTerminal.terminal.write(tabId, data);
       });
@@ -287,7 +289,10 @@ export default function TerminalView({
 
   useLayoutEffect(() => {
     activeRef.current = active;
-    if (!active) osc52CopyArmedUntilRef.current = 0;
+    if (!active) {
+      osc52CopyArmedUntilRef.current = 0;
+      setPendingOsc52Copy(null);
+    }
   }, [active]);
 
   // Refit on visibility change or window resize
@@ -432,6 +437,17 @@ export default function TerminalView({
             Clear
           </button>
         </div>
+      )}
+      {pendingOsc52Copy !== null && (
+        <TerminalClipboardDialog
+          text={pendingOsc52Copy}
+          source={cwd || 'Shell terminal'}
+          onCancel={() => setPendingOsc52Copy(null)}
+          onConfirm={() => {
+            window.nockTerminal.clipboard.write(pendingOsc52Copy);
+            setPendingOsc52Copy(null);
+          }}
+        />
       )}
     </div>
   );

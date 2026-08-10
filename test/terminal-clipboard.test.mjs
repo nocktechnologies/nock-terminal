@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  decodeAuthorizedOsc52Clipboard,
+  decodeOsc52ClipboardRequest,
   decodeOsc52Clipboard,
 } from '../src/utils/terminalClipboard.mjs';
 
@@ -29,12 +29,12 @@ test('rejects oversized OSC 52 payloads', () => {
   assert.equal(decodeOsc52Clipboard(osc52('x'.repeat(256 * 1024 + 1))), null);
 });
 
-test('requires a recent copy gesture from the active focused terminal', () => {
+test('offers a clipboard request only from a recent active focused gesture', () => {
   const data = osc52('https://claude.com/oauth');
-  const authorized = { active: true, focused: true, armedUntil: 1200, now: 1000 };
+  const promptable = { active: true, focused: true, armedUntil: 1200, now: 1000 };
 
-  assert.equal(decodeAuthorizedOsc52Clipboard(data, authorized), 'https://claude.com/oauth');
-  assert.equal(decodeAuthorizedOsc52Clipboard(data, { ...authorized, active: false }), null);
-  assert.equal(decodeAuthorizedOsc52Clipboard(data, { ...authorized, focused: false }), null);
-  assert.equal(decodeAuthorizedOsc52Clipboard(data, { ...authorized, now: 1200 }), null);
+  assert.equal(decodeOsc52ClipboardRequest(data, promptable), 'https://claude.com/oauth');
+  assert.equal(decodeOsc52ClipboardRequest(data, { ...promptable, active: false }), null);
+  assert.equal(decodeOsc52ClipboardRequest(data, { ...promptable, focused: false }), null);
+  assert.equal(decodeOsc52ClipboardRequest(data, { ...promptable, now: 1200 }), null);
 });

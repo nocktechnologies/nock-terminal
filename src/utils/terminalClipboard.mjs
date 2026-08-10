@@ -2,7 +2,7 @@ const MAX_OSC52_BYTES = 256 * 1024;
 const OSC52_SELECTION = /^[cpsq0-7]*$/;
 const BASE64_PAYLOAD = /^[A-Za-z0-9+/]*={0,2}$/;
 
-export const OSC52_COPY_WINDOW_MS = 2000;
+export const OSC52_PROMPT_WINDOW_MS = 2000;
 
 export function decodeOsc52Clipboard(data) {
   if (typeof data !== 'string') return null;
@@ -25,7 +25,7 @@ export function decodeOsc52Clipboard(data) {
   }
 }
 
-export function decodeAuthorizedOsc52Clipboard(data, {
+export function decodeOsc52ClipboardRequest(data, {
   active,
   focused,
   armedUntil,
