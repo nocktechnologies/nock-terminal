@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { Copy as CopyIcon } from 'lucide-react';
 
-export default function TerminalClipboardDialog({ text, source, onCancel, onConfirm }) {
+export default function TerminalClipboardDialog({ tabId, text, source, onCancel, onConfirm }) {
+  const titleId = `terminal-clipboard-dialog-title-${tabId}`;
   useEffect(() => {
     const cancel = (event) => {
       if (event.key === 'Escape') onCancel();
@@ -15,11 +16,11 @@ export default function TerminalClipboardDialog({ text, source, onCancel, onConf
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/65 p-4"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="terminal-clipboard-dialog-title"
+      aria-labelledby={titleId}
     >
       <div className="w-full max-w-lg rounded-lg border border-nock-border bg-nock-card shadow-xl">
         <div className="border-b border-nock-border px-4 py-3">
-          <h2 id="terminal-clipboard-dialog-title" className="text-sm font-semibold text-nock-text">
+          <h2 id={titleId} className="text-sm font-semibold text-nock-text">
             Terminal clipboard request
           </h2>
           <p className="mt-1 truncate text-xs text-nock-text-dim" title={source}>

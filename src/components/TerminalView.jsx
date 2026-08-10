@@ -440,8 +440,9 @@ export default function TerminalView({
       )}
       {pendingOsc52Copy !== null && (
         <TerminalClipboardDialog
+          tabId={tabId}
           text={pendingOsc52Copy}
-          source={cwd || 'Shell terminal'}
+          source={`${cwd || 'Shell terminal'} · ${tabId}`}
           onCancel={() => setPendingOsc52Copy(null)}
           onConfirm={() => {
             window.nockTerminal.clipboard.write(pendingOsc52Copy);
