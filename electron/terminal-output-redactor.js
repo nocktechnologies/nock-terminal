@@ -1,5 +1,6 @@
 const OSC_52_PREFIXES = ['\x1b]52;', '\x9d52;'];
 const OSC_52_REDACTION = '[OSC 52 clipboard request redacted]';
+const OSC_TERMINATORS = new Set(['\x07', '\x18', '\x1a', '\x9c']);
 
 class TerminalOutputRedactor {
   constructor() {
@@ -14,20 +15,27 @@ class TerminalOutputRedactor {
 
     for (const character of chunk) {
       if (this.redactingOsc52) {
-        if (character === '\x07' || character === '\x9c') {
+        if (OSC_TERMINATORS.has(character)) {
           this.redactingOsc52 = false;
           this.escapePending = false;
+          continue;
         } else if (this.escapePending) {
           if (character === '\\') {
             this.redactingOsc52 = false;
             this.escapePending = false;
+            continue;
           } else {
-            this.escapePending = character === '\x1b';
+            // An ESC not followed by `\` aborts OSC and starts a new sequence.
+            this.redactingOsc52 = false;
+            this.escapePending = false;
+            this.candidate = '\x1b';
           }
         } else if (character === '\x1b') {
           this.escapePending = true;
+          continue;
+        } else {
+          continue;
         }
-        continue;
       }
 
       if (this.candidate) {
