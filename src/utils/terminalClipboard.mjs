@@ -3,7 +3,7 @@ const MAX_OSC52_CHARACTERS = 2000;
 const OSC52_SELECTION = /^[cpsq0-7]*$/;
 const BASE64_PAYLOAD = /^[A-Za-z0-9+/]*={0,2}$/;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
-const INVISIBLE_UNICODE = /[\p{Cf}\p{Zl}\p{Zp}]/u;
+const INVISIBLE_UNICODE = /[\p{Cf}\p{Default_Ignorable_Code_Point}\p{Zl}\p{Zp}]/u;
 
 const OSC52_PROMPT_WINDOW_MS = 2000;
 

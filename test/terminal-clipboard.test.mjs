@@ -36,6 +36,8 @@ test('rejects OSC 52 control characters hidden in clipboard text', () => {
   assert.equal(decodeOsc52Clipboard(osc52('safe\u202emalicious')), null);
   assert.equal(decodeOsc52Clipboard(osc52('safe\u200bmalicious')), null);
   assert.equal(decodeOsc52Clipboard(osc52('safe\u2028malicious')), null);
+  assert.equal(decodeOsc52Clipboard(osc52('safe\u034fmalicious')), null);
+  assert.equal(decodeOsc52Clipboard(osc52('safe\ufe0fmalicious')), null);
 });
 
 test('arms a prompt only for plain c in the active focused terminal', () => {
