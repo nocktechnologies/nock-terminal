@@ -916,6 +916,7 @@ class SessionDiscovery {
           action: terminalLaunch.action,
           actionLabel: terminalLaunch.actionLabel,
           capability: terminalLaunch.capability,
+          terminalMode: terminalLaunch.terminalMode,
         },
         sessionContract,
       };
@@ -1059,6 +1060,7 @@ class SessionDiscovery {
         action: 'attach',
         actionLabel: 'Attach',
         capability: 'live-attach',
+        terminalMode: 'tmux',
         canLaunch: crmAttachAvailable,
         disabledReason: crmAttachAvailable
           ? ''
@@ -1141,7 +1143,9 @@ class SessionDiscovery {
 
   _resolveCrmAgentAttachCommand(agentPath, agentName, resolvedSessionName) {
     const sessionName = resolvedSessionName ?? this._resolveCrmAgentSessionName(agentPath, agentName);
-    return sessionName ? `tmux attach -t ${sessionName}` : '';
+    return sessionName
+      ? `tmux set-option -t ${sessionName} mouse on \\; attach -t ${sessionName}`
+      : '';
   }
 
   _resolveCrmAgentSessionName(agentPath, agentName) {

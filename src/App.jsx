@@ -274,6 +274,7 @@ export default function App() {
       splitContent: null,
       splitRatio: 0.5,
       launchCommand: launch.command,
+      terminalMode: launch.terminalMode,
       initialInput,
       agentId: launch.agentId,
     }, {
@@ -330,6 +331,7 @@ export default function App() {
       splitContent: null,
       splitRatio: 0.5,
       launchCommand: launch.command,
+      terminalMode: launch.terminalMode,
       agentId,
     }, {
       project: title,
@@ -478,6 +480,7 @@ export default function App() {
                       cwd={tab.cwd}
                       active={tab.id === activeTabId && view === 'terminal'}
                       launchCommand={tab.launchCommand}
+                      terminalMode={tab.terminalMode}
                       initialInput={tab.initialInput}
                     />
                   </SplitPane>

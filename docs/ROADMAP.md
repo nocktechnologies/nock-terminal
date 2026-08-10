@@ -38,6 +38,10 @@ The v1 boundary is intentionally narrow. Codex/Gemini residents, SDK residents, 
 
 The first hardening pass pins generated manifests to the probed Claude and Python executables, refuses incomplete Claude auth identities, and keeps managed residences authorized only as terminal working directories rather than general project/file roots. Runtime probes are coalesced and cached so the four-second inventory refresh does not repeatedly spawn version checks, while a trusted residence ownership record keeps Stop available if an installed executable or manifest drifts or disappears.
 
+### Focused Terminal Usability Fix
+
+Trusted CRM and managed-resident tmux attaches now enable tmux mouse mode and preserve native tmux scrollback for trackpad and mouse use. Terminal output supports macOS Cmd+C, Ctrl+Shift+C, and a stable right-click copy action; Option-assisted selection is configured for mouse-reporting TUIs. A disposable CRM attach validated wheel entry into tmux copy mode and backward movement through history, while keyboard and context-menu probes both reached the macOS pasteboard. A live managed-resident OAuth prompt remains a packaged-app smoke item; it uses the same terminal copy path and must be exercised without persisting credentials.
+
 ### May 24-25 NockCC Backlog Reconciliation, Phase H Closeout, And Release Truth
 
 The live NockCC backlog has been reconciled against `origin/main` after PRs #31, #32, #37, #38, #39, #40, #42, #43, #44, #46, #47, #48, #49, #50, #51, #52, #53, #54, #55, #56, #57, #58, and #59. See `docs/NOCK_BACKLOG.md` for the source-of-truth queue state and `docs/POST_ABC_INTEGRATION_AUDIT.md` for the post-A/B/C checkpoint.
