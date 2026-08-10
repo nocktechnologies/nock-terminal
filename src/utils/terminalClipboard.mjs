@@ -3,6 +3,7 @@ const MAX_OSC52_CHARACTERS = 2000;
 const OSC52_SELECTION = /^[cpsq0-7]*$/;
 const BASE64_PAYLOAD = /^[A-Za-z0-9+/]*={0,2}$/;
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
+const INVISIBLE_UNICODE = /[\p{Cf}\p{Zl}\p{Zp}]/u;
 
 const OSC52_PROMPT_WINDOW_MS = 2000;
 
@@ -22,7 +23,11 @@ export function decodeOsc52Clipboard(data) {
     if (binary.length > MAX_OSC52_BYTES) return null;
     const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
     const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    if (text.length > MAX_OSC52_CHARACTERS || CONTROL_CHARACTERS.test(text)) return null;
+    if (
+      text.length > MAX_OSC52_CHARACTERS
+      || CONTROL_CHARACTERS.test(text)
+      || INVISIBLE_UNICODE.test(text)
+    ) return null;
     return text;
   } catch {
     return null;

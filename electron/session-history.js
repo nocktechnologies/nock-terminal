@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const TerminalOutputRedactor = require('./terminal-output-redactor');
 
 const SESSION_HISTORY_SCHEMA_VERSION = 1;
 
@@ -85,21 +86,22 @@ class SessionHistory {
       }),
       buffer: [],
       bufferSize: 0,
+      outputRedactor: new TerminalOutputRedactor(),
     };
     this.activeSessions.set(tabId, session);
     return session.metadata;
   }
 
   appendOutput(tabId, data) {
-    if (!this.store.get('autoCaptureSessions')) return;
-
     const session = this.activeSessions.get(tabId);
     if (!session) return;
+
+    const chunk = session.outputRedactor.redact(data);
+    if (!this.store.get('autoCaptureSessions') || !chunk) return;
 
     // Cap buffer at 2MB to prevent memory issues
     if (session.bufferSize >= this.MAX_BUFFER_SIZE) return;
 
-    const chunk = typeof data === 'string' ? data : String(data);
     const chunkSize = Buffer.byteLength(chunk, 'utf8');
 
     if (session.bufferSize + chunkSize > this.MAX_BUFFER_SIZE) {
