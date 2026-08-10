@@ -76,6 +76,7 @@ class SessionHistory {
   }
 
   startSession(tabId, metadata) {
+    const captureEnabled = this.store.get('autoCaptureSessions') === true;
     const session = {
       metadata: migrateSessionMetadata({
         ...metadata,
@@ -86,7 +87,7 @@ class SessionHistory {
       }),
       buffer: [],
       bufferSize: 0,
-      outputRedactor: new TerminalOutputRedactor(),
+      outputRedactor: captureEnabled ? new TerminalOutputRedactor() : null,
     };
     this.activeSessions.set(tabId, session);
     return session.metadata;
@@ -96,12 +97,14 @@ class SessionHistory {
     const session = this.activeSessions.get(tabId);
     if (!session) return;
 
+    if (!session.outputRedactor || session.bufferSize >= this.MAX_BUFFER_SIZE) return;
+    if (this.store.get('autoCaptureSessions') !== true) {
+      session.outputRedactor = null;
+      return;
+    }
+
     const chunk = session.outputRedactor.redact(data);
-    if (!this.store.get('autoCaptureSessions') || !chunk) return;
-
-    // Cap buffer at 2MB to prevent memory issues
-    if (session.bufferSize >= this.MAX_BUFFER_SIZE) return;
-
+    if (!chunk) return;
     const chunkSize = Buffer.byteLength(chunk, 'utf8');
 
     if (session.bufferSize + chunkSize > this.MAX_BUFFER_SIZE) {
