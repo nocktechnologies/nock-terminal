@@ -1,7 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { pitchBlack } from '../utils/themes';
 import { sanitizeStagedTerminalInput } from '../utils/agentLaunchers.mjs';
-import { decodeOsc52Clipboard } from '../utils/terminalClipboard.mjs';
+import {
+  decodeAuthorizedOsc52Clipboard,
+  OSC52_COPY_WINDOW_MS,
+} from '../utils/terminalClipboard.mjs';
 
 const LAUNCH_COMMAND_DELAY_MS = 500;
 const STAGED_INPUT_DELAY_MS = 1400;
@@ -19,6 +22,7 @@ export default function TerminalView({
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
   const activeRef = useRef(active);
+  const osc52CopyArmedUntilRef = useRef(0);
   const [initialized, setInitialized] = useState(false);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, selection } | null
   const copyShortcutLabel = /Mac/i.test(navigator.platform) ? 'Cmd+C' : 'Ctrl+Shift+C';
@@ -129,8 +133,13 @@ export default function TerminalView({
       term.loadAddon(webLinksAddon);
 
       term.parser.registerOscHandler(52, (data) => {
-        const text = decodeOsc52Clipboard(data);
-        if (text !== null && activeRef.current && document.hasFocus()) {
+        const text = decodeAuthorizedOsc52Clipboard(data, {
+          active: activeRef.current,
+          focused: document.hasFocus(),
+          armedUntil: osc52CopyArmedUntilRef.current,
+        });
+        osc52CopyArmedUntilRef.current = 0;
+        if (text !== null) {
           window.nockTerminal.clipboard.write(text);
         }
         return true;
@@ -220,6 +229,9 @@ export default function TerminalView({
 
       // Wire input: terminal → pty
       term.onData((data) => {
+        osc52CopyArmedUntilRef.current = data === 'c'
+          ? Date.now() + OSC52_COPY_WINDOW_MS
+          : 0;
         window.nockTerminal.terminal.write(tabId, data);
       });
 
@@ -273,8 +285,9 @@ export default function TerminalView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, cwd, launchCommand, destroyOnUnmount]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     activeRef.current = active;
+    if (!active) osc52CopyArmedUntilRef.current = 0;
   }, [active]);
 
   // Refit on visibility change or window resize

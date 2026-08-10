@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { decodeOsc52Clipboard } from '../src/utils/terminalClipboard.mjs';
+import {
+  decodeAuthorizedOsc52Clipboard,
+  decodeOsc52Clipboard,
+} from '../src/utils/terminalClipboard.mjs';
 
 function osc52(text, selection = 'c') {
   return `${selection};${Buffer.from(text, 'utf8').toString('base64')}`;
@@ -24,4 +27,14 @@ test('rejects OSC 52 queries and malformed payloads', () => {
 
 test('rejects oversized OSC 52 payloads', () => {
   assert.equal(decodeOsc52Clipboard(osc52('x'.repeat(256 * 1024 + 1))), null);
+});
+
+test('requires a recent copy gesture from the active focused terminal', () => {
+  const data = osc52('https://claude.com/oauth');
+  const authorized = { active: true, focused: true, armedUntil: 1200, now: 1000 };
+
+  assert.equal(decodeAuthorizedOsc52Clipboard(data, authorized), 'https://claude.com/oauth');
+  assert.equal(decodeAuthorizedOsc52Clipboard(data, { ...authorized, active: false }), null);
+  assert.equal(decodeAuthorizedOsc52Clipboard(data, { ...authorized, focused: false }), null);
+  assert.equal(decodeAuthorizedOsc52Clipboard(data, { ...authorized, now: 1200 }), null);
 });

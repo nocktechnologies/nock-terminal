@@ -40,7 +40,7 @@ The first hardening pass pins generated manifests to the probed Claude and Pytho
 
 ### Focused Terminal Usability Fix
 
-Terminal wheel routing now follows xterm's live mouse-tracking mode, so local and manually entered remote tmux attaches receive wheel input without launch-path metadata. Resident tmux servers enable mouse handling and OSC 52 forwarding; the renderer accepts bounded, valid OSC 52 writes only from the active terminal while the app is focused. Terminal output also supports macOS Cmd+C, Ctrl+Shift+C, a stable right-click copy action, and Option-assisted selection for mouse-reporting TUIs. The installed arm64 app was validated against Mira's remote resident session: wheel input moved backward through tmux history, and Claude's OAuth-prompt `c` action copied the emitted URL to the macOS pasteboard without opening it or completing authentication.
+Terminal wheel routing now follows xterm's live mouse-tracking mode, so local and manually entered remote tmux attaches receive wheel input without launch-path metadata. Resident tmux servers enable mouse handling and OSC 52 forwarding; the renderer accepts bounded, valid OSC 52 writes only immediately after a plain `c` copy gesture in the active terminal while the app is focused. Terminal output also supports macOS Cmd+C, Ctrl+Shift+C, a stable right-click copy action, and Option-assisted selection for mouse-reporting TUIs. The installed arm64 app was validated against Mira's remote resident session: wheel input moved backward through tmux history, and Claude's OAuth-prompt `c` action copied the emitted URL to the macOS pasteboard without opening it or completing authentication.
 
 ### May 24-25 NockCC Backlog Reconciliation, Phase H Closeout, And Release Truth
 
