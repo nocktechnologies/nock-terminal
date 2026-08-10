@@ -1,12 +1,14 @@
-const OSC_52_PREFIXES = ['\x1b]52;', '\x9d52;'];
 const OSC_52_REDACTION = '[OSC 52 clipboard request redacted]';
+const OSC_IDENTIFIER_LIMIT = 64;
 const OSC_TERMINATORS = new Set(['\x07', '\x18', '\x1a', '\x9c']);
 
 class TerminalOutputRedactor {
   constructor() {
-    this.candidate = '';
-    this.redactingOsc52 = false;
-    this.escapePending = false;
+    this.state = 'text';
+    this.oscIntroducer = '';
+    this.oscIdentifier = '';
+    this.oscIdentifierOverflow = false;
+    this.osc52Match = 'zeros';
   }
 
   redact(data) {
@@ -14,62 +16,106 @@ class TerminalOutputRedactor {
     let output = '';
 
     for (const character of chunk) {
-      if (this.redactingOsc52) {
-        if (OSC_TERMINATORS.has(character)) {
-          this.redactingOsc52 = false;
-          this.escapePending = false;
-          continue;
-        } else if (this.escapePending) {
-          if (character === '\\') {
-            this.redactingOsc52 = false;
-            this.escapePending = false;
-            continue;
+      let reprocess = true;
+
+      while (reprocess) {
+        reprocess = false;
+
+        if (this.state === 'text') {
+          if (character === '\x1b') {
+            this.state = 'escape';
+          } else if (character === '\x9d') {
+            this._startOscIdentifier('\x9d');
           } else {
-            // An ESC not followed by `\` aborts OSC and starts a new sequence.
-            this.redactingOsc52 = false;
-            this.escapePending = false;
-            this.candidate = '\x1b';
+            output += character;
           }
-        } else if (character === '\x1b') {
-          this.escapePending = true;
-          continue;
-        } else {
           continue;
         }
-      }
 
-      if (this.candidate) {
-        this.candidate += character;
-      } else if (character === '\x1b' || character === '\x9d') {
-        this.candidate = character;
-      } else {
-        output += character;
-        continue;
-      }
+        if (this.state === 'escape') {
+          if (character === ']') {
+            this._startOscIdentifier('\x1b]');
+          } else {
+            output += '\x1b';
+            this.state = 'text';
+            reprocess = true;
+          }
+          continue;
+        }
 
-      const isCompletePrefix = OSC_52_PREFIXES.includes(this.candidate);
-      const isPartialPrefix = OSC_52_PREFIXES.some(prefix => prefix.startsWith(this.candidate));
-      if (isCompletePrefix) {
-        this.candidate = '';
-        this.redactingOsc52 = true;
-        this.escapePending = false;
-        output += OSC_52_REDACTION;
-      } else if (!isPartialPrefix) {
-        const restartAt = Math.max(
-          this.candidate.lastIndexOf('\x1b'),
-          this.candidate.lastIndexOf('\x9d'),
-        );
-        if (restartAt > 0) {
-          output += this.candidate.slice(0, restartAt);
-          this.candidate = this.candidate.slice(restartAt);
-        } else {
-          output += this.candidate;
-          this.candidate = '';
+        if (this.state === 'osc-identifier') {
+          if (/^[0-9]$/.test(character)) {
+            this._appendOscIdentifier(character);
+          } else if (character === ';') {
+            if (this.osc52Match === 'fifty-two') {
+              output += OSC_52_REDACTION;
+              this.state = 'osc-52';
+            } else {
+              output += `${this._capturedOscIdentifier()};`;
+              this.state = 'text';
+            }
+          } else {
+            output += this._capturedOscIdentifier();
+            this.state = 'text';
+            reprocess = true;
+          }
+          continue;
+        }
+
+        if (this.state === 'osc-52') {
+          if (OSC_TERMINATORS.has(character)) {
+            this.state = 'text';
+          } else if (character === '\x1b') {
+            this.state = 'osc-52-escape';
+          }
+          continue;
+        }
+
+        if (this.state === 'osc-52-escape') {
+          if (character === '\\') {
+            this.state = 'text';
+          } else if (OSC_TERMINATORS.has(character)) {
+            this.state = 'text';
+          } else {
+            // A non-ST ESC aborts OSC and starts a new terminal sequence.
+            this.state = 'escape';
+            reprocess = true;
+          }
         }
       }
     }
 
     return output;
+  }
+
+  _startOscIdentifier(introducer) {
+    this.state = 'osc-identifier';
+    this.oscIntroducer = introducer;
+    this.oscIdentifier = '';
+    this.oscIdentifierOverflow = false;
+    this.osc52Match = 'zeros';
+  }
+
+  _appendOscIdentifier(digit) {
+    if (this.oscIdentifier.length < OSC_IDENTIFIER_LIMIT) {
+      this.oscIdentifier += digit;
+    } else {
+      this.oscIdentifierOverflow = true;
+    }
+
+    if (this.osc52Match === 'zeros') {
+      if (digit === '5') this.osc52Match = 'five';
+      else if (digit !== '0') this.osc52Match = 'other';
+    } else if (this.osc52Match === 'five') {
+      this.osc52Match = digit === '2' ? 'fifty-two' : 'other';
+    } else if (this.osc52Match === 'fifty-two') {
+      this.osc52Match = 'other';
+    }
+  }
+
+  _capturedOscIdentifier() {
+    const overflow = this.oscIdentifierOverflow ? '[identifier truncated]' : '';
+    return `${this.oscIntroducer}${this.oscIdentifier}${overflow}`;
   }
 }
 

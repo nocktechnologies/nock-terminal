@@ -14,6 +14,34 @@ test('redacts OSC 52 clipboard values across PTY chunks', () => {
   assert.equal(output, 'before[OSC 52 clipboard request redacted]after');
 });
 
+test('redacts numeric OSC 52 identifiers with leading zeros', () => {
+  const standard = new TerminalOutputRedactor();
+  const c1 = new TerminalOutputRedactor();
+
+  assert.equal(
+    [standard.redact('\x1b]0'), standard.redact('52;c;c2VjcmV0\x07')].join(''),
+    '[OSC 52 clipboard request redacted]',
+  );
+  assert.equal(
+    [c1.redact('\x9d00'), c1.redact('52;c;c2VjcmV0\x9c')].join(''),
+    '[OSC 52 clipboard request redacted]',
+  );
+});
+
+test('bounds malformed OSC identifiers without missing a later numeric 52', () => {
+  const redactor = new TerminalOutputRedactor();
+  const leadingZeros = '0'.repeat(10_000);
+
+  assert.equal(
+    redactor.redact(`\x1b]${leadingZeros}52;c;c2VjcmV0\x07`),
+    '[OSC 52 clipboard request redacted]',
+  );
+
+  const malformed = new TerminalOutputRedactor().redact(`\x1b]${leadingZeros}1;visible`);
+  assert.ok(malformed.length < 200);
+  assert.match(malformed, /\[identifier truncated\];visible$/);
+});
+
 test('redacts ST-terminated and C1 OSC 52 clipboard values', () => {
   const redactor = new TerminalOutputRedactor();
 
