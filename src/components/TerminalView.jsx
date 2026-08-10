@@ -6,12 +6,21 @@ const LAUNCH_COMMAND_DELAY_MS = 500;
 const STAGED_INPUT_DELAY_MS = 1400;
 const DIRECT_STAGED_INPUT_DELAY_MS = 700;
 
-export default function TerminalView({ tabId, cwd, active, launchCommand, initialInput, destroyOnUnmount = false }) {
+export default function TerminalView({
+  tabId,
+  cwd,
+  active,
+  launchCommand,
+  initialInput,
+  terminalMode = '',
+  destroyOnUnmount = false,
+}) {
   const containerRef = useRef(null);
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
   const [initialized, setInitialized] = useState(false);
-  const [contextMenu, setContextMenu] = useState(null); // { x, y } | null
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, selection } | null
+  const copyShortcutLabel = /Mac/i.test(navigator.platform) ? 'Cmd+C' : 'Ctrl+Shift+C';
 
   // Paste clipboard content to the active pty
   const pasteFromClipboard = async () => {
@@ -26,10 +35,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
   };
 
   // Copy the current terminal selection to clipboard
-  const copySelection = () => {
-    const term = terminalRef.current;
-    if (!term) return false;
-    const selection = term.getSelection();
+  const copySelection = (selection = terminalRef.current?.getSelection() || '') => {
     if (selection) {
       window.nockTerminal.clipboard.write(selection);
       return true;
@@ -85,6 +91,8 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
         fontFamily,
         scrollback,
         lineHeight: 1.2,
+        macOptionClickForcesSelection: true,
+        rightClickSelectsWord: true,
         theme: {
           background: pitchBlack.terminal.bg,
           foreground: pitchBlack.terminal.foreground,
@@ -119,27 +127,27 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
       term.loadAddon(fitAddon);
       term.loadAddon(webLinksAddon);
 
-      // Intercept Ctrl+C to copy-on-selection (fall through as SIGINT otherwise).
+      // Copy selected text with the platform shortcut. Bare Ctrl+C still
+      // reaches the PTY as SIGINT when there is no selection.
       // Ctrl+V is handled natively by xterm via the browser paste event on its
       // backing textarea — do NOT intercept it here or paste will fire twice.
       term.attachCustomKeyEventHandler((e) => {
         if (e.type !== 'keydown') return true;
-        if (!e.ctrlKey || e.altKey || e.metaKey) return true;
-
         const key = e.key.toLowerCase();
-        if (key === 'c' && !e.shiftKey) {
+        const commandCopy = e.metaKey && !e.ctrlKey && !e.altKey && key === 'c';
+        const explicitCopy = e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && key === 'c';
+        if (commandCopy || explicitCopy) {
+          if (term.hasSelection()) {
+            window.nockTerminal.clipboard.write(term.getSelection());
+          }
+          return false;
+        }
+        if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && key === 'c') {
           if (term.hasSelection()) {
             window.nockTerminal.clipboard.write(term.getSelection());
             return false;
           }
           return true; // no selection → let SIGINT through
-        }
-        if (e.shiftKey && key === 'c') {
-          // Ctrl+Shift+C — always copy
-          if (term.hasSelection()) {
-            window.nockTerminal.clipboard.write(term.getSelection());
-          }
-          return false;
         }
         return true;
       });
@@ -147,16 +155,13 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
       term.open(containerRef.current);
       fitAddon.fit();
 
-      // Mouse wheel in the alt-screen buffer (TUIs like claude, vim, less) is
-      // translated by xterm into arrow keys, which makes claude cycle its
-      // input history into the chat bar on scroll. Intercept in capture phase
-      // and scroll the viewport instead so wheel = scroll, never = input nav.
+      // Non-tmux TUIs have no alternate-screen scrollback, so prevent xterm
+      // from translating wheel movement into accidental arrow-key input.
+      // Managed tmux sessions enable tmux mouse mode and own their scrollback.
       const handleWheel = (e) => {
-        if (term.buffer.active.type !== 'alternate') return;
+        if (terminalMode === 'tmux' || term.buffer.active.type !== 'alternate') return;
         e.preventDefault();
         e.stopPropagation();
-        const step = e.deltaMode === 1 ? 1 : 24;
-        term.scrollLines(Math.round(e.deltaY / step));
       };
       containerRef.current.addEventListener('wheel', handleWheel, { capture: true, passive: false });
       term._wheelCleanup = () => containerRef.current?.removeEventListener('wheel', handleWheel, { capture: true });
@@ -256,7 +261,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
     // initialInput is staged once at tab creation; re-running this effect on
     // its change would destroy and recreate the live terminal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId, cwd, launchCommand, destroyOnUnmount]);
+  }, [tabId, cwd, launchCommand, terminalMode, destroyOnUnmount]);
 
   // Refit on visibility change or window resize
   useEffect(() => {
@@ -312,10 +317,14 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
     const MENU_H = 140;
     const x = Math.max(0, Math.min(e.clientX, window.innerWidth - MENU_W - 4));
     const y = Math.max(0, Math.min(e.clientY, window.innerHeight - MENU_H - 4));
-    setContextMenu({ x, y });
+    // xterm selects the word under a right-click after React receives this
+    // event. Read the selection on the next frame and keep it stable while the
+    // menu itself takes focus.
+    requestAnimationFrame(() => {
+      const selection = terminalRef.current?.getSelection() || '';
+      setContextMenu({ x, y, selection });
+    });
   };
-
-  const hasSelection = terminalRef.current?.hasSelection?.() ?? false;
 
   // Drag-and-drop: paste file paths (or text) into terminal
   const handleDragOver = (e) => {
@@ -354,15 +363,16 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
           onClick={(e) => e.stopPropagation()}
         >
           <button
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
-              copySelection();
+              copySelection(contextMenu.selection);
               setContextMenu(null);
             }}
-            disabled={!hasSelection}
+            disabled={!contextMenu.selection}
             className="w-full text-left px-3 py-1.5 text-xs text-nock-text hover:bg-nock-border/50 transition-colors disabled:opacity-40 disabled:hover:bg-transparent flex items-center justify-between"
           >
             <span>Copy</span>
-            <kbd className="text-[9px] text-nock-text-dim font-mono">Ctrl+C</kbd>
+            <kbd className="text-[9px] text-nock-text-dim font-mono">{copyShortcutLabel}</kbd>
           </button>
           <button
             onClick={() => {

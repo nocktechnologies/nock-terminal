@@ -111,14 +111,15 @@ test('discovers agent folders from existing config.json files', async () => {
   assert.equal(mira.agent.lifecycle, 'idle');
   assert.equal(mira.agent.model, 'claude-opus-4-6');
   assert.equal(mira.agent.unreadCount, 1);
-  assert.equal(mira.launch.command, 'tmux attach -t crm-default-mira');
+  assert.equal(mira.launch.command, 'tmux set-option -t crm-default-mira mouse on \\; attach -t crm-default-mira');
   assert.equal(mira.launch.cwd, agentPath);
   assert.equal(mira.launch.action, 'attach');
   assert.equal(mira.launch.actionLabel, 'Attach');
   assert.equal(mira.launch.capability, 'live-attach');
+  assert.equal(mira.launch.terminalMode, 'tmux');
   assert.equal(mira.sessionContract.adapterId, 'local-agent-folder');
   assert.equal(mira.sessionContract.liveAttach.state, 'supported');
-  assert.equal(mira.sessionContract.liveAttach.command, 'tmux attach -t crm-default-mira');
+  assert.equal(mira.sessionContract.liveAttach.command, 'tmux set-option -t crm-default-mira mouse on \\; attach -t crm-default-mira');
   assert.equal(mira.sessionContract.resumeCommand.state, 'supported');
 });
 
@@ -248,7 +249,7 @@ test('upgrades Claude transcript paths to agent folders even without dev roots',
   assert.equal(mira.id, `agent:${agentPath}`);
   assert.equal(mira.name, 'Mira');
   assert.equal(mira.claudeSessionId, 'transcript-for-mira');
-  assert.equal(mira.launch.command, 'tmux attach -t crm-default-mira');
+  assert.equal(mira.launch.command, 'tmux set-option -t crm-default-mira mouse on \\; attach -t crm-default-mira');
   assert.equal(mira.launch.cwd, agentPath);
 });
 
@@ -911,7 +912,7 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
   const cooper = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'cooper');
 
   assert.ok(cooper);
-  assert.equal(cooper.launch.command, 'tmux attach -t crm-default-cooper');
+  assert.equal(cooper.launch.command, 'tmux set-option -t crm-default-cooper mouse on \\; attach -t crm-default-cooper');
   assert.equal(cooper.launch.canLaunch, true);
   assert.equal(cooper.launch.action, 'attach');
   assert.equal(cooper.sessionContract.liveAttach.evidence, 'crm-tmux-session-name');
@@ -953,7 +954,7 @@ test('does not advertise CRM attach when the derived tmux session is absent', as
 
   assert.ok(mira);
   assert.deepEqual(probedSessions, ['crm-default-mira']);
-  assert.equal(mira.launch.command, 'tmux attach -t crm-default-mira');
+  assert.equal(mira.launch.command, 'tmux set-option -t crm-default-mira mouse on \\; attach -t crm-default-mira');
   assert.equal(mira.launch.action, 'attach');
   assert.equal(mira.launch.canLaunch, false);
   assert.match(mira.launch.disabledReason, /tmux session crm-default-mira is not running/i);

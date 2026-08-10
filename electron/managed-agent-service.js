@@ -438,13 +438,20 @@ class ManagedAgentService {
     const resolvedTmuxPath = tmuxPath === undefined
       ? findExecutable(['tmux'], this.configuredTmux)
       : tmuxPath;
-    const argv = resolvedTmuxPath ? [resolvedTmuxPath, '-S', seat.paths.tmuxSocket, 'attach', '-t', `=${seat.paths.tmuxSession}`] : [];
+    const argv = resolvedTmuxPath ? [
+      resolvedTmuxPath,
+      '-S', seat.paths.tmuxSocket,
+      'set-option', '-g', 'mouse', 'on',
+      ';',
+      'attach', '-t', `=${seat.paths.tmuxSession}`,
+    ] : [];
     const canLaunch = Boolean(argv.length && socketExists(seat.paths.tmuxSocket) && ATTACHABLE_STATES.has(status));
     return {
       mode: 'terminal',
       action: 'attach',
       actionLabel: 'Attach',
       capability: 'resident-live-attach',
+      terminalMode: 'tmux',
       command: argv.length ? posixCommand(argv) : '',
       argv,
       cwd: seat.paths.residence,
