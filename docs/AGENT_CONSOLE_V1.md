@@ -147,9 +147,11 @@ path, manifest path, launchd label, or executable path.
 Resident mutations use the manifest-declared same-UID NDJSON control socket.
 Each request gets a UUID that must be echoed by the resident. Nock does not
 silently retry a mutation, so an ambiguous result cannot become a second
-effect. Attach enables mouse handling on the dedicated tmux server and then
-attaches with `tmux -S <socket> attach -t =<session>` using trusted manifest
-metadata. Nock never pane-scrapes, uses `send-keys`, or writes engine state.
+effect. The resident tmux server enables mouse handling and clipboard
+forwarding, then Nock attaches with `tmux -S <socket> attach -t =<session>`
+using trusted manifest metadata. This keeps scrollback and terminal OSC 52
+copy behavior available through local or remote attaches. Nock never
+pane-scrapes, uses `send-keys`, or writes engine state.
 
 ## v1 UI
 

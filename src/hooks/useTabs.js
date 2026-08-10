@@ -1,10 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { buildUnsavedFilesMessage } from '../utils/unsavedFiles.mjs';
-import {
-  resolveSessionLaunch,
-  sanitizeStagedTerminalInput,
-  shouldRunSessionLaunch,
-} from '../utils/agentLaunchers.mjs';
+import { sanitizeStagedTerminalInput, shouldRunSessionLaunch } from '../utils/agentLaunchers.mjs';
 import {
   createTabId,
   duplicateTabWithFreshIds,
@@ -48,7 +44,6 @@ export default function useTabs({ setView }) {
 
     const isAgent = session.kind === 'agent';
     const launchCommand = shouldRunSessionLaunch(session, options) ? session.launch.command : undefined;
-    const terminalMode = launchCommand ? resolveSessionLaunch(session).terminalMode : undefined;
     const initialInput = sanitizeStagedTerminalInput(options?.initialInput || '');
     const cwd = isAgent ? (session.launch?.cwd || session.path) : session.path;
     openTab({
@@ -61,7 +56,6 @@ export default function useTabs({ setView }) {
       splitContent: null,
       splitRatio: 0.5,
       launchCommand,
-      terminalMode,
       initialInput,
     }, {
       project: session.name,

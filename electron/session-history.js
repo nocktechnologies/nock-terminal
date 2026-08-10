@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const TerminalOutputRedactor = require('./terminal-output-redactor');
 
 const SESSION_HISTORY_SCHEMA_VERSION = 1;
 
@@ -75,6 +76,7 @@ class SessionHistory {
   }
 
   startSession(tabId, metadata) {
+    const captureEnabled = this.store.get('autoCaptureSessions') === true;
     const session = {
       metadata: migrateSessionMetadata({
         ...metadata,
@@ -85,21 +87,24 @@ class SessionHistory {
       }),
       buffer: [],
       bufferSize: 0,
+      outputRedactor: captureEnabled ? new TerminalOutputRedactor() : null,
     };
     this.activeSessions.set(tabId, session);
     return session.metadata;
   }
 
   appendOutput(tabId, data) {
-    if (!this.store.get('autoCaptureSessions')) return;
-
     const session = this.activeSessions.get(tabId);
     if (!session) return;
 
-    // Cap buffer at 2MB to prevent memory issues
-    if (session.bufferSize >= this.MAX_BUFFER_SIZE) return;
+    if (!session.outputRedactor || session.bufferSize >= this.MAX_BUFFER_SIZE) return;
+    if (this.store.get('autoCaptureSessions') !== true) {
+      session.outputRedactor = null;
+      return;
+    }
 
-    const chunk = typeof data === 'string' ? data : String(data);
+    const chunk = session.outputRedactor.redact(data);
+    if (!chunk) return;
     const chunkSize = Buffer.byteLength(chunk, 'utf8');
 
     if (session.bufferSize + chunkSize > this.MAX_BUFFER_SIZE) {
