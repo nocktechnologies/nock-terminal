@@ -1,8 +1,10 @@
-const MAX_OSC52_BYTES = 256 * 1024;
+const MAX_OSC52_BYTES = 8 * 1024;
+const MAX_OSC52_CHARACTERS = 2000;
 const OSC52_SELECTION = /^[cpsq0-7]*$/;
 const BASE64_PAYLOAD = /^[A-Za-z0-9+/]*={0,2}$/;
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u;
 
-export const OSC52_PROMPT_WINDOW_MS = 2000;
+const OSC52_PROMPT_WINDOW_MS = 2000;
 
 export function decodeOsc52Clipboard(data) {
   if (typeof data !== 'string') return null;
@@ -19,10 +21,20 @@ export function decodeOsc52Clipboard(data) {
     const binary = atob(padded);
     if (binary.length > MAX_OSC52_BYTES) return null;
     const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    if (text.length > MAX_OSC52_CHARACTERS || CONTROL_CHARACTERS.test(text)) return null;
+    return text;
   } catch {
     return null;
   }
+}
+
+export function getOsc52PromptDeadline(data, {
+  active,
+  focused,
+  now = Date.now(),
+}) {
+  return data === 'c' && active && focused ? now + OSC52_PROMPT_WINDOW_MS : 0;
 }
 
 export function decodeOsc52ClipboardRequest(data, {

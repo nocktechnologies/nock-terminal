@@ -29,8 +29,7 @@ export default function TerminalClipboardDialog({ tabId, text, source, onCancel,
         </div>
         <div className="px-4 py-3">
           <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded border border-nock-border bg-nock-bg p-3 text-xs text-nock-text">
-            {text.slice(0, 2000)}
-            {text.length > 2000 ? '\n…' : ''}
+            {text}
           </pre>
           <p className="mt-2 text-[11px] text-nock-text-dim">
             {text.length.toLocaleString()} characters

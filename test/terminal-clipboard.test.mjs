@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   decodeOsc52ClipboardRequest,
   decodeOsc52Clipboard,
+  getOsc52PromptDeadline,
 } from '../src/utils/terminalClipboard.mjs';
 
 function osc52(text, selection = 'c') {
@@ -26,7 +27,21 @@ test('rejects OSC 52 queries and malformed payloads', () => {
 });
 
 test('rejects oversized OSC 52 payloads', () => {
-  assert.equal(decodeOsc52Clipboard(osc52('x'.repeat(256 * 1024 + 1))), null);
+  assert.equal(decodeOsc52Clipboard(osc52('x'.repeat(2001))), null);
+});
+
+test('rejects OSC 52 control characters hidden in clipboard text', () => {
+  assert.equal(decodeOsc52Clipboard(osc52('safe prefix\rmalicious suffix')), null);
+  assert.equal(decodeOsc52Clipboard(osc52('first line\nsecond line')), null);
+});
+
+test('arms a prompt only for plain c in the active focused terminal', () => {
+  const prompt = { active: true, focused: true, now: 1000 };
+
+  assert.equal(getOsc52PromptDeadline('c', prompt), 3000);
+  assert.equal(getOsc52PromptDeadline('c', { ...prompt, active: false }), 0);
+  assert.equal(getOsc52PromptDeadline('c', { ...prompt, focused: false }), 0);
+  assert.equal(getOsc52PromptDeadline('\u0003', prompt), 0);
 });
 
 test('offers a clipboard request only from a recent active focused gesture', () => {

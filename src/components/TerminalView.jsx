@@ -3,7 +3,7 @@ import { pitchBlack } from '../utils/themes';
 import { sanitizeStagedTerminalInput } from '../utils/agentLaunchers.mjs';
 import {
   decodeOsc52ClipboardRequest,
-  OSC52_PROMPT_WINDOW_MS,
+  getOsc52PromptDeadline,
 } from '../utils/terminalClipboard.mjs';
 import TerminalClipboardDialog from './TerminalClipboardDialog';
 
@@ -231,9 +231,10 @@ export default function TerminalView({
 
       // Wire input: terminal → pty
       term.onData((data) => {
-        osc52CopyArmedUntilRef.current = data === 'c'
-          ? Date.now() + OSC52_PROMPT_WINDOW_MS
-          : 0;
+        osc52CopyArmedUntilRef.current = getOsc52PromptDeadline(data, {
+          active: activeRef.current,
+          focused: document.hasFocus(),
+        });
         window.nockTerminal.terminal.write(tabId, data);
       });
 
