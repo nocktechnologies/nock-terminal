@@ -28,6 +28,15 @@ test('redacts numeric OSC 52 identifiers with leading zeros', () => {
   );
 });
 
+test('matches xterm control handling while parsing an OSC identifier', () => {
+  const redactor = new TerminalOutputRedactor();
+
+  assert.equal(
+    redactor.redact('\x1b]5\x002;c;c2VjcmV0\x07'),
+    '[OSC 52 clipboard request redacted]',
+  );
+});
+
 test('bounds malformed OSC identifiers without missing a later numeric 52', () => {
   const redactor = new TerminalOutputRedactor();
   const leadingZeros = '0'.repeat(10_000);
@@ -65,6 +74,20 @@ test('resumes capture when CAN or SUB aborts OSC 52', () => {
   assert.equal(
     redactor.redact('\x1b]52;c;c2VjcmV0\x1avisible'),
     '[OSC 52 clipboard request redacted]visible',
+  );
+});
+
+test('resumes capture or starts a new OSC after a C1 transition', () => {
+  const aborted = new TerminalOutputRedactor();
+  const nested = new TerminalOutputRedactor();
+
+  assert.equal(
+    aborted.redact('\x1b]52;c;c2VjcmV0\x9bvisible'),
+    '[OSC 52 clipboard request redacted]\x9bvisible',
+  );
+  assert.equal(
+    nested.redact('\x1b]52;c;b25l\x9d052;c;dHdv\x07'),
+    '[OSC 52 clipboard request redacted][OSC 52 clipboard request redacted]',
   );
 });
 

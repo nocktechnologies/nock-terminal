@@ -2,6 +2,16 @@ const OSC_52_REDACTION = '[OSC 52 clipboard request redacted]';
 const OSC_IDENTIFIER_LIMIT = 64;
 const OSC_TERMINATORS = new Set(['\x07', '\x18', '\x1a', '\x9c']);
 
+function isIgnoredOscControl(character) {
+  const code = character.charCodeAt(0);
+  return code <= 0x17 || code === 0x19 || (code >= 0x1c && code <= 0x1f);
+}
+
+function isC1Control(character) {
+  const code = character.charCodeAt(0);
+  return code >= 0x80 && code <= 0x9f;
+}
+
 class TerminalOutputRedactor {
   constructor() {
     this.state = 'text';
@@ -44,7 +54,9 @@ class TerminalOutputRedactor {
         }
 
         if (this.state === 'osc-identifier') {
-          if (/^[0-9]$/.test(character)) {
+          if (isIgnoredOscControl(character)) {
+            continue;
+          } else if (character >= '0' && character <= '9') {
             this._appendOscIdentifier(character);
           } else if (character === ';') {
             if (this.osc52Match === 'fifty-two') {
@@ -67,6 +79,9 @@ class TerminalOutputRedactor {
             this.state = 'text';
           } else if (character === '\x1b') {
             this.state = 'osc-52-escape';
+          } else if (isC1Control(character)) {
+            this.state = 'text';
+            reprocess = true;
           }
           continue;
         }
