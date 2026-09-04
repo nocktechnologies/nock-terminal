@@ -2,6 +2,7 @@
 
 Current docs:
 
+- [Agent Console v1](AGENT_CONSOLE_V1.md) - managed local resident architecture, ownership boundaries, launchd supervision, permission presets, control IPC, and deliberate v1 limits.
 - [Product Audit And GTM Readiness](PRODUCT_AUDIT_GTM_READINESS.md) - May 15 audit plus May 16 cockpit/dispatch updates, market read, launch decision, and GTM readiness.
 - [Product Roadmap](ROADMAP.md) - recommended positioning, completed cockpit and dispatch slices, roadmap, GTM experiments, and product ideas.
 - [Phase H Execution Plan](PHASE_H_EXECUTION_PLAN.md) - post-Phase-F release and product-truth execution plan with ordered slices and acceptance criteria.

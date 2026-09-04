@@ -33,6 +33,7 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 - Launches Claude Code, Codex CLI, Gemini CLI, or custom agent aliases from project profiles; local agent-folder config commands are shown as metadata but are not auto-run unless discovery marks the path trusted.
 - Stages task text into newly launched agent terminals for human review before submit.
 - Sends brokered dispatch requests to Mira through NockCC AgentMessage, or opens a direct dispatch alias/script terminal with a generated payload file.
+- Combines imported agents with Nock-managed local Claude/tmux residents in Agent Console, including dedicated auth, launchd supervision, exact attach, and resident lifecycle controls.
 - Opens xterm.js terminal tabs through `node-pty`, including splits.
 - Keeps terminal sessions mounted while switching between dashboard, terminal, and settings views.
 - Cleans stale PTYs that lost their renderer tab or whose root pid disappeared, without killing quiet attached sessions.
@@ -57,8 +58,8 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for concrete product ideas and sequencing
 
 ## Requirements
 
-- Node.js 18+
-- npm 9+
+- Node.js 22.12+
+- npm 10+
 - macOS, Windows, or Linux
 
 ## Quick Start
@@ -107,6 +108,7 @@ docs/           Product audit, launch readiness, roadmap, historical specs
 - [docs/ROADMAP.md](docs/ROADMAP.md) lists product directions and prioritization.
 - [docs/AGENT_FOLDER_INTELLIGENCE.md](docs/AGENT_FOLDER_INTELLIGENCE.md) documents agent folder detection, state mapping, and launch behavior.
 - [docs/AGENT_DISPATCH.md](docs/AGENT_DISPATCH.md) documents Codex/DeepSeek dispatch discovery, brokered routing, direct scripts, and current limits.
+- [docs/AGENT_CONSOLE_V1.md](docs/AGENT_CONSOLE_V1.md) documents managed local residents, permission presets, launchd supervision, control IPC, and v1 limits.
 - [docs/RELEASE_READINESS.md](docs/RELEASE_READINESS.md) documents the release gate and packaged smoke checklist.
 - [CHANGELOG.md](CHANGELOG.md) summarizes repo history.
 - [AGENTS.md](AGENTS.md) is the canonical agent instruction file; [CLAUDE.md](CLAUDE.md) points Claude users back to it with Claude-specific context.

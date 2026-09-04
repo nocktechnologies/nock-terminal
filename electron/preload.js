@@ -45,6 +45,20 @@ contextBridge.exposeInMainWorld('nockTerminal', {
     discover: () => ipcRenderer.invoke('sessions:discover'),
   },
 
+  // Local managed resident agents
+  managedAgents: {
+    prerequisites: () => ipcRenderer.invoke('managedAgents:prerequisites'),
+    list: () => ipcRenderer.invoke('managedAgents:list'),
+    create: (draft) => ipcRenderer.invoke('managedAgents:create', draft),
+    update: (agentId, draft) => ipcRenderer.invoke('managedAgents:update', { agentId, draft }),
+    validate: (agentId) => ipcRenderer.invoke('managedAgents:validate', { agentId }),
+    authLaunch: (agentId) => ipcRenderer.invoke('managedAgents:authLaunch', { agentId }),
+    supervise: (agentId, action) => ipcRenderer.invoke('managedAgents:supervise', { agentId, action }),
+    control: (agentId, action, params = {}) => (
+      ipcRenderer.invoke('managedAgents:control', { agentId, action, params })
+    ),
+  },
+
   // Dispatch-and-die agent launch requests
   dispatch: {
     brokered: (payload) => ipcRenderer.invoke('dispatch:brokered', payload),
@@ -131,7 +145,11 @@ contextBridge.exposeInMainWorld('nockTerminal', {
 
   // File operations
   files: {
-    tree: (dirPath) => ipcRenderer.invoke('files:tree', dirPath),
+    tree: (dirPath, options = undefined) => (
+      options
+        ? ipcRenderer.invoke('files:tree', { dirPath, ...options })
+        : ipcRenderer.invoke('files:tree', dirPath)
+    ),
     read: (filePath) => ipcRenderer.invoke('files:read', filePath),
     write: (filePath, content) => ipcRenderer.invoke('files:write', { filePath, content }),
     stat: (filePath) => ipcRenderer.invoke('files:stat', filePath),

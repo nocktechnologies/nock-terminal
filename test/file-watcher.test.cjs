@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const EventEmitter = require('node:events');
 
 const FileWatcher = require('../electron/file-watcher');
 
@@ -77,4 +78,58 @@ test('stop() without an active watcher still returns a promise', async () => {
   const closed = watcher.stop();
   assert.equal(typeof closed?.then, 'function');
   await closed;
+});
+
+test('watch() refuses roots that fail the project-watch guard', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'file-watcher-test-'));
+  const originalWarn = console.warn;
+  const watcher = new FileWatcher({
+    isAllowedPath: () => true,
+    isWatchableRoot: () => false,
+    gitStatus: () => {
+      throw new Error('git status should not run for refused roots');
+    },
+  });
+
+  try {
+    console.warn = () => {};
+    const started = watcher.watch(dir);
+
+    assert.equal(started, false);
+    assert.equal(watcher.watcher, null);
+    assert.equal(watcher.currentRoot, null);
+  } finally {
+    console.warn = originalWarn;
+    await watcher.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('watch() stops after resource-limit watcher errors', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'file-watcher-test-'));
+  const originalError = console.error;
+  const fakeWatcher = new EventEmitter();
+  let closed = false;
+  fakeWatcher.close = async () => {
+    closed = true;
+  };
+
+  const watcher = new FileWatcher(createFileService(), {
+    watch: () => fakeWatcher,
+  });
+
+  try {
+    console.error = () => {};
+    const started = watcher.watch(dir);
+    fakeWatcher.emit('error', Object.assign(new Error('EMFILE: too many open files, watch'), { code: 'EMFILE' }));
+
+    assert.equal(started, true);
+    assert.equal(closed, true);
+    assert.equal(watcher.watcher, null);
+    assert.equal(watcher.currentRoot, null);
+  } finally {
+    console.error = originalError;
+    await watcher.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

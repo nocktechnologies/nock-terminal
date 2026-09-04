@@ -6,9 +6,10 @@ const EventEmitter = require('events');
 const IGNORED_DIRS = /(?:^|[\\/])(node_modules|\.git|__pycache__|dist|build|\.next|\.cache|coverage)[\\/]/;
 
 class FileWatcher extends EventEmitter {
-  constructor(fileService) {
+  constructor(fileService, watcherBackend = chokidar) {
     super();
     this.fileService = fileService;
+    this.watcherBackend = watcherBackend;
     this.watcher = null;
     this.currentRoot = null;
     this.gitPollInterval = null;
@@ -16,9 +17,15 @@ class FileWatcher extends EventEmitter {
 
   watch(dirPath) {
     this.stop();
+
+    if (typeof this.fileService.isWatchableRoot === 'function' && !this.fileService.isWatchableRoot(dirPath)) {
+      console.warn(`FileWatcher: refusing to watch non-project root: ${dirPath}`);
+      return false;
+    }
+
     this.currentRoot = dirPath;
 
-    this.watcher = chokidar.watch(dirPath, {
+    this.watcher = this.watcherBackend.watch(dirPath, {
       ignored: IGNORED_DIRS,
       persistent: true,
       ignoreInitial: true,
@@ -27,7 +34,7 @@ class FileWatcher extends EventEmitter {
     });
 
     this.watcher
-      .on('error', (err) => console.error('FileWatcher: chokidar error:', err.message))
+      .on('error', (err) => this._handleWatcherError(err))
       .on('add', (filePath) => this._emitChanged('add', filePath))
       .on('change', (filePath) => this._emitChanged('change', filePath))
       .on('unlink', (filePath) => this._emitChanged('unlink', filePath))
@@ -36,6 +43,7 @@ class FileWatcher extends EventEmitter {
 
     this._pollGitStatus();
     this.gitPollInterval = setInterval(() => this._pollGitStatus(), 10000);
+    return true;
   }
 
   revalidate() {
@@ -85,6 +93,27 @@ class FileWatcher extends EventEmitter {
     }
     if (!this.fileService.isAllowedPath(filePath)) return;
     this.emit('changed', { type, path: filePath });
+  }
+
+  _handleWatcherError(err) {
+    const message = err?.message || String(err);
+    console.error('FileWatcher: chokidar error:', message);
+
+    if (this._isResourceLimitError(err)) {
+      const root = this.currentRoot;
+      this.stop();
+      this.emit('watchError', {
+        code: err?.code || 'WATCH_RESOURCE_LIMIT',
+        message,
+        root,
+      });
+    }
+  }
+
+  _isResourceLimitError(err) {
+    const code = err?.code;
+    const message = err?.message || '';
+    return code === 'EMFILE' || code === 'ENOSPC' || /too many open files|watch limit/i.test(message);
   }
 }
 

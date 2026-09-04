@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Bot, Search, X } from 'lucide-react';
 import FileTree from './FileTree';
 import ContextMonitor from './ContextMonitor';
 import SessionHistory from './SessionHistory';
@@ -48,6 +48,7 @@ export default function Sidebar({
       {/* Navigation */}
       <div className="flex flex-col gap-1 p-2 border-b border-nock-border">
         <NavButton icon={<GridIcon />} label="Dashboard" collapsed={collapsed} active={activeView === 'dashboard'} onClick={() => onViewChange('dashboard')} />
+        <NavButton icon={<Bot className="h-3.5 w-3.5 shrink-0" />} label="Agents" collapsed={collapsed} active={activeView === 'agents'} onClick={() => onViewChange('agents')} />
         <NavButton icon={<CommandIcon />} label="Launcher" collapsed={collapsed} active={false} onClick={onOpenCommandPalette} />
         <NavButton icon={<TerminalIcon />} label="Terminal" collapsed={collapsed} active={activeView === 'terminal'} onClick={() => onViewChange('terminal')} />
         <NavButton icon={<GearIcon />} label="Settings" collapsed={collapsed} active={activeView === 'settings'} onClick={() => onViewChange('settings')} />

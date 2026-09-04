@@ -6,6 +6,8 @@ const { normalizeSettingValue } = require('./settings-utils');
 const VALIDATION_CODE = 'IPC_VALIDATION_ERROR';
 const MAX_PATH_LENGTH = 2000;
 const MAX_FILE_WRITE_BYTES = 2 * 1024 * 1024;
+const MAX_TREE_DEPTH = 8;
+const MAX_TREE_ENTRIES = 2000;
 
 function ok(value) {
   return { ok: true, value };
@@ -38,6 +40,13 @@ function normalizeString(value, { maxLength = 1000, trim = true, allowEmpty = tr
 function normalizePathString(value, { allowEmpty = false } = {}) {
   const normalized = normalizeString(value, { maxLength: MAX_PATH_LENGTH, allowEmpty });
   return normalized || null;
+}
+
+function normalizeBoundedInteger(value, { min = 1, max, fallback } = {}) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(parsed)));
 }
 
 function normalizeId(value) {
@@ -413,7 +422,22 @@ function validateDispatchThreadPayload(payload) {
 
 function validateFilesPayload(operation, payload, context = {}) {
   switch (operation) {
-    case 'tree':
+    case 'tree': {
+      const input = isPlainObject(payload) ? payload.dirPath : payload;
+      const dirPath = normalizePathString(input);
+      if (!dirPath) return invalid('files:tree path must be a non-empty string');
+      const allowedPath = validateAllowedPath('files:tree path', dirPath, context);
+      if (!allowedPath.ok) return allowedPath;
+
+      if (!isPlainObject(payload)) return ok({ dirPath, options: undefined });
+      return ok({
+        dirPath,
+        options: {
+          maxDepth: normalizeBoundedInteger(payload.maxDepth, { max: MAX_TREE_DEPTH, fallback: undefined }),
+          maxEntries: normalizeBoundedInteger(payload.maxEntries, { max: MAX_TREE_ENTRIES, fallback: undefined }),
+        },
+      });
+    }
     case 'read':
     case 'stat': {
       const filePath = normalizePathString(payload);

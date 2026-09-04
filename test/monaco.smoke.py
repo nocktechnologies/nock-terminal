@@ -88,7 +88,7 @@ def run():
         page = browser.new_page()
 
         page.add_init_script(NOCK_TERMINAL_MOCK)
-        page.on('console', lambda msg: console_errors.append(msg.text) if msg.type == 'error' else None)
+        page.on('console', lambda msg: console_errors.append(msg.text) if msg.type in ('error', 'warning') else None)
         page.on('pageerror', lambda err: console_errors.append(f'pageerror: {err}'))
 
         print(f'Loading {APP_URL} with mocked nockTerminal…')

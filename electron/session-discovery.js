@@ -16,6 +16,18 @@ const GEMINI_LOGS_BYTES = 512 * 1024;
 // ~/.gemini/tmp entries that are never per-project session dirs: the bundled
 // `bin/`, plus credential/account/history names guarded against by the allowlist.
 const GEMINI_RESERVED_SLUGS = new Set(['bin', 'history', 'oauth_creds', 'google_accounts']);
+const RESIDENT_PRESENCE_BYTES = 64 * 1024;
+const RESIDENT_MANIFEST_BYTES = 256 * 1024;
+const RESIDENT_PRESENCE_LIFECYCLES = {
+  starting: 'running',
+  working: 'running',
+  waiting: 'idle',
+  idle: 'idle',
+  compacting: 'running',
+  ended: 'offline',
+  capsule_failed: 'offline',
+  unknown: 'offline',
+};
 
 class SessionDiscovery {
   constructor(opts = {}) {
@@ -31,6 +43,9 @@ class SessionDiscovery {
     this.geminiProjectsBytes = this._positiveInteger(opts.geminiProjectsBytes, GEMINI_PROJECTS_BYTES);
     this.geminiLogsBytes = this._positiveInteger(opts.geminiLogsBytes, GEMINI_LOGS_BYTES);
     this.fileBusRoot = opts.fileBusRoot || this._defaultFileBusRoot();
+    this.managedAgentsRoot = opts.managedAgentsRoot === null
+      ? null
+      : (opts.managedAgentsRoot || path.join(os.homedir(), '.nock', 'agents'));
     // Dev root directories to scan for git projects (merged with sessions)
     this.defaultDevRoots = Array.isArray(opts.defaultDevRoots)
       ? opts.defaultDevRoots
@@ -703,6 +718,8 @@ class SessionDiscovery {
 
   async _discoverAgentFolders(sessionPaths = []) {
     const configPaths = new Set();
+    const configPathSources = new Map();
+    const residentManifestPaths = new Set();
     const sessionConfigPaths = new Set();
     for (const sessionPath of sessionPaths) {
       const normalizedPath = this._safeString(sessionPath, 1000);
@@ -710,8 +727,12 @@ class SessionDiscovery {
       sessionConfigPaths.add(path.join(normalizedPath, 'config.json'));
     }
     await this._mapLimit([...sessionConfigPaths], 5, (configPath) =>
-      this._addConfigIfReadable(configPaths, configPath)
+      this._addConfigIfReadable(configPaths, configPath, { source: 'session-path', sources: configPathSources })
     );
+
+    if (this.managedAgentsRoot) {
+      await this._addManagedResidentManifests(residentManifestPaths, this.managedAgentsRoot);
+    }
 
     for (const root of this.devRoots) {
       try {
@@ -722,13 +743,22 @@ class SessionDiscovery {
       }
       for (const configPath of await this._candidateAgentConfigPaths(root)) {
         configPaths.add(configPath);
+        if (!configPathSources.has(configPath)) configPathSources.set(configPath, 'dev-root');
+      }
+      for (const manifestPath of await this._candidateResidentManifestPaths(root)) {
+        residentManifestPaths.add(manifestPath);
       }
     }
 
-    const results = await this._mapLimit([...configPaths], 5, (configPath) =>
-      this._parseAgentFolder(configPath)
-    );
-    return this._dedupeAgentFolders(results.filter(Boolean));
+    const [configResults, residentResults] = await Promise.all([
+      this._mapLimit([...configPaths], 5, (configPath) =>
+        this._parseAgentFolder(configPath, { discoverySource: configPathSources.get(configPath) || 'dev-root' })
+      ),
+      this._mapLimit([...residentManifestPaths], 5, (manifestPath) =>
+        this._parseResidentSeatManifest(manifestPath)
+      ),
+    ]);
+    return this._dedupeAgentFolders([...configResults, ...residentResults].filter(Boolean));
   }
 
   _dedupeAgentFolders(agentFolders) {
@@ -746,6 +776,8 @@ class SessionDiscovery {
   _agentFolderPriority(agent) {
     let score = 0;
     const normalizedPath = String(agent.path || '').replace(/\\/g, '/');
+    if (agent.agent?.runtime === 'resident') score += 3000;
+    if (agent.discoverySource === 'session-path') score += 1500;
     if (/\/claude-remote-manager\/agents\/[^/]+$/i.test(normalizedPath)) score += 1000;
     if (agent.launch?.canLaunch === true) score += 100;
     if (agent.agent?.enabled === true) score += 50;
@@ -793,6 +825,39 @@ class SessionDiscovery {
     return [...configs];
   }
 
+  async _candidateResidentManifestPaths(root) {
+    const manifests = new Set();
+    if (this._isDispatchWorkspaceName(path.basename(root))) {
+      return [];
+    }
+
+    await this._addResidentManifestsFromRoot(manifests, path.join(root, 'seats'));
+
+    let entries = [];
+    try {
+      entries = await fsp.readdir(root, { withFileTypes: true });
+    } catch (err) {
+      this._debugDiscovery('Resident manifest candidate scan failed', { path: root, error: err });
+      return [...manifests];
+    }
+
+    const ignored = new Set(['.git', 'node_modules', 'dist', 'dist-react', 'build']);
+    await this._mapLimit(
+      entries.filter(entry =>
+        entry.isDirectory()
+        && !entry.name.startsWith('.')
+        && !ignored.has(entry.name)
+        && !this._isDispatchWorkspaceName(entry.name)
+      ),
+      5,
+      async (entry) => {
+        await this._addResidentManifestsFromRoot(manifests, path.join(root, entry.name, 'seats'));
+      }
+    );
+
+    return [...manifests];
+  }
+
   _isDispatchWorkspaceName(name) {
     return /(?:^|-)dispatch$/i.test(String(name || ''));
   }
@@ -815,11 +880,48 @@ class SessionDiscovery {
     );
   }
 
-  async _addConfigIfReadable(configs, configPath) {
+  async _addResidentManifestsFromRoot(manifests, seatsRoot) {
+    let entries = [];
+    try {
+      entries = await fsp.readdir(seatsRoot, { withFileTypes: true });
+    } catch (err) {
+      this._debugDiscovery('Resident manifest root scan failed', { path: seatsRoot, error: err });
+      return;
+    }
+
+    await this._mapLimit(
+      entries.filter(entry => entry.isFile() && /\.json$/i.test(entry.name)),
+      5,
+      async (entry) => {
+        await this._addResidentManifestIfReadable(manifests, path.join(seatsRoot, entry.name));
+      }
+    );
+  }
+
+  async _addManagedResidentManifests(manifests, agentsRoot) {
+    let entries = [];
+    try {
+      entries = await fsp.readdir(agentsRoot, { withFileTypes: true });
+    } catch (err) {
+      this._debugDiscovery('Managed agent root scan failed', { path: agentsRoot, error: err });
+      return;
+    }
+
+    await this._mapLimit(
+      entries.filter(entry => entry.isDirectory() && /^[a-z][a-z0-9-]{1,63}$/.test(entry.name)),
+      5,
+      async (entry) => {
+        await this._addResidentManifestIfReadable(manifests, path.join(agentsRoot, entry.name, 'seat.json'));
+      }
+    );
+  }
+
+  async _addConfigIfReadable(configs, configPath, { source = '', sources = null } = {}) {
     try {
       const config = JSON.parse(await fsp.readFile(configPath, 'utf-8'));
       if (this._agentNameFromConfig(config)) {
         configs.add(configPath);
+        if (sources && source && !sources.has(configPath)) sources.set(configPath, source);
         return;
       }
       this._debugIgnoredAgentConfig(configPath, 'missing valid agent_name');
@@ -830,7 +932,22 @@ class SessionDiscovery {
     }
   }
 
-  async _parseAgentFolder(configPath) {
+  async _addResidentManifestIfReadable(manifests, manifestPath) {
+    try {
+      const manifest = JSON.parse(await this._readFileHead(manifestPath, RESIDENT_MANIFEST_BYTES));
+      if (this._residentAgentNameFromManifest(manifest)) {
+        manifests.add(manifestPath);
+        return;
+      }
+      this._debugDiscovery('Ignored resident manifest', { path: manifestPath, reason: 'missing resident seat fields' });
+    } catch (err) {
+      if (!['ENOENT', 'ENOTDIR'].includes(err?.code)) {
+        this._debugDiscovery('Ignored resident manifest', { path: manifestPath, reason: 'unreadable or invalid JSON' });
+      }
+    }
+  }
+
+  async _parseAgentFolder(configPath, { discoverySource = 'dev-root' } = {}) {
     try {
       const agentPath = path.dirname(configPath);
       const dirName = path.basename(agentPath);
@@ -881,6 +998,7 @@ class SessionDiscovery {
         lastActivity,
         lastActivityFormatted: this._formatTime(lastActivity),
         dirty: gitInfo.dirty,
+        discoverySource,
         agent: {
           name: agentName,
           enabled,
@@ -913,6 +1031,104 @@ class SessionDiscovery {
     }
   }
 
+  async _parseResidentSeatManifest(manifestPath) {
+    try {
+      const manifest = JSON.parse(await this._readFileHead(manifestPath, RESIDENT_MANIFEST_BYTES));
+      const agentName = this._residentAgentNameFromManifest(manifest);
+      if (!agentName) {
+        this._debugDiscovery('Ignored resident manifest', { path: manifestPath, reason: 'missing resident seat fields' });
+        return null;
+      }
+
+      const manifestDir = path.dirname(manifestPath);
+      const homePath = this._resolveManifestPath(manifest.home || manifest.work_dir || manifest.workDir, manifestDir);
+      const workDir = this._resolveManifestPath(manifest.work_dir || manifest.workDir || manifest.home, manifestDir);
+      const stateDir = this._resolveManifestPath(
+        manifest.state_dir || manifest.stateDir || (homePath ? path.join(homePath, 'state', 'resident') : ''),
+        manifestDir
+      );
+      const presenceDir = this._resolveManifestPath(
+        manifest.presence_dir || manifest.presenceDir || (stateDir ? path.join(stateDir, 'presence') : ''),
+        manifestDir
+      );
+      const controlSocket = this._safeString(manifest.control_socket || manifest.controlSocket, 1000);
+      const tmuxSocket = this._safeString(manifest.tmux?.socket, 1000);
+      const journalPath = stateDir ? path.join(stateDir, 'journal.db') : '';
+      const launchCwd = workDir || homePath || manifestDir;
+      const attachCommand = this._resolveResidentTmuxAttachCommand(manifest);
+      const [tmuxSocketReachable, controlSocketReachable] = await Promise.all([
+        this._localPathReadable(tmuxSocket),
+        this._localPathReadable(controlSocket),
+      ]);
+      const terminalLaunch = this._residentLaunchDescriptor(attachCommand, { tmuxSocketReachable });
+      const presence = await this._readResidentPresence(presenceDir);
+      const lifecycle = this._residentLifecycleFromPresenceStatus(presence.status);
+      const runtime = manifest.runtime && typeof manifest.runtime === 'object' && !Array.isArray(manifest.runtime)
+        ? manifest.runtime
+        : {};
+      const gitInfo = await this._getGitInfo(homePath || workDir || manifestDir);
+      const lastActivity = presence.lastActivity || 0;
+      const sessionContract = this._resolveResidentSessionContract({
+        attachCommand,
+        controlSocket,
+        journalPath,
+        manifestPath,
+        presenceAvailable: presence.available,
+        presencePath: presence.path,
+        tmuxSession: this._safeString(manifest.tmux?.session, 200),
+        tmuxSocket,
+        tmuxSocketReachable,
+        controlSocketReachable,
+      });
+
+      return {
+        id: `resident:${manifestPath}`,
+        kind: 'agent',
+        name: this._formatAgentName(agentName),
+        path: homePath || workDir || manifestDir,
+        branch: gitInfo.branch,
+        status: this._statusFromAgentLifecycle(lifecycle),
+        lastActivity,
+        lastActivityFormatted: this._formatTime(lastActivity),
+        dirty: gitInfo.dirty,
+        agent: {
+          name: agentName,
+          enabled: true,
+          lifecycle,
+          runtime: 'resident',
+          launchType: 'resident',
+          model: this._safeString(runtime.model, 120),
+          workingDirectory: launchCwd,
+          cronCount: 0,
+          unreadCount: 0,
+          inflightCount: 0,
+          aliases: [agentName],
+          lastHeartbeat: lastActivity || null,
+          presenceStatus: presence.status,
+          presenceLastEvent: presence.lastEvent,
+          presenceSessionId: presence.sessionId,
+          controlSocket,
+          tmuxSocket,
+          tmuxSession: this._safeString(manifest.tmux?.session, 200),
+        },
+        launch: {
+          mode: 'terminal',
+          command: attachCommand,
+          cwd: launchCwd,
+          canLaunch: terminalLaunch.canLaunch,
+          disabledReason: terminalLaunch.disabledReason,
+          action: terminalLaunch.action,
+          actionLabel: terminalLaunch.actionLabel,
+          capability: terminalLaunch.capability,
+        },
+        sessionContract,
+      };
+    } catch (err) {
+      this._debugDiscovery('Resident manifest parse failed', { path: manifestPath, error: err });
+      return null;
+    }
+  }
+
   _safeAgentName(value) {
     const normalized = String(value || '').trim().toLowerCase();
     return /^[a-z0-9_-]{1,100}$/.test(normalized) ? normalized : '';
@@ -921,6 +1137,22 @@ class SessionDiscovery {
   _agentNameFromConfig(config) {
     if (!config || typeof config !== 'object' || Array.isArray(config)) return '';
     return this._safeAgentName(config.agent_name);
+  }
+
+  _residentAgentNameFromManifest(manifest) {
+    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) return '';
+    const agentName = this._safeAgentName(manifest.agent || manifest.agent_name);
+    if (!agentName) return '';
+    const runtime = manifest.runtime && typeof manifest.runtime === 'object' && !Array.isArray(manifest.runtime)
+      ? manifest.runtime
+      : {};
+    const adapter = this._safeString(runtime.adapter, 120);
+    const tmuxSocket = this._safeString(manifest.tmux?.socket, 1000);
+    const tmuxSession = this._safeString(manifest.tmux?.session, 200);
+    const controlSocket = this._safeString(manifest.control_socket || manifest.controlSocket, 1000);
+    if (adapter !== 'claude-code-interactive') return '';
+    if (!tmuxSocket || !tmuxSession || !controlSocket) return '';
+    return agentName;
   }
 
   _debugIgnoredAgentConfig(configPath, reason) {
@@ -1120,10 +1352,116 @@ class SessionDiscovery {
     return `tmux attach -t crm-${instanceId}-${safeAgent}`;
   }
 
+  _resolveResidentTmuxAttachCommand(manifest) {
+    if (process.platform === 'win32') return '';
+    const socket = this._safeString(manifest?.tmux?.socket, 1000);
+    const session = this._safeString(manifest?.tmux?.session, 200);
+    if (!path.isAbsolute(socket) || !/^[A-Za-z0-9_.:-]{1,200}$/.test(session)) return '';
+    return `tmux -S ${this._shellToken(socket)} attach -t ${this._shellToken(`=${session}`)}`;
+  }
+
+  _residentLaunchDescriptor(attachCommand, { tmuxSocketReachable = false } = {}) {
+    if (!attachCommand) {
+      return {
+        action: 'unavailable',
+        actionLabel: 'Unavailable',
+        capability: 'none',
+        canLaunch: false,
+        disabledReason: 'Resident tmux attach target is missing or unsupported on this platform',
+      };
+    }
+    if (!tmuxSocketReachable) {
+      return {
+        action: 'attach',
+        actionLabel: 'Attach',
+        capability: 'resident-live-attach',
+        canLaunch: false,
+        disabledReason: 'Resident tmux socket is not reachable from this machine.',
+      };
+    }
+    return {
+      action: 'attach',
+      actionLabel: 'Attach',
+      capability: 'resident-live-attach',
+      canLaunch: true,
+      disabledReason: '',
+    };
+  }
+
+  _resolveResidentSessionContract({
+    attachCommand,
+    controlSocket,
+    journalPath,
+    manifestPath,
+    presenceAvailable,
+    presencePath,
+    tmuxSession,
+    tmuxSocket,
+    tmuxSocketReachable,
+    controlSocketReachable,
+  }) {
+    const contract = getAgentSessionContract('resident-agent');
+    contract.adapterId = 'resident-agent';
+    contract.liveAttach = {
+      ...(contract.liveAttach || {}),
+      state: attachCommand ? (tmuxSocketReachable ? 'supported' : 'conditional') : 'unsupported',
+      command: attachCommand || '',
+      evidence: attachCommand ? 'resident-tmux-manifest' : '',
+      tmuxSocket: tmuxSocket || '',
+      tmuxSession: tmuxSession || '',
+      disabledReason: attachCommand
+        ? (tmuxSocketReachable ? '' : 'Resident tmux socket is configured but not reachable from this machine.')
+        : 'No deterministic resident tmux attach target was resolved.',
+    };
+    contract.resumeCommand = {
+      ...(contract.resumeCommand || {}),
+      state: 'unsupported',
+      command: '',
+      disabledReason: 'Resident seats do not use SDK wake/resume turns; use live attach or control-socket actions.',
+    };
+    contract.folderLaunch = {
+      ...(contract.folderLaunch || {}),
+      state: 'unsupported',
+      command: '',
+      disabledReason: 'Resident seats are supervised by residentd; Nock Terminal must not launch them as folder commands.',
+    };
+    contract.residentControl = {
+      ...(contract.residentControl || {}),
+      state: controlSocket ? (controlSocketReachable ? 'supported' : 'conditional') : 'unsupported',
+      controlSocket: controlSocket || '',
+      actions: ['status', 'receipt', 'pause', 'resume', 'restart', 'steer', 'rotate'],
+      disabledReason: controlSocket && !controlSocketReachable
+        ? 'Resident control socket is configured but not reachable from this machine.'
+        : '',
+      notes: 'Mutating resident control actions require non-empty request ids and are idempotent by effect ledger.',
+    };
+    contract.presence = {
+      ...(contract.presence || {}),
+      state: presencePath ? (presenceAvailable ? 'supported' : 'conditional') : 'unsupported',
+      path: presencePath || '',
+      notes: 'Presence is hook-derived liveness; do not infer state from process tables or pane scraping.',
+    };
+    contract.journal = {
+      ...(contract.journal || {}),
+      state: journalPath ? 'conditional' : 'unsupported',
+      path: journalPath || '',
+      access: 'read-only',
+      notes: 'Resident journal is optional telemetry. It must be opened read-only and deduped by external id.',
+    };
+    contract.manifestPath = manifestPath;
+    return contract;
+  }
+
   _resolveAgentLaunchCwd(config, agentPath) {
     const raw = this._safeString(config.working_directory || config.workingDirectory, 1000);
     if (!raw) return agentPath;
     return path.isAbsolute(raw) ? raw : path.resolve(agentPath, raw);
+  }
+
+  _resolveManifestPath(value, baseDir) {
+    const raw = this._safeString(value, 1000);
+    if (!raw) return '';
+    return path.isAbsolute(raw) ? raw : path.resolve(baseDir, raw);
   }
 
   _agentRuntimeFromConfig(config) {
@@ -1303,9 +1641,60 @@ class SessionDiscovery {
   }
 
   _statusFromAgentLifecycle(lifecycle) {
-    if (lifecycle === 'running' || lifecycle === 'idle') return 'active';
+    if (['running', 'idle', 'working', 'waiting', 'starting', 'compacting'].includes(lifecycle)) return 'active';
     if (lifecycle === 'stale') return 'recent';
     return 'inactive';
+  }
+
+  _residentLifecycleFromPresenceStatus(status) {
+    const normalized = this._safeString(status, 80).toLowerCase();
+    return RESIDENT_PRESENCE_LIFECYCLES[normalized] || 'offline';
+  }
+
+  async _readResidentPresence(presenceDir) {
+    const presencePath = presenceDir ? path.join(presenceDir, 'presence.json') : '';
+    const fallback = {
+      status: 'unknown',
+      lastActivity: 0,
+      lastEvent: '',
+      sessionId: '',
+      path: presencePath,
+      available: false,
+    };
+    if (!presencePath) return fallback;
+
+    try {
+      const stat = await fsp.stat(presencePath);
+      if (!stat.isFile() || stat.size > RESIDENT_PRESENCE_BYTES) return fallback;
+      const presence = JSON.parse(await fsp.readFile(presencePath, 'utf-8'));
+      const status = this._safeString(presence.status, 80).toLowerCase() || 'unknown';
+      const timestamp = this._timestampFromText(
+        presence.updated_at || presence.updatedAt || presence.timestamp || presence.last_event_at || presence.lastEventAt
+      );
+      return {
+        status: RESIDENT_PRESENCE_LIFECYCLES[status] ? status : 'unknown',
+        lastActivity: timestamp || stat.mtimeMs || 0,
+        lastEvent: this._safeString(presence.last_event || presence.lastEvent, 120),
+        sessionId: this._safeString(presence.session_id || presence.sessionId, 200),
+        path: presencePath,
+        available: true,
+      };
+    } catch (err) {
+      this._debugDiscovery('Resident presence unavailable', { path: presencePath, error: err });
+      return fallback;
+    }
+  }
+
+  async _localPathReadable(filePath) {
+    const normalized = this._safeString(filePath, 1000);
+    if (!normalized || !path.isAbsolute(normalized)) return false;
+    try {
+      await fsp.access(normalized);
+      return true;
+    } catch (err) {
+      this._debugDiscovery('Local resident endpoint unavailable', { path: normalized, error: err });
+      return false;
+    }
   }
 
   async _countBusFiles(kind, aliases) {

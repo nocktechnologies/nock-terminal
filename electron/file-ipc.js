@@ -31,7 +31,7 @@ function registerFileIPC({
   ipcMain.handle('files:tree', (_, payload) => {
     const validated = validateFilePayload('tree', payload);
     if (!validated.ok) return invalidFilePayloadResult(validated);
-    return fileService.tree(validated.value);
+    return fileService.tree(validated.value.dirPath, validated.value.options);
   });
 
   ipcMain.handle('files:read', (_, payload) => {

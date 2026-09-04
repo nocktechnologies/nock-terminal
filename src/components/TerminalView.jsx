@@ -1,17 +1,38 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { pitchBlack } from '../utils/themes';
 import { sanitizeStagedTerminalInput } from '../utils/agentLaunchers.mjs';
+import { resolveTerminalFileCandidate } from '../utils/terminalFileLinks.mjs';
 
 const LAUNCH_COMMAND_DELAY_MS = 500;
 const STAGED_INPUT_DELAY_MS = 1400;
 const DIRECT_STAGED_INPUT_DELAY_MS = 700;
 
-export default function TerminalView({ tabId, cwd, active, launchCommand, initialInput }) {
+export default function TerminalView({ tabId, cwd, active, launchCommand, initialInput, onOpenFile }) {
   const containerRef = useRef(null);
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
+  const onOpenFileRef = useRef(onOpenFile);
   const [initialized, setInitialized] = useState(false);
   const [contextMenu, setContextMenu] = useState(null); // { x, y } | null
+
+  useEffect(() => {
+    onOpenFileRef.current = onOpenFile;
+  }, [onOpenFile]);
+
+  const openFileCandidate = useCallback(async (text) => {
+    const candidate = resolveTerminalFileCandidate(text, cwd);
+    if (!candidate || typeof onOpenFileRef.current !== 'function') return false;
+
+    try {
+      const stat = await window.nockTerminal.files.stat(candidate.filePath);
+      if (!stat?.exists || stat.error) return false;
+      onOpenFileRef.current(candidate.filePath);
+      return true;
+    } catch (err) {
+      console.error('TerminalView: failed to open file candidate:', err);
+      return false;
+    }
+  }, [cwd]);
 
   // Paste clipboard content to the active pty
   const pasteFromClipboard = async () => {
@@ -110,6 +131,11 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
 
       fitAddon = new FitAddon();
       const webLinksAddon = new WebLinksAddon((_, uri) => {
+        const candidate = resolveTerminalFileCandidate(uri, cwd);
+        if (candidate) {
+          openFileCandidate(uri);
+          return;
+        }
         window.nockTerminal.shell.openExternal(uri);
       });
 
@@ -242,7 +268,7 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
     // initialInput is staged once at tab creation; re-running this effect on
     // its change would destroy and recreate the live terminal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId, cwd, launchCommand]);
+  }, [tabId, cwd, launchCommand, openFileCandidate]);
 
   // Refit on visibility change or window resize
   useEffect(() => {
@@ -302,6 +328,8 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
   };
 
   const hasSelection = terminalRef.current?.hasSelection?.() ?? false;
+  const selectedText = terminalRef.current?.getSelection?.() || '';
+  const canOpenSelectedFile = Boolean(resolveTerminalFileCandidate(selectedText, cwd));
 
   // Drag-and-drop: paste file paths (or text) into terminal
   const handleDragOver = (e) => {
@@ -359,6 +387,16 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
           >
             <span>Paste</span>
             <kbd className="text-[9px] text-nock-text-dim font-mono">Ctrl+V</kbd>
+          </button>
+          <button
+            onClick={() => {
+              openFileCandidate(selectedText);
+              setContextMenu(null);
+            }}
+            disabled={!canOpenSelectedFile}
+            className="w-full text-left px-3 py-1.5 text-xs text-nock-text hover:bg-nock-border/50 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+          >
+            Open File
           </button>
           <div className="border-t border-nock-border my-1" />
           <button

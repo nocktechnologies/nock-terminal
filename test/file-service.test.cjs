@@ -94,6 +94,39 @@ test('tree reports partial results when depth is capped', () => {
   assert.deepEqual(result.entries[0].children, []);
 });
 
+test('isWatchableRoot refuses allowed folders without project markers', () => {
+  const sandbox = makeSandbox();
+  const root = path.join(sandbox, 'workspace');
+  fs.mkdirSync(root, { recursive: true });
+
+  const fileService = new FileService(createStore([root]));
+
+  assert.equal(fileService.isWatchableRoot(root), false);
+});
+
+test('isWatchableRoot accepts project roots under allowed folders', () => {
+  const sandbox = makeSandbox();
+  const root = path.join(sandbox, 'workspace');
+  const project = path.join(root, 'nock-terminal');
+  fs.mkdirSync(path.join(project, '.git'), { recursive: true });
+
+  const fileService = new FileService(createStore([root]));
+
+  assert.equal(fileService.isWatchableRoot(project), true);
+});
+
+test('isWatchableRoot accepts manifest-based project roots', () => {
+  const sandbox = makeSandbox();
+  const root = path.join(sandbox, 'workspace');
+  const project = path.join(root, 'renderer-app');
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(path.join(project, 'package.json'), '{}', 'utf8');
+
+  const fileService = new FileService(createStore([root]));
+
+  assert.equal(fileService.isWatchableRoot(project), true);
+});
+
 test('read returns a preview for large files without reading the whole file', () => {
   const sandbox = makeSandbox();
   const root = path.join(sandbox, 'workspace');

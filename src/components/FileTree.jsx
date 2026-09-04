@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ContextMenu from './ContextMenu';
+import { formatTreeMetaNotice } from '../utils/fileTreeMeta.mjs';
+import { normalizeTreeEntries, replaceTreeNodeChildren, updateTreeNode } from '../utils/fileTreeState.mjs';
+
+const ROOT_TREE_OPTIONS = { maxDepth: 1, maxEntries: 300 };
+const CHILD_TREE_OPTIONS = { maxDepth: 1, maxEntries: 300 };
 
 const GIT_STATUS_COLORS = {
   M: 'bg-nock-yellow',
@@ -20,12 +25,12 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
   const loadTree = useCallback(async () => {
     if (!rootPath) return;
     try {
-      const result = await window.nockTerminal.files.tree(rootPath);
+      const result = await window.nockTerminal.files.tree(rootPath, ROOT_TREE_OPTIONS);
       if (Array.isArray(result)) {
-        setTree(result);
+        setTree(normalizeTreeEntries(result));
         setTreeMeta(null);
       } else {
-        setTree(Array.isArray(result?.entries) ? result.entries : []);
+        setTree(normalizeTreeEntries(result?.entries));
         setTreeMeta(result?.meta || null);
       }
     } catch (err) {
@@ -34,6 +39,24 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
       setTreeMeta({ error: err.message });
     }
   }, [rootPath]);
+
+  const loadChildren = useCallback(async (dirPath) => {
+    setTree(prev => updateTreeNode(prev, dirPath, { loadingChildren: true }));
+    try {
+      const result = await window.nockTerminal.files.tree(dirPath, CHILD_TREE_OPTIONS);
+      const entries = Array.isArray(result) ? result : result?.entries;
+      setTree(prev => replaceTreeNodeChildren(prev, dirPath, entries, {
+        childrenMeta: Array.isArray(result) ? null : result?.meta || null,
+      }));
+    } catch (err) {
+      console.error('FileTree: failed to load children:', err);
+      setTree(prev => updateTreeNode(prev, dirPath, {
+        childrenLoaded: true,
+        loadingChildren: false,
+        childrenMeta: { error: err.message },
+      }));
+    }
+  }, []);
 
   useEffect(() => {
     loadTree();
@@ -147,6 +170,7 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
   };
 
   const filteredTree = filterNodes(tree);
+  const treeMetaNotice = formatTreeMetaNotice(treeMeta, 'tree');
 
   return (
     <div className="flex flex-col overflow-hidden">
@@ -161,13 +185,9 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
         />
       </div>
 
-      {(treeMeta?.truncated || treeMeta?.error) && (
+      {treeMetaNotice && (
         <div className="mx-2 mb-2 rounded border border-nock-yellow/20 bg-nock-yellow/10 px-2 py-1 text-[10px] font-mono text-nock-yellow">
-          {treeMeta.error || (
-            treeMeta.truncatedByEntries
-              ? `Partial tree shown (${treeMeta.entryCount}/${treeMeta.maxEntries} entries)`
-              : `Partial tree shown (depth limit ${treeMeta.maxDepth})`
-          )}
+          {treeMetaNotice}
         </div>
       )}
 
@@ -181,6 +201,7 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
             rootPath={rootPath}
             onFileClick={onFileClick}
             onContextMenu={handleContextMenu}
+            onLoadChildren={loadChildren}
             forceExpand={Boolean(filter)}
           />
         ))}
@@ -202,21 +223,29 @@ export default function FileTree({ rootPath, onFileClick, onCtrlPFocus }) {
   );
 }
 
-function TreeNode({ node, depth, gitStatus, rootPath, onFileClick, onContextMenu, forceExpand = false }) {
-  const [expanded, setExpanded] = useState(depth < 1);
+function TreeNode({ node, depth, gitStatus, rootPath, onFileClick, onContextMenu, onLoadChildren, forceExpand = false }) {
+  const [expanded, setExpanded] = useState(false);
 
   const relativePath = node.path.replace(rootPath, '').replace(/^[/\\]/, '').replace(/\\/g, '/');
   const statusCode = gitStatus[relativePath] || gitStatus[relativePath.replace(/\//g, '\\')];
+  const childrenMetaNotice = formatTreeMetaNotice(node.childrenMeta, 'folder');
 
   if (node.type === 'dir') {
     // While a filter is active every surviving folder opens, so matches deep
     // in the tree are visible instead of hiding behind collapsed parents.
     const isOpen = forceExpand || expanded;
+    const toggleOpen = () => {
+      const nextOpen = !isOpen;
+      setExpanded(nextOpen);
+      if (nextOpen && !node.childrenLoaded && !node.loadingChildren) {
+        onLoadChildren(node.path);
+      }
+    };
     return (
       <div>
         <button
           type="button"
-          onClick={() => setExpanded(!isOpen)}
+          onClick={toggleOpen}
           onContextMenu={(e) => onContextMenu(e, node)}
           className="w-full min-h-6 text-left flex items-center gap-1 py-0.5 hover:bg-nock-card/50 rounded transition-colors"
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
@@ -227,6 +256,22 @@ function TreeNode({ node, depth, gitStatus, rootPath, onFileClick, onContextMenu
           </span>
           <span className="text-[10px] text-nock-accent-blue truncate">{node.name}/</span>
         </button>
+        {isOpen && node.loadingChildren && (
+          <p
+            className="font-mono text-[10px] text-nock-text-muted py-0.5"
+            style={{ paddingLeft: `${(depth + 1) * 12 + 16}px` }}
+          >
+            Loading...
+          </p>
+        )}
+        {isOpen && childrenMetaNotice && (
+          <p
+            className="font-mono text-[10px] text-nock-yellow py-0.5"
+            style={{ paddingLeft: `${(depth + 1) * 12 + 16}px` }}
+          >
+            {childrenMetaNotice}
+          </p>
+        )}
         {isOpen && node.children?.map(child => (
           <TreeNode
             key={child.path}
@@ -236,6 +281,7 @@ function TreeNode({ node, depth, gitStatus, rootPath, onFileClick, onContextMenu
             rootPath={rootPath}
             onFileClick={onFileClick}
             onContextMenu={onContextMenu}
+            onLoadChildren={onLoadChildren}
             forceExpand={forceExpand}
           />
         ))}

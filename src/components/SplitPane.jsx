@@ -65,11 +65,11 @@ export default function SplitPane({
   return (
     <div
       ref={containerRef}
-      className={`flex-1 flex overflow-hidden ${isHorizontal ? 'flex-row' : 'flex-col'}`}
+      className={`flex-1 flex min-h-0 min-w-0 overflow-hidden ${isHorizontal ? 'flex-row' : 'flex-col'}`}
     >
       <div
         style={{ [isHorizontal ? 'width' : 'height']: hasSplit ? `${ratio * 100}%` : '100%' }}
-        className="overflow-hidden relative"
+        className="flex h-full min-h-0 min-w-0 overflow-hidden relative"
       >
         {children}
       </div>
@@ -95,7 +95,7 @@ export default function SplitPane({
 
           <div
             style={{ [isHorizontal ? 'width' : 'height']: `${(1 - ratio) * 100}%` }}
-            className="overflow-hidden relative"
+            className="flex h-full min-h-0 min-w-0 overflow-hidden relative"
           >
             {rightPane}
           </div>

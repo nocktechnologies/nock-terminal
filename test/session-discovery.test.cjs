@@ -6,6 +6,10 @@ const path = require('path');
 
 const SessionDiscovery = require('../electron/session-discovery');
 
+function createDiscovery(options = {}) {
+  return new SessionDiscovery({ managedAgentsRoot: null, ...options });
+}
+
 function makeTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'nock-session-discovery-'));
 }
@@ -50,7 +54,7 @@ test('logs missing Claude projects directory at debug level when discovery debug
   process.env.NOCK_DEBUG_DISCOVERY = '1';
 
   try {
-    const discovery = new SessionDiscovery({
+    const discovery = createDiscovery({
       claudeDir,
       devRoots: [],
       fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -93,7 +97,7 @@ test('discovers agent folders from existing config.json files', async () => {
   });
   writeFile(path.join(fileBusRoot, 'inbox', 'mira', '2-123-from-codex-test.json'), '{}\n');
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot,
@@ -121,6 +125,51 @@ test('discovers agent folders from existing config.json files', async () => {
   assert.equal(mira.sessionContract.resumeCommand.state, 'supported');
 });
 
+test('discovers Nock-managed resident seat manifests outside configured dev roots', async () => {
+  const root = makeTempDir();
+  const managedAgentsRoot = path.join(root, '.nock', 'agents');
+  const residence = path.join(managedAgentsRoot, 'local-mira');
+  const runtimeDir = path.join(root, '.nock', 'run', 'local-mira');
+  const manifestPath = path.join(residence, 'seat.json');
+
+  writeJson(manifestPath, {
+    agent: 'local-mira',
+    home: residence,
+    work_dir: residence,
+    state_dir: path.join(residence, 'state', 'resident'),
+    runtime: {
+      adapter: 'claude-code-interactive',
+      model: 'claude-opus-4-8[1m]',
+    },
+    tmux: {
+      socket: path.join(runtimeDir, 'tmux.sock'),
+      session: 'nock-resident-local-mira',
+    },
+    control_socket: path.join(runtimeDir, 'control.sock'),
+    presence_dir: path.join(residence, 'state', 'resident', 'presence'),
+  });
+
+  const discovery = createDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir: path.join(root, '.codex', 'sessions'),
+    geminiDir: path.join(root, '.gemini'),
+    devRoots: [path.join(root, 'Dev')],
+    defaultDevRoots: [],
+    managedAgentsRoot,
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const managed = sessions.find(session => session.agent?.name === 'local-mira');
+
+  assert.ok(managed);
+  assert.equal(managed.id, `resident:${manifestPath}`);
+  assert.equal(managed.path, residence);
+  assert.equal(managed.agent.runtime, 'resident');
+  assert.equal(managed.launch.command, `tmux -S ${path.join(runtimeDir, 'tmux.sock')} attach -t =nock-resident-local-mira`);
+  assert.equal(managed.launch.canLaunch, false);
+});
+
 test('claude transcript rows expose a resume launch from the newest session id', async () => {
   const root = makeTempDir();
   const claudeDir = path.join(root, '.claude');
@@ -135,7 +184,7 @@ test('claude transcript rows expose a resume launch from the newest session id',
   const past = new Date(Date.now() - 60 * 60 * 1000);
   fs.utimesSync(path.join(projectDir, `${olderId}.jsonl`), past, past);
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir,
     devRoots: [],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -167,7 +216,7 @@ test('claude transcript rows skip resume when the session id is not safe', async
     `${JSON.stringify({ type: 'user', cwd: repoPath, message: { role: 'user', content: [] } })}\n`
   );
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir,
     devRoots: [],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -201,7 +250,7 @@ test('excludes ephemeral agent worktree paths from discovered sessions', async (
     `${JSON.stringify({ type: 'user', cwd: plainWorktree, message: { role: 'user', content: [] } })}\n`
   );
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir,
     devRoots: [],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -232,9 +281,10 @@ test('upgrades Claude transcript paths to agent folders even without dev roots',
     `${JSON.stringify({ type: 'user', cwd: agentPath, message: { role: 'user', content: [] } })}\n`
   );
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir,
     devRoots: [],
+    defaultDevRoots: [],
     fileBusRoot,
   });
 
@@ -261,7 +311,7 @@ test('adds Claude session contract metadata to transcript-only project rows', as
     `${JSON.stringify({ type: 'user', cwd: projectPath, message: { role: 'user', content: [] } })}\n`
   );
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir,
     devRoots: [],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -295,7 +345,7 @@ test('discovers Codex rollout sessions from session_meta cwd', async () => {
     },
   ]);
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir,
     devRoots: [],
@@ -339,7 +389,7 @@ test('Codex rollout rows skip resume when the session id is unsafe', async () =>
     },
   ]);
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir,
     devRoots: [],
@@ -378,7 +428,7 @@ test('falls back to Codex turn_context cwd when session_meta lacks cwd', async (
     },
   ]);
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir,
     devRoots: [],
@@ -415,7 +465,7 @@ test('skips malformed or empty Codex rollouts with debug logging', async () => {
       },
     ]);
 
-    const discovery = new SessionDiscovery({
+    const discovery = createDiscovery({
       claudeDir: path.join(root, '.claude'),
       codexSessionsDir,
       devRoots: [],
@@ -461,7 +511,7 @@ test('applies Codex rollout recency and bounded read caps', async () => {
     + `${' '.repeat(256)}${JSON.stringify({ type: 'turn_context', payload: { cwd: hiddenProjectPath } })}\n`
   );
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir,
     codexRolloutHeadBytes: 96,
@@ -489,7 +539,7 @@ test('derives Codex project names from Windows cwd strings without changing the 
     },
   ]);
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir,
     devRoots: [],
@@ -536,7 +586,7 @@ test('discovers Gemini prompt-log sessions from projects.json and logs.json', as
     { projectRoot: projectRootPath }
   );
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir: path.join(root, '.codex', 'sessions'),
     geminiDir,
@@ -589,7 +639,7 @@ test('Gemini project-presence entries without prompt records emit no rows', asyn
   writeFile(path.join(geminiDir, 'tmp', 'kevin', 'logs.json'), '[]');
   writeFile(path.join(geminiDir, 'tmp', 'nock-terminal', '.project_root'), `${realProjectPath}\n`);
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir: path.join(root, '.codex', 'sessions'),
     geminiDir,
@@ -622,7 +672,7 @@ test('Gemini discovery falls back to .project_root when the project map path is 
     },
   ]);
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir: path.join(root, '.codex', 'sessions'),
     geminiDir,
@@ -662,7 +712,7 @@ test('skips malformed and oversized Gemini logs with debug logging', async () =>
       JSON.stringify([{ sessionId: 'huge-session', timestamp: '2026-06-12T10:00:00.000Z' }])
     );
 
-    const discovery = new SessionDiscovery({
+    const discovery = createDiscovery({
       claudeDir: path.join(root, '.claude'),
       codexSessionsDir: path.join(root, '.codex', 'sessions'),
       geminiDir,
@@ -735,7 +785,7 @@ test('Gemini discovery reads only the allowlisted project and prompt-log file sh
       return originalReaddir.call(fsp, dirPath, ...args);
     };
 
-    const discovery = new SessionDiscovery({
+    const discovery = createDiscovery({
       claudeDir: path.join(root, '.claude'),
       codexSessionsDir: path.join(root, '.codex', 'sessions'),
       geminiDir,
@@ -767,7 +817,7 @@ test('excludes Gemini prompt-log sessions from ephemeral worktree paths', async 
     },
   ]);
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir: path.join(root, '.codex', 'sessions'),
     geminiDir,
@@ -803,7 +853,7 @@ test('Gemini discovery refuses reserved slugs that map to non-session directorie
     },
   });
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir: path.join(root, '.codex', 'sessions'),
     geminiDir,
@@ -833,7 +883,7 @@ test('Gemini discovery skips slug directories that are symlinks', async () => {
     projects: { [projectPath]: 'evil-slug' },
   });
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir: path.join(root, '.codex', 'sessions'),
     geminiDir,
@@ -855,7 +905,7 @@ test('Gemini discovery never emits a row for the home directory itself', async (
     { sessionId: 'home-session', timestamp: '2026-06-12T10:00:00.000Z' },
   ]);
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     codexSessionsDir: path.join(root, '.codex', 'sessions'),
     geminiDir,
@@ -879,7 +929,7 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
     model: 'claude-opus-4-6',
   });
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -902,6 +952,118 @@ test('uses CRM tmux attach fallback for enabled persistent agents without shell 
   assert.equal(attachCommandCalls, 1);
 });
 
+test('discovers tmux resident harness manifests with exact attach and presence metadata', async () => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const enginePath = path.join(devRoot, 'nock-agent-harness-tmux');
+  const homePath = path.join(devRoot, 'mira-home');
+  const stateDir = path.join(homePath, 'state', 'resident');
+  const presenceDir = path.join(stateDir, 'presence');
+  const tmuxSocket = path.join(root, 'run', 'nock-agent-harness-tmux', 'mira', 'tmux.sock');
+  const controlSocket = path.join(root, 'run', 'nock-agent-harness-tmux', 'mira', 'control.sock');
+
+  writeJson(path.join(enginePath, 'seats', 'mira.json'), {
+    agent: 'mira',
+    home: homePath,
+    work_dir: homePath,
+    state_dir: stateDir,
+    runtime: {
+      adapter: 'claude-code-interactive',
+      binary_version: '2.1.220',
+      model: 'claude-opus-4.8',
+      auth_mode: 'subscription-max',
+      auth_identity: 'authfp:0123456789abcdef0123456789abcdef',
+    },
+    tmux: {
+      socket: tmuxSocket,
+      session: 'nock-resident-mira',
+    },
+    control_socket: controlSocket,
+    presence_dir: presenceDir,
+  });
+  writeJson(path.join(presenceDir, 'presence.json'), {
+    status: 'working',
+    last_event: 'UserPromptSubmit',
+    session_id: 'resident-session-1',
+  });
+  writeFile(tmuxSocket, '');
+  writeFile(controlSocket, '');
+
+  const discovery = createDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [devRoot],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const mira = sessions.find(session => session.kind === 'agent' && session.agent?.name === 'mira');
+
+  assert.ok(mira);
+  assert.equal(mira.path, homePath);
+  assert.equal(mira.agent.runtime, 'resident');
+  assert.equal(mira.agent.lifecycle, 'running');
+  assert.equal(mira.agent.presenceStatus, 'working');
+  assert.equal(mira.agent.launchType, 'resident');
+  assert.equal(mira.launch.command, `tmux -S ${tmuxSocket} attach -t =nock-resident-mira`);
+  assert.equal(mira.launch.canLaunch, true);
+  assert.equal(mira.launch.action, 'attach');
+  assert.equal(mira.launch.capability, 'resident-live-attach');
+  assert.equal(mira.sessionContract.adapterId, 'resident-agent');
+  assert.equal(mira.sessionContract.liveAttach.state, 'supported');
+  assert.equal(mira.sessionContract.liveAttach.evidence, 'resident-tmux-manifest');
+  assert.equal(mira.sessionContract.liveAttach.command, `tmux -S ${tmuxSocket} attach -t =nock-resident-mira`);
+  assert.equal(mira.sessionContract.resumeCommand.state, 'unsupported');
+  assert.equal(mira.sessionContract.residentControl.state, 'supported');
+  assert.equal(mira.sessionContract.residentControl.controlSocket, controlSocket);
+  assert.equal(mira.sessionContract.presence.state, 'supported');
+  assert.equal(mira.sessionContract.presence.path, path.join(presenceDir, 'presence.json'));
+});
+
+test('resident manifests win over retired SDK rows for the same agent', async () => {
+  const root = makeTempDir();
+  const devRoot = path.join(root, 'Dev');
+  const legacyAgentPath = path.join(devRoot, 'claude-remote-manager', 'agents', 'mira');
+  const enginePath = path.join(devRoot, 'nock-agent-harness-tmux');
+  const homePath = path.join(devRoot, 'mira-home');
+  const stateDir = path.join(homePath, 'state', 'resident');
+  const presenceDir = path.join(stateDir, 'presence');
+
+  writeJson(path.join(legacyAgentPath, 'config.json'), {
+    agent_name: 'mira',
+    enabled: false,
+    model: 'claude-opus-4-6',
+  });
+  writeJson(path.join(enginePath, 'seats', 'mira.json'), {
+    agent: 'mira',
+    home: homePath,
+    state_dir: stateDir,
+    runtime: { adapter: 'claude-code-interactive', model: 'claude-opus-4.8' },
+    tmux: {
+      socket: '/run/nock-agent-harness-tmux/mira/tmux.sock',
+      session: 'nock-resident-mira',
+    },
+    control_socket: '/run/nock-agent-harness-tmux/mira/control.sock',
+    presence_dir: presenceDir,
+  });
+
+  const discovery = createDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    devRoots: [devRoot],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const miraRows = sessions.filter(session => session.kind === 'agent' && session.agent?.name === 'mira');
+
+  assert.equal(miraRows.length, 1);
+  assert.equal(miraRows[0].path, homePath);
+  assert.equal(miraRows[0].agent.runtime, 'resident');
+  assert.equal(miraRows[0].launch.canLaunch, false);
+  assert.match(miraRows[0].launch.disabledReason, /not reachable/i);
+  assert.equal(miraRows[0].sessionContract.liveAttach.state, 'conditional');
+  assert.equal(miraRows[0].sessionContract.residentControl.state, 'conditional');
+});
+
 test('keeps explicit agent launch commands as folder launches rather than attach claims', async () => {
   const root = makeTempDir();
   const devRoot = path.join(root, 'Dev');
@@ -914,7 +1076,7 @@ test('keeps explicit agent launch commands as folder launches rather than attach
     launch_command: 'mira --watch',
   });
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -947,7 +1109,7 @@ test('marks disabled agent folders as inactive without launch defaults', async (
     model: 'codex',
   });
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot,
@@ -996,7 +1158,7 @@ test('discovers disabled Codex and DeepSeek folders as dispatch-ready agents', a
     working_directory: path.join(devRoot, 'claude-remote-manager-smith-dispatch'),
   });
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot,
@@ -1066,7 +1228,7 @@ test('falls back to common dev roots when stored devRoots is empty', async () =>
     });
   }
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     devRoots: [],
     defaultDevRoots: [devRoot],
@@ -1098,7 +1260,7 @@ test('keeps non-allowlisted dispatch folders visible but not launchable', async 
     model: 'o4-mini',
   });
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -1150,7 +1312,7 @@ test('does not duplicate agents from dispatch worktree copies', async () => {
     enabled: false,
   });
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -1164,7 +1326,7 @@ test('does not duplicate agents from dispatch worktree copies', async () => {
 });
 
 test('dedupe prefers recently active agent folders when priority is otherwise tied', () => {
-  const discovery = new SessionDiscovery({});
+  const discovery = createDiscovery({});
   const now = Date.now();
   const oldAsh = {
     path: '/tmp/agents-old/ash',
@@ -1192,7 +1354,7 @@ test('ignores malformed agent configs instead of failing discovery', async () =>
 
   writeFile(path.join(agentPath, 'config.json'), '{not json');
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -1217,7 +1379,7 @@ test('ignores config.json files without a valid agent_name', async () => {
     model: 'claude-opus-4-6',
   });
 
-  const discovery = new SessionDiscovery({
+  const discovery = createDiscovery({
     claudeDir: path.join(root, '.claude'),
     devRoots: [devRoot],
     fileBusRoot: path.join(root, '.claude-remote', 'default'),
@@ -1231,7 +1393,7 @@ test('ignores config.json files without a valid agent_name', async () => {
 
 test('pid checks treat EPERM as an alive process', () => {
   const originalKill = process.kill;
-  const discovery = new SessionDiscovery();
+  const discovery = createDiscovery();
 
   process.kill = () => {
     const err = new Error('operation not permitted');
@@ -1247,25 +1409,25 @@ test('pid checks treat EPERM as an alive process', () => {
 });
 
 test('timestamp parsing does not treat short numeric pid strings as dates', () => {
-  const discovery = new SessionDiscovery();
+  const discovery = createDiscovery();
 
   assert.equal(discovery._timestampFromText('73622'), null);
   assert.equal(discovery._timestampFromText('1778890762'), 1778890762000);
 });
 
 test('_decodeDirName handles posix paths', () => {
-  const discovery = new SessionDiscovery();
+  const discovery = createDiscovery();
   assert.equal(discovery._decodeDirName('-Users-kevin-Dev-nock-terminal'), '/Users/kevin/Dev/nock/terminal');
 });
 
 test('_decodeDirName handles Windows paths with drive letter and nested folders', { skip: process.platform !== 'win32' }, () => {
-  const discovery = new SessionDiscovery();
+  const discovery = createDiscovery();
   // Standard encoding: leading dash, drive, `--`, then path with dashes as separators
   assert.equal(discovery._decodeDirName('-C--Users-kevin-Dev-project'), 'C:\\Users\\kevin\\Dev\\project');
 });
 
 test('_decodeDirName preserves rest-of-path when only one `--` separator is present', { skip: process.platform !== 'win32' }, () => {
-  const discovery = new SessionDiscovery();
+  const discovery = createDiscovery();
   // Regression: previous impl used String.replace('--', ':\\') which is correct
   // for the first `--` but then `replace(/-/g, '\\')` would have run over the
   // remainder. The new impl slices explicitly at the first `--` and only
@@ -1275,6 +1437,6 @@ test('_decodeDirName preserves rest-of-path when only one `--` separator is pres
 });
 
 test('_decodeDirName falls back to dash-replacement when no `--` is present', { skip: process.platform !== 'win32' }, () => {
-  const discovery = new SessionDiscovery();
+  const discovery = createDiscovery();
   assert.equal(discovery._decodeDirName('foo-bar-baz'), 'foo\\bar\\baz');
 });

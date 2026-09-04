@@ -9,6 +9,7 @@ import TerminalView from './components/TerminalView';
 import SplitPane from './components/SplitPane';
 import AIChatPanel from './components/AIChatPanel';
 import EditorPane from './components/EditorPane';
+import AgentConsole from './components/AgentConsole';
 import Settings from './components/Settings';
 import StatusBar from './components/StatusBar';
 import CommandPalette from './components/CommandPalette';
@@ -17,6 +18,7 @@ import {
   resolveSessionLaunch,
   sanitizeStagedTerminalInput,
 } from './utils/agentLaunchers.mjs';
+import { resolveActiveProjectPath } from './utils/activeProjectPath.mjs';
 import { createTabId } from './utils/tabOps.mjs';
 import useTabs from './hooks/useTabs.js';
 import useTabSplits from './hooks/useTabSplits.js';
@@ -30,8 +32,14 @@ function projectNameFromPath(projectPath) {
   return normalized.split(/[\\/]/).filter(Boolean).pop() || '';
 }
 
+function dirnameFromPath(filePath) {
+  const normalized = String(filePath || '').replace(/[\\/]+$/, '');
+  const index = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+  return index > 0 ? normalized.slice(0, index) : '';
+}
+
 export default function App() {
-  const [view, setView] = useState('dashboard'); // dashboard | terminal | settings
+  const [view, setView] = useState('dashboard'); // dashboard | agents | terminal | settings
   const {
     tabs,
     setTabs,
@@ -264,8 +272,62 @@ export default function App() {
     ctrlPFocusRef,
   });
 
-  // File tree path: active tab's cwd, or fall back to first session's path
-  const activeProjectPath = activeTab?.cwd || sessions[0]?.path || null;
+  // File tree path: active tab's cwd, or the first repo-like discovered project.
+  const activeProjectPath = resolveActiveProjectPath(activeTab, sessions);
+  const handleOpenFileInEditor = useCallback((filePath) => {
+    if (!filePath) return;
+    if (activeTabId) {
+      openFileInEditor(filePath);
+      setView('terminal');
+      return;
+    }
+
+    const cwd = activeProjectPath || dirnameFromPath(filePath) || undefined;
+    openTab({
+      id: createTabId(),
+      sessionId: null,
+      title: projectNameFromPath(cwd) || projectNameFromPath(filePath) || 'Editor',
+      branch: null,
+      status: 'active',
+      cwd,
+      splitContent: {
+        type: 'editor',
+        files: [filePath],
+        activeFile: filePath,
+      },
+      splitRatio: 0.55,
+    }, {
+      project: projectNameFromPath(cwd) || 'Editor',
+      shell: '',
+      cwd,
+    });
+  }, [activeProjectPath, activeTabId, openFileInEditor, openTab, setView]);
+
+  const openManagedAuth = useCallback((launch) => {
+    if (!launch?.cwd || !launch?.launchCommand) {
+      setNotice({
+        id: createTabId('notice'),
+        title: 'Authentication unavailable',
+        message: launch?.error || 'The managed seat did not provide a trusted authentication command.',
+      });
+      return;
+    }
+    openTab({
+      id: createTabId(),
+      sessionId: launch.agentId ? `managed:${launch.agentId}:auth` : null,
+      title: launch.title || 'Agent authentication',
+      branch: null,
+      status: 'active',
+      cwd: launch.cwd,
+      splitContent: null,
+      splitRatio: 0.5,
+      launchCommand: launch.launchCommand,
+    }, {
+      project: launch.title || 'Agent authentication',
+      shell: launch.launchCommand,
+      cwd: launch.cwd,
+    });
+  }, [openTab]);
 
   return (
     <div className="h-screen w-screen flex flex-col bg-nock-bg overflow-hidden">
@@ -287,7 +349,7 @@ export default function App() {
           activeView={view}
           onViewChange={setView}
           activeProjectPath={activeProjectPath}
-          onFileClick={openFileInEditor}
+          onFileClick={handleOpenFileInEditor}
           onCtrlPFocus={(fn) => { ctrlPFocusRef.current = fn; }}
           onExecutePrompt={executePrompt}
           onOpenCommandPalette={openCommandPalette}
@@ -313,6 +375,16 @@ export default function App() {
               dispatchRuns={dispatchRuns}
               onOpenCommandPalette={openCommandPalette}
               onLaunchSessionWithAgent={launchSessionWithAgent}
+            />
+          </div>
+
+          {/* Agent Console */}
+          <div className={`absolute inset-0 ${view === 'agents' ? 'flex flex-col z-10' : 'invisible pointer-events-none z-0'}`}>
+            <AgentConsole
+              sessions={sessions}
+              onOpenSession={openSession}
+              onOpenAuth={openManagedAuth}
+              onRefreshSessions={refreshSessions}
             />
           </div>
 
@@ -359,6 +431,7 @@ export default function App() {
                           tabId={tab.splitContent.id}
                           cwd={tab.cwd}
                           active={tab.id === activeTabId && view === 'terminal'}
+                          onOpenFile={handleOpenFileInEditor}
                         />
                       ) : tab.splitContent?.type === 'editor' ? (
                         <EditorPane
@@ -378,6 +451,7 @@ export default function App() {
                       active={tab.id === activeTabId && view === 'terminal'}
                       launchCommand={tab.launchCommand}
                       initialInput={tab.initialInput}
+                      onOpenFile={handleOpenFileInEditor}
                     />
                   </SplitPane>
                 </div>

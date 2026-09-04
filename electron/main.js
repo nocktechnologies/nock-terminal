@@ -26,6 +26,8 @@ const { AgentDispatchService } = require('./agent-dispatch');
 const { registerDispatchIPC } = require('./dispatch-ipc');
 const { registerFileIPC } = require('./file-ipc');
 const { registerLocalDataIPC } = require('./local-data-ipc');
+const { ManagedAgentService } = require('./managed-agent-service');
+const { registerManagedAgentIPC } = require('./managed-agent-ipc');
 const { createNockCCActivityIPC } = require('./nockcc-activity-ipc');
 const { registerOllamaIPC } = require('./ollama-ipc');
 const { registerSettingsIPC } = require('./settings-ipc');
@@ -124,6 +126,7 @@ let sessionHistory = null;
 let promptStore = null;
 let nockccClient = null;
 let agentDispatchService = null;
+let managedAgentService = null;
 let nockccActivityController = null;
 
 const isDev = !app.isPackaged;
@@ -418,6 +421,7 @@ function initServices() {
   promptStore = new PromptStore();
   nockccClient = new NockCCClient(serviceSettingsStore);
   agentDispatchService = new AgentDispatchService(serviceSettingsStore);
+  managedAgentService = new ManagedAgentService();
 }
 
 function registerIPC() {
@@ -452,6 +456,11 @@ function registerIPC() {
   registerDispatchIPC({
     ipcMain,
     agentDispatchService,
+  });
+
+  registerManagedAgentIPC({
+    ipcMain,
+    managedAgentService,
   });
 
   registerOllamaIPC({

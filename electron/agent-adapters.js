@@ -158,6 +158,39 @@ const AGENT_SESSION_CONTRACTS = [
     },
   },
   {
+    id: 'resident-agent',
+    label: 'TMUX resident agent',
+    transcriptDiscovery: {
+      state: 'unsupported',
+      notes: 'Resident agents keep one live interactive session; Nock should use presence/journal/control surfaces instead of transcript scraping.',
+    },
+    liveAttach: {
+      state: 'conditional',
+      evidence: 'resident-tmux-manifest',
+      notes: 'Supported when a resident seat manifest exposes a deterministic tmux socket and exact session target.',
+    },
+    resumeCommand: {
+      state: 'unsupported',
+      notes: 'Resident seats are continuous sessions, not bounded turns; attach to watch and use the resident control socket for lifecycle actions.',
+    },
+    folderLaunch: {
+      state: 'unsupported',
+      notes: 'Resident seats are supervised externally by residentd; Nock Terminal must not launch them as folder commands.',
+    },
+    residentControl: {
+      state: 'conditional',
+      notes: 'Use the same-uid AF_UNIX resident control socket for status, receipts, steer, pause, resume, restart, and rotate.',
+    },
+    presence: {
+      state: 'conditional',
+      notes: 'Read hook-derived presence.json for liveness instead of process-table inference or pane scraping.',
+    },
+    journal: {
+      state: 'conditional',
+      notes: 'Optional read-only SQLite WAL history surface. Nock Terminal must never write resident journal state.',
+    },
+  },
+  {
     id: 'dispatch-agent',
     label: 'Dispatch agent',
     transcriptDiscovery: {

@@ -2,7 +2,7 @@
 
 Nock Terminal is an Electron desktop app with a React 18 renderer. The renderer owns the cockpit UI; the Electron main process owns privileged work: PTYs, filesystem access, settings, process discovery, network clients, notifications, and OS integrations.
 
-This document describes the current codebase, not aspirational product copy. Today, the implementation is strongest around Claude Code transcript discovery and Ollama chat, plus first-class local agent-folder discovery for existing `agents/*/config.json` folders. The renderer now has profile-driven launch support for Claude Code, Codex CLI, Gemini CLI, and custom terminal agents, brokered/direct dispatch support for Codex and DeepSeek agents managed by Mira, and explicit session capability metadata for transcript discovery, live attach, resume commands, and folder launch. The only implemented attach/resume path today is CRM persistent agents through deterministic tmux attach commands; non-Claude transcript discovery and arbitrary runtime resume remain future adapter work.
+This document describes the current codebase, not aspirational product copy. Today, the implementation is strongest around local terminal sessions, multi-runtime transcript discovery, agent-folder and resident-seat discovery, Ollama chat, and the first managed resident template. The renderer has profile-driven launch support for Claude Code, Codex CLI, Gemini CLI, and custom terminal agents, brokered/direct dispatch support for Codex and DeepSeek agents managed by Mira, and explicit session capability metadata for transcript discovery, live attach, resume commands, folder launch, and resident control. CRM and resident tmux seats have deterministic attach paths; arbitrary runtime resume remains future adapter work.
 
 ## Process Model
 
@@ -16,6 +16,7 @@ This document describes the current codebase, not aspirational product copy. Tod
 
 - **Dashboard**: `Dashboard`, `ProjectCard`, `OnboardingPanel`, and `Sidebar` show discovered agent folders, Claude Code sessions, git repositories, operations telemetry, status counts, ports, project context, prompt library entries, first-run setup status, and session history.
 - **Command launcher**: `CommandPalette` and `src/utils/agentLaunchers.mjs` provide repo/agent search, default-agent launch resolution, task staging for terminal-first agent work, and brokered/direct dispatch routing for dispatch-and-die agents.
+- **Agent Console**: `AgentConsole` and `AgentCreateWizard` combine imported agents with Nock-managed local residents, then expose only the lifecycle and control actions supported by each row.
 - **Nock Command**: `TabBar`, `ActionToolbar`, `TerminalView`, `SplitPane`, `EditorPane`, and `AIChatPanel` form the terminal workbench for shells, Claude Code launch, split terminals, file editing, git actions, and AI chat.
 - **Settings**: `Settings` edits electron-store-backed preferences for window behavior, AI/model settings, terminal/editor options, file-tree roots, notifications, Telegram, data import/export, and app info.
 
@@ -24,6 +25,7 @@ This document describes the current codebase, not aspirational product copy. Tod
 - `TerminalManager` wraps `node-pty`, chooses a platform shell, applies global/project shell overrides, parses shell arguments and environment variables, relays terminal data, resizes PTYs, chunks large writes on Windows, and destroys processes.
 - `SessionDiscovery` reads Claude Code transcripts from `~/.claude/projects`, scans configured dev roots for git repos and `agents/*/config.json` folders, merges them by path, and annotates branch, dirty state, activity metadata, agent runtime state, terminal launch defaults, dispatch descriptors, launch action metadata, and adapter session contracts.
 - `AgentDispatchService` builds sanitized dispatch payloads, writes direct-dispatch payload files, and sends brokered NockCC AgentMessages to Mira.
+- `ManagedAgentService` owns local Nock residence creation and updates, dedicated Claude configuration, launchd registration, auth validation, exact tmux attach metadata, and bounded resident control-socket calls. Imported agents never pass through its mutation methods.
 - `PortScanner` finds local development servers for the sidebar.
 - `FileService` reads/writes files, builds trees, reads git status, and runs `pull`, `push`, and `fetch` only inside allowed roots.
 - `FileWatcher` emits file and git status changes for the active project tree.
@@ -40,7 +42,7 @@ This document describes the current codebase, not aspirational product copy. Tod
 ### Session Discovery
 
 1. `App` calls `window.nockTerminal.sessions.discover()` on mount and every 30 seconds.
-2. `SessionDiscovery` reads Claude transcripts, scans configured dev roots, reads agent `config.json` files, checks local NockCC file-bus state, resolves dispatch runtimes/allowlists, dedupes copied worktree configs, and returns normalized sessions/projects/agents with explicit launch action and session contract metadata.
+2. `SessionDiscovery` reads Claude/Codex/Gemini session evidence, scans configured dev roots and `~/.nock/agents`, reads agent `config.json` and resident `seat.json` files, checks local NockCC file-bus state, resolves dispatch runtimes/allowlists, dedupes copied worktree configs, and returns normalized sessions/projects/agents with explicit launch action and session contract metadata.
 3. `electron/session-ipc.js` grants discovered project paths to `FileService` and revalidates `FileWatcher`.
 4. Dashboard and sidebar render sessions, project status, file trees, context checks, and cards from the returned data.
 
@@ -85,6 +87,14 @@ This document describes the current codebase, not aspirational product copy. Tod
 4. `CommandPalette` requires task text before dispatch. The default route sends a NockCC AgentMessage to `mira-nockos`; the direct route creates a temp payload file and opens a terminal that runs the dispatcher script.
 5. `App` keeps lightweight recent dispatch-run telemetry in renderer local storage so the dashboard can show whether a request was sent, launched, or failed.
 
+### Managed Residents
+
+1. Agent Console loads imported session rows from `SessionDiscovery` and managed rows from `ManagedAgentService`.
+2. Creation validates a closed blueprint and atomically writes a residence below `~/.nock/agents/<id>` plus a matching launchd plist. Engine state stays below the residence; short AF_UNIX sockets stay below `~/.nock/run/<id>`.
+3. Each managed seat has a dedicated `CLAUDE_CONFIG_DIR`. Authentication opens in the existing terminal workbench; validation reads only Claude's non-secret auth-status fields and pins the resulting fingerprint in the manifest.
+4. Before installation, Nock runs the engine's own `runtime.seat --check` against the staged manifest. launchd then starts that entry point through a generated wrapper. Engine terminal/config exits stop cleanly instead of becoming supervisor restart loops, and the wrapper leaves a Nock-owned exit receipt for the inventory.
+5. Runtime controls use a dedicated bounded NDJSON client against the manifest-declared same-UID socket. Requests are correlated by UUID and mutations are not retried automatically. Attach uses the exact manifest tmux socket and `=<session>` target.
+
 ## NockCC Connection
 
 `electron/main.js` creates `NockCCClient` during service initialization, then delegates renderer activity updates and heartbeat lifecycle wiring to `electron/nockcc-activity-ipc.js`. The client reads `nockccApiKey` and `nockccUrl` from electron-store; without an API key it silently does nothing.
@@ -108,6 +118,7 @@ When configured:
 - File APIs are path-gated by sanitized dev roots and discovered project grants.
 - Settings are normalized before being stored or applied.
 - Dispatch IPC validates runtime and agent names, strips unsafe control characters from payload text, writes payload files under the OS temp directory with best-effort cleanup, and shell-quotes direct script commands.
+- Managed-agent IPC accepts closed, bounded drafts and enum actions. The renderer cannot choose executables, sockets, manifests, launchd labels, or commands, and it cannot mutate imported agents.
 - Claude Code spawning avoids shell execution and validates custom binary paths.
 - CI includes Node tests for security utilities, settings normalization, and file-service write behavior.
 
@@ -115,7 +126,8 @@ When configured:
 
 - Claude Code transcript discovery is still hard-coded around `~/.claude/projects`; Codex and Gemini need first-class transcript/session discovery and resume/attach adapters.
 - Dispatch completion is request-level only. Brokered dispatch can poll NockCC live `status_update` messages by `context.request_id`, but the app does not yet render the full resulting NockCC reply thread or dispatched-agent transcript.
-- Agent folder state is read-only and local-file-bus based. CRM tmux attach is the first supported attach/resume metadata path, but arbitrary reconnect, transcript resume, and file-bus handoff still need runtime-specific adapters.
+- Imported agent folders and remote residents are read-only. Nock manages one local Claude/tmux resident template on macOS; remote provisioning, external-channel credential installation, SDK residents, and additional managed runtime templates remain future adapter work.
+- Packaged distribution still needs a pinned resident-engine installation path. The development build can use `NOCK_RESIDENT_ENGINE_ROOT` or the sibling `~/Dev/nock-agent-harness-tmux` checkout.
 - Monaco is lazy-loaded and now budgeted in CI, but targeted worker/language loading is still worth tightening if startup or update size becomes a problem.
 - The app has CI for tests, dependency audit, renderer builds, and bundle budgets, but no automated packaged Electron smoke test, crash reporting, or update channel validation.
 

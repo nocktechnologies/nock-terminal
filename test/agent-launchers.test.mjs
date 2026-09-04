@@ -111,6 +111,39 @@ test('preserves discovered attach action labels for agent folders', () => {
   assert.equal(launch.capability, 'live-attach');
 });
 
+test('preserves resident attach capability and runtime metadata', () => {
+  const residentAgent = {
+    ...agent,
+    id: 'resident:/Users/kevin/Dev/nock-agent-harness-tmux/seats/mira.json',
+    path: '/home/nock/Dev/mira-home',
+    agent: {
+      name: 'mira',
+      lifecycle: 'running',
+      runtime: 'resident',
+      launchType: 'resident',
+      presenceStatus: 'working',
+    },
+    launch: {
+      command: 'tmux -S /run/nock-agent-harness-tmux/mira/tmux.sock attach -t =nock-resident-mira',
+      cwd: '/home/nock/Dev/mira-home',
+      action: 'attach',
+      actionLabel: 'Attach',
+      capability: 'resident-live-attach',
+      canLaunch: true,
+    },
+  };
+
+  const launch = resolveSessionLaunch(residentAgent, {});
+
+  assert.equal(launch.agentId, AGENT_FOLDER_ID);
+  assert.equal(launch.command, residentAgent.launch.command);
+  assert.equal(launch.cwd, residentAgent.launch.cwd);
+  assert.equal(launch.action, 'attach');
+  assert.equal(launch.actionLabel, 'Attach');
+  assert.equal(launch.capability, 'resident-live-attach');
+  assert.equal(launch.canLaunch, true);
+});
+
 test('preserves disabled discovered attach launches even when a command is present', () => {
   const attachAgent = {
     ...agent,

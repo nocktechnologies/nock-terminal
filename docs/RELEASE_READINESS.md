@@ -1,6 +1,6 @@
 # Release Readiness
 
-Updated: 2026-06-12
+Updated: 2026-08-08
 
 Nock Terminal has a release pipeline, but public distribution should stay gated until the checks below pass on a tagged release and the signed installers are smoked on each target OS.
 
@@ -48,6 +48,13 @@ npm run smoke:package
 
 The packaged smoke builds an unpacked app with `electron-builder --dir`, launches the packaged binary with an isolated user-data directory, waits for the renderer-ready smoke marker, verifies the packaged renderer rendered the Nock Terminal shell, and exits cleanly. CI runs this on Linux under `xvfb`.
 
+Latest local evidence, 2026-08-08:
+
+- Dependency audit is clean for both `npm audit --audit-level=moderate` and `npm audit --omit=dev --audit-level=moderate`.
+- `npm run release:check` passes after targeted current-major upgrades for Electron, electron-builder, Vite, PostCSS, DOMPurify, and related transitive lockfile patches.
+- `npm run smoke:package` passes on macOS arm64 with Electron `41.10.4`, electron-builder `26.15.3`, and rebuilt `node-pty`.
+- Residual warnings are non-blocking: six existing React hook lint warnings and Vite's future `configLoader: native` warning for `vite.config.js`.
+
 ## GitHub Release Gate
 
 `.github/workflows/release.yml` runs on `v*.*.*` tags and now requires:
@@ -81,9 +88,11 @@ Before a public beta announcement, install the generated artifacts on clean mach
 - Linux AppImage launches and the deb package installs cleanly.
 - First-run onboarding can detect dev roots, Claude/Codex CLI availability, project context files, and Ollama status.
 - Session discovery shows Claude transcript projects, recent Codex rollout transcript projects, and Gemini prompt-log session-presence rows without unbounded startup reads or Gemini credential/history access.
+- Resident harness discovery shows TMUX seat manifests once per agent, reads only hook-derived presence metadata, and disables Attach when the manifest socket is not reachable from the current machine.
 - Terminal tab opens in the selected shell and respects shell arguments and environment variables.
 - `Ctrl+K` command launcher opens, searches repos/agents, launches trusted project-profile targets, attaches proven CRM tmux agents, and opens fallback-discovered untrusted agent folders without auto-running config commands.
 - Persistent CRM agents without shell aliases attach through the canonical tmux fallback, such as `tmux attach -t crm-default-cooper`.
+- TMUX resident agents attach through the exact manifest target, such as `tmux -S /run/nock-agent-harness-tmux/mira/tmux.sock attach -t =nock-resident-mira`, and never use old SDK queue state, pane scraping, or `tmux send-keys`.
 - Local agent-folder `launch_command` values remain visible but disabled from auto-run unless explicitly trusted.
 - Claude, Codex, Gemini, and custom-agent profile launch commands use the configured project command when present.
 - Task staging opens a fresh agent terminal and places task text in the terminal without auto-submitting it.
@@ -145,6 +154,7 @@ Record Phase H decisions here as they are made:
 | Support path | Private alpha support is direct through Kevin/Mira/NockCC coordination. Public beta is blocked until a public support route exists, such as GitHub Issues or a support mailbox. | Kevin / Mira | Nock #123, this document |
 | Beta feedback channel | Private alpha feedback is direct/NockCC. Public beta needs a published feedback route linked from release notes or onboarding. | Kevin / Mira | Nock #123, this document |
 | Signed artifact smoke | Blocked pending real signing credentials and clean target OS machines/VMs. CI unpacked Linux smoke is useful but not a substitute. | Kevin / release operator | Evidence ledger above |
+| Dependency audit gate | Current dependency audit blocker is cleared locally. Keep `npm audit --audit-level=moderate` in the release gate and revisit the Vite native-config warning before the next Vite major. | Codex / release operator | 2026-08-08 local `npm run release:check` and `npm run smoke:package` |
 
 ## Rollback
 

@@ -43,8 +43,8 @@ function createFileHarness() {
       const resolved = path.resolve(candidate);
       return resolved === allowedRoot || resolved.startsWith(`${allowedRoot}${path.sep}`);
     },
-    tree(filePath) {
-      calls.push(['tree', filePath]);
+    tree(filePath, options) {
+      calls.push(['tree', filePath, options]);
       return { entries: [{ name: 'README.md' }] };
     },
     read(filePath) {
@@ -160,12 +160,25 @@ test('file handlers validate paths before delegating to services', () => {
   });
 
   assert.deepEqual(ipc.calls, [
-    ['tree', ipc.allowedDir],
+    ['tree', ipc.allowedDir, undefined],
     ['read', ipc.allowedFile],
     ['write', ipc.allowedFile, 'hello'],
     ['stat', ipc.allowedFile],
     ['gitStatus', ipc.allowedDir],
     ['gitOp', ipc.allowedDir, 'fetch'],
+  ]);
+});
+
+test('file tree handler accepts bounded tree options', () => {
+  const ipc = createFileHarness();
+
+  assert.deepEqual(
+    ipc.invoke('files:tree', { dirPath: ipc.allowedDir, maxDepth: 1, maxEntries: 200 }),
+    { entries: [{ name: 'README.md' }] }
+  );
+
+  assert.deepEqual(ipc.calls, [
+    ['tree', ipc.allowedDir, { maxDepth: 1, maxEntries: 200 }],
   ]);
 });
 

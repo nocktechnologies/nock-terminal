@@ -279,7 +279,7 @@ export default function EditorPane({
   const getFileName = (filePath) => filePath.split(/[/\\]/).pop();
 
   return (
-    <div className="flex-1 flex flex-col bg-[#0D0D12] overflow-hidden">
+    <div className="flex-1 flex min-h-0 min-w-0 flex-col bg-[#0D0D12] overflow-hidden">
       <div className="flex items-center border-b border-nock-border bg-nock-bg shrink-0 h-7 overflow-x-auto no-scrollbar">
         {files.map(filePath => {
           const isActive = filePath === activeFile;
@@ -350,7 +350,7 @@ export default function EditorPane({
         </div>
       )}
 
-      <div ref={containerRef} className={`flex-1 ${loading ? 'hidden' : ''}`} />
+      <div ref={containerRef} className={`flex-1 min-h-0 ${loading ? 'hidden' : ''}`} />
 
       <div className="h-5 bg-nock-bg border-t border-nock-border px-3 flex items-center justify-between shrink-0">
         <span className="font-mono text-[8px] text-nock-text-muted">

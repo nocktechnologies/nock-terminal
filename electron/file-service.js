@@ -15,6 +15,20 @@ const IGNORED_TREE_ENTRIES = new Set([
   '.next', '.nuxt', '.cache', '.parcel-cache', 'coverage',
   '.venv', 'venv', 'env', '.env', '.DS_Store', 'Thumbs.db',
 ]);
+const PROJECT_ROOT_MARKERS = [
+  '.git',
+  'package.json',
+  'pyproject.toml',
+  'Cargo.toml',
+  'go.mod',
+  'Gemfile',
+  'composer.json',
+  'pom.xml',
+  'build.gradle',
+  'AGENTS.md',
+  'CLAUDE.md',
+  path.join('.nock', 'config.toml'),
+];
 
 function normalizePositiveInteger(value, fallback) {
   return Number.isInteger(value) && value > 0 ? value : fallback;
@@ -267,6 +281,21 @@ class FileService {
     }
     return isPathWithinRoots(filePath, allowedRoots);
   }
+
+  isWatchableRoot(dirPath) {
+    if (!this.isAllowedPath(dirPath)) return false;
+
+    let resolved;
+    try {
+      resolved = path.resolve(dirPath);
+      if (!fs.statSync(resolved).isDirectory()) return false;
+    } catch {
+      return false;
+    }
+
+    return PROJECT_ROOT_MARKERS.some(marker => fs.existsSync(path.join(resolved, marker)));
+  }
 }
 
 module.exports = FileService;
+module.exports.PROJECT_ROOT_MARKERS = PROJECT_ROOT_MARKERS;

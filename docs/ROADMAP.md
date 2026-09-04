@@ -1,6 +1,6 @@
 # Product Roadmap
 
-Updated: 2026-06-12
+Updated: 2026-08-08
 
 This roadmap follows the audit in `docs/PRODUCT_AUDIT_GTM_READINESS.md`. It assumes Nock Terminal should become a local-first cockpit for supervising coding agents, not a generic AI IDE.
 
@@ -26,6 +26,27 @@ Do not lead with "Codex app" or "Claude app." Lead with the workflow:
 - **Dense, calm, repeated-use UI**: this is an operator console, not a marketing dashboard.
 
 ## Near-Term Roadmap
+
+### August 8 Agent Console v1
+
+The next product slice turns resident discovery into a local management plane.
+Nock imports every discovered harness read-only and fully manages one template:
+a local Claude Code interactive seat hosted by `nock-agent-harness-tmux`.
+
+- Managed residences live below `~/.nock/agents`; short-lived sockets live
+  below `~/.nock/run`.
+- macOS seats use launchd supervision while preserving the engine's exit-code
+  and terminal-failure contract.
+- Every seat receives a dedicated Claude config and authentication boundary.
+- Supervised, Standard, and Autonomous permission presets compile to explicit
+  Claude settings rather than prose or arbitrary command flags.
+- Attach and resident controls use manifest metadata and the same-UID NDJSON
+  control socket. Pane scraping, `send-keys`, and engine-state writes remain
+  prohibited.
+- Remote seats, imported harnesses, external channels, SDK residents, and
+  additional LLM templates remain read-only or out of scope for v1.
+
+See `docs/AGENT_CONSOLE_V1.md` for the architecture and acceptance boundary.
 
 ### May 24-25 NockCC Backlog Reconciliation, Phase H Closeout, And Release Truth
 
@@ -56,6 +77,8 @@ Current execution posture:
 - Nock `7682` / Phase H H6b is done via PR #59: attach-capable CRM agent actions execute the proven tmux attach command, while explicit folder-open actions suppress command execution and unsupported resume/attach states remain disabled.
 - Nock `7975` / audit hardening blocks arbitrary agent-folder config commands from auto-running. CRM tmux attach, dispatch requests, and trusted project-profile launches remain runnable; untrusted folder commands are metadata until a confirmation/trust UI exists.
 - Nock `7976` / audit hardening moves Telegram and NockCC credentials behind main-process secure storage. Renderer settings APIs can set or clear credentials and query configured status, but cannot read raw token/API-key values.
+- August 8 resident harness slice: Mira's retired SDK/bounded-turn harness is no longer treated as load-bearing. Nock now discovers TMUX resident harness seat manifests under `seats/*.json`, reads hook-derived `presence.json`, exposes the resident session contract, and resolves exact tmux attach metadata while disabling Attach when the local socket is not reachable.
+- August 8 dependency hardening: the audit blocker is cleared locally with targeted current-major upgrades and compatible lockfile patches. `npm audit --audit-level=moderate`, `npm run release:check`, and macOS arm64 `npm run smoke:package` now pass with Electron `41.10.4` and electron-builder `26.15.3`.
 - June 12 Wave 2 hardening: PR #65 closed loader-injection env var blocking and project lookup IPC validation; PR #72 closed discovery fallback debug logging and refreshed the esbuild lockfile to keep `npm run release:check` green. PR #71 is open and green for dispatch validation helper dedupe, awaiting explicit merge approval.
 - June 12 Wave 3 Codex transcript discovery: Codex rollout JSONL files under `~/.codex/sessions/**/rollout-*.jsonl` are now a supported transcript source. Discovery recovers cwd from `session_meta` with `turn_context` fallback, skips malformed files with debug logging, and keeps startup bounded with a 45-day recency window, newest-500 file scan cap, and first-16 KiB read cap.
 - June 12 Wave 4 dispatch thread rendering: brokered dispatch rows can expand into an on-demand NockCC AgentMessage thread keyed by `context.request_id`. This is intentionally request-level evidence, not launched-agent transcript replay.
@@ -126,6 +149,7 @@ Initial adapter foundations now exist for process detection and project context 
 Completed in the agent-folder intelligence pass:
 
 - Detect existing agent folders from configured dev roots.
+- Detect TMUX resident harness seats from configured dev roots through `seats/<agent>.json` manifests.
 - Read `config.json` as the source of truth instead of creating a parallel metadata format.
 - Show agent cards separately from repo cards in the dashboard and sidebar.
 - Resolve conservative launch metadata from config or the agent name without auto-running untrusted folder commands.
@@ -153,6 +177,7 @@ Current adapter posture:
 
 - Claude Code: current transcript discovery and launch behavior remain preserved.
 - Local agent folders: discovered from config and file-bus state; CRM persistent agents expose attach/resume metadata when Nock derives the deterministic `tmux attach -t crm-<instance>-<agent>` target; arbitrary folder launch/reconnect remains future work until a trust/confirmation path exists.
+- TMUX resident agents: discovered from seat manifests with `runtime.adapter: claude-code-interactive`; Nock reads presence metadata and attaches with `tmux -S <socket> attach -t =<session>` only when the local tmux socket is reachable. Agent Console manages one local macOS template and uses the manifest-declared control socket for status, pause, resume, restart, steer, and rotate. Imported/remote seats remain read-only; old SDK queue, wake-state, pane-scrape, and `send-keys` paths must not be used.
 - Codex CLI: context/process detection, profile-driven terminal launch, and recent rollout transcript discovery are implemented; resume/attach remain future work.
 - Codex dispatch agents: CRM brokered/direct dispatch is implemented for allowlisted agents; local dispatch-run history has a shared status normalizer, brokered runs poll live NockCC `status_update` messages by `context.request_id`, and operators can expand a brokered run to inspect its request-level AgentMessage thread. Full dispatched-agent transcript replay remains future work.
 - DeepSeek dispatch agents: API-backed CRM brokered/direct dispatch is implemented for allowlisted agents; there is no standalone DeepSeek CLI launcher.
