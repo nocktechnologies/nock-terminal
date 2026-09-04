@@ -8,3 +8,5 @@ dist-react/
 
 # memsearch plugin session memory (machine-local)
 .memsearch/
+
+.DS_Store
