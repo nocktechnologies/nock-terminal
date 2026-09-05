@@ -27,6 +27,19 @@ function writeRollout(filePath, lines, { mtime } = {}) {
   }
 }
 
+function writeGeminiProject(root, projectPath, slug, records, { projectRoot = projectPath, mtime } = {}) {
+  writeJson(path.join(root, '.gemini', 'projects.json'), {
+    projects: {
+      [projectPath]: slug,
+    },
+  });
+  writeFile(path.join(root, '.gemini', 'tmp', slug, '.project_root'), `${projectRoot}\n`);
+  writeJson(path.join(root, '.gemini', 'tmp', slug, 'logs.json'), records);
+  if (mtime) {
+    fs.utimesSync(path.join(root, '.gemini', 'tmp', slug, 'logs.json'), mtime, mtime);
+  }
+}
+
 test('logs missing Claude projects directory at debug level when discovery debug is enabled', async () => {
   const root = makeTempDir();
   const claudeDir = path.join(root, '.claude');
@@ -448,6 +461,279 @@ test('derives Codex project names from Windows cwd strings without changing the 
   assert.ok(project);
   assert.equal(project.path, windowsProjectPath);
   assert.equal(project.name, 'nock-terminal');
+});
+
+test('discovers Gemini prompt-log sessions from projects.json and logs.json', async () => {
+  const root = makeTempDir();
+  const geminiDir = path.join(root, '.gemini');
+  const projectPath = path.join(root, 'Dev', 'nock-terminal');
+  const projectRootPath = path.join(root, 'Copied', 'nock-terminal');
+  const slug = 'nock-terminal';
+  const olderTimestamp = '2026-06-12T10:00:00.000Z';
+  const newerTimestamp = '2026-06-12T10:05:00.000Z';
+
+  writeGeminiProject(
+    root,
+    projectPath,
+    slug,
+    [
+      {
+        sessionId: 'gemini-session-old',
+        messageId: 1,
+        type: 'user',
+        message: 'hello',
+        timestamp: olderTimestamp,
+      },
+      {
+        sessionId: 'gemini-session-new',
+        messageId: 2,
+        type: 'user',
+        message: 'continue',
+        timestamp: newerTimestamp,
+      },
+    ],
+    { projectRoot: projectRootPath }
+  );
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir: path.join(root, '.codex', 'sessions'),
+    geminiDir,
+    devRoots: [],
+    defaultDevRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+  const project = sessions.find(session => session.path === projectPath);
+
+  assert.ok(project);
+  assert.equal(project.id, 'gemini:nock-terminal:gemini-session-new');
+  assert.equal(project.name, 'nock-terminal');
+  assert.equal(project.lastActivity, Date.parse(newerTimestamp));
+  assert.equal(project.sessionContract.adapterId, 'gemini');
+  assert.equal(project.sessionContract.transcriptDiscovery.state, 'conditional');
+  assert.equal(project.sessionContract.transcriptDiscovery.source, 'gemini-prompt-logs');
+  assert.equal(project.sessionContract.transcriptDiscovery.evidence, 'gemini-prompt-logs');
+  assert.equal(project.sessionContract.transcriptDiscovery.projectPath, projectPath);
+  assert.equal(project.sessionContract.transcriptDiscovery.projectSlug, slug);
+  assert.equal(project.sessionContract.transcriptDiscovery.projectRootPath, projectRootPath);
+  assert.equal(project.sessionContract.transcriptDiscovery.sessionId, 'gemini-session-new');
+  assert.equal(project.sessionContract.transcriptDiscovery.sessionCount, 2);
+  assert.equal(
+    project.sessionContract.transcriptDiscovery.promptLogPath,
+    path.join(geminiDir, 'tmp', slug, 'logs.json')
+  );
+  assert.equal(project.sessionContract.liveAttach.state, 'future');
+  assert.equal(project.sessionContract.resumeCommand.state, 'future');
+});
+
+test('Gemini project-presence entries without prompt records emit no rows', async () => {
+  const root = makeTempDir();
+  const geminiDir = path.join(root, '.gemini');
+  const homeProjectPath = root;
+  const realProjectPath = path.join(root, 'Dev', 'nock-terminal');
+
+  writeJson(path.join(geminiDir, 'projects.json'), {
+    projects: {
+      [homeProjectPath]: 'kevin',
+      [realProjectPath]: 'nock-terminal',
+    },
+  });
+  writeFile(path.join(geminiDir, 'tmp', 'kevin', '.project_root'), `${homeProjectPath}\n`);
+  writeFile(path.join(geminiDir, 'tmp', 'kevin', 'logs.json'), '[]');
+  writeFile(path.join(geminiDir, 'tmp', 'nock-terminal', '.project_root'), `${realProjectPath}\n`);
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir: path.join(root, '.codex', 'sessions'),
+    geminiDir,
+    devRoots: [],
+    defaultDevRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+
+  assert.equal(sessions.some(session => session.path === homeProjectPath), false);
+  assert.equal(sessions.some(session => session.path === realProjectPath), false);
+});
+
+test('Gemini discovery falls back to .project_root when the project map path is unusable', async () => {
+  const root = makeTempDir();
+  const geminiDir = path.join(root, '.gemini');
+  const projectRootPath = path.join(root, 'Dev', 'fallback-project');
+
+  writeJson(path.join(geminiDir, 'projects.json'), {
+    projects: {
+      'not-an-absolute-path': 'fallback-project',
+    },
+  });
+  writeFile(path.join(geminiDir, 'tmp', 'fallback-project', '.project_root'), `${projectRootPath}\n`);
+  writeJson(path.join(geminiDir, 'tmp', 'fallback-project', 'logs.json'), [
+    {
+      sessionId: 'gemini-fallback-session',
+      timestamp: '2026-06-12T10:00:00.000Z',
+    },
+  ]);
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir: path.join(root, '.codex', 'sessions'),
+    geminiDir,
+    devRoots: [],
+    defaultDevRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+
+  assert.ok(sessions.some(session => session.path === projectRootPath));
+});
+
+test('skips malformed and oversized Gemini logs with debug logging', async () => {
+  const root = makeTempDir();
+  const geminiDir = path.join(root, '.gemini');
+  const badProjectPath = path.join(root, 'Dev', 'bad-json');
+  const hugeProjectPath = path.join(root, 'Dev', 'huge-json');
+  const messages = [];
+  const originalDebug = console.debug;
+  const originalEnv = process.env.NOCK_DEBUG_DISCOVERY;
+  console.debug = (...args) => messages.push(args.join(' '));
+  process.env.NOCK_DEBUG_DISCOVERY = '1';
+
+  try {
+    writeJson(path.join(geminiDir, 'projects.json'), {
+      projects: {
+        [badProjectPath]: 'bad-json',
+        [hugeProjectPath]: 'huge-json',
+      },
+    });
+    writeFile(path.join(geminiDir, 'tmp', 'bad-json', '.project_root'), `${badProjectPath}\n`);
+    writeFile(path.join(geminiDir, 'tmp', 'bad-json', 'logs.json'), '{not json');
+    writeFile(path.join(geminiDir, 'tmp', 'huge-json', '.project_root'), `${hugeProjectPath}\n`);
+    writeFile(
+      path.join(geminiDir, 'tmp', 'huge-json', 'logs.json'),
+      JSON.stringify([{ sessionId: 'huge-session', timestamp: '2026-06-12T10:00:00.000Z' }])
+    );
+
+    const discovery = new SessionDiscovery({
+      claudeDir: path.join(root, '.claude'),
+      codexSessionsDir: path.join(root, '.codex', 'sessions'),
+      geminiDir,
+      geminiLogsBytes: 12,
+      devRoots: [],
+      defaultDevRoots: [],
+      fileBusRoot: path.join(root, '.claude-remote', 'default'),
+    });
+
+    const sessions = await discovery.discover();
+
+    assert.equal(sessions.some(session => session.path === badProjectPath), false);
+    assert.equal(sessions.some(session => session.path === hugeProjectPath), false);
+    assert.ok(messages.some(message => message.includes('Gemini prompt log JSON parse failed')));
+    assert.ok(messages.some(message => message.includes('Gemini prompt log skipped by size cap')));
+  } finally {
+    console.debug = originalDebug;
+    if (originalEnv === undefined) {
+      delete process.env.NOCK_DEBUG_DISCOVERY;
+    } else {
+      process.env.NOCK_DEBUG_DISCOVERY = originalEnv;
+    }
+  }
+});
+
+test('Gemini discovery reads only the allowlisted project and prompt-log file shapes', async () => {
+  const root = makeTempDir();
+  const geminiDir = path.join(root, '.gemini');
+  const projectPath = path.join(root, 'Dev', 'nock-terminal');
+  const allowedFiles = new Set([
+    path.join(geminiDir, 'projects.json'),
+    path.join(geminiDir, 'tmp', 'nock-terminal', '.project_root'),
+    path.join(geminiDir, 'tmp', 'nock-terminal', 'logs.json'),
+  ]);
+  const fsp = require('fs/promises');
+  const originalReadFile = fsp.readFile;
+  const originalReaddir = fsp.readdir;
+  const originalStat = fsp.stat;
+
+  writeGeminiProject(root, projectPath, 'nock-terminal', [
+    {
+      sessionId: 'gemini-session',
+      timestamp: '2026-06-12T10:00:00.000Z',
+    },
+  ]);
+  writeFile(path.join(geminiDir, 'history', 'nock-terminal', 'logs.json'), '[]');
+  writeFile(path.join(geminiDir, 'oauth_creds.json'), '{}');
+  writeFile(path.join(geminiDir, 'google_accounts.json'), '{}');
+
+  try {
+    fsp.readFile = async (filePath, ...args) => {
+      const normalized = String(filePath);
+      if (normalized.startsWith(geminiDir) && !allowedFiles.has(normalized)) {
+        throw new Error(`unexpected Gemini read: ${normalized}`);
+      }
+      return originalReadFile.call(fsp, filePath, ...args);
+    };
+    fsp.stat = async (filePath, ...args) => {
+      const normalized = String(filePath);
+      if (normalized.startsWith(geminiDir) && !allowedFiles.has(normalized)) {
+        throw new Error(`unexpected Gemini stat: ${normalized}`);
+      }
+      return originalStat.call(fsp, filePath, ...args);
+    };
+    fsp.readdir = async (dirPath, ...args) => {
+      const normalized = String(dirPath);
+      if (normalized.startsWith(geminiDir)) {
+        throw new Error(`unexpected Gemini directory enumeration: ${normalized}`);
+      }
+      return originalReaddir.call(fsp, dirPath, ...args);
+    };
+
+    const discovery = new SessionDiscovery({
+      claudeDir: path.join(root, '.claude'),
+      codexSessionsDir: path.join(root, '.codex', 'sessions'),
+      geminiDir,
+      devRoots: [],
+      defaultDevRoots: [],
+      fileBusRoot: path.join(root, '.claude-remote', 'default'),
+    });
+
+    const sessions = await discovery._discoverGeminiSessions();
+
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0].path, projectPath);
+  } finally {
+    fsp.readFile = originalReadFile;
+    fsp.readdir = originalReaddir;
+    fsp.stat = originalStat;
+  }
+});
+
+test('excludes Gemini prompt-log sessions from ephemeral worktree paths', async () => {
+  const root = makeTempDir();
+  const geminiDir = path.join(root, '.gemini');
+  const worktreePath = path.join(root, 'Dev', 'repo', '.worktrees', 'agent-scratch');
+
+  writeGeminiProject(root, worktreePath, 'agent-scratch', [
+    {
+      sessionId: 'gemini-worktree-session',
+      timestamp: '2026-06-12T10:00:00.000Z',
+    },
+  ]);
+
+  const discovery = new SessionDiscovery({
+    claudeDir: path.join(root, '.claude'),
+    codexSessionsDir: path.join(root, '.codex', 'sessions'),
+    geminiDir,
+    devRoots: [],
+    defaultDevRoots: [],
+    fileBusRoot: path.join(root, '.claude-remote', 'default'),
+  });
+
+  const sessions = await discovery.discover();
+
+  assert.equal(sessions.some(session => session.path === worktreePath), false);
 });
 
 test('uses CRM tmux attach fallback for enabled persistent agents without shell aliases', async () => {
