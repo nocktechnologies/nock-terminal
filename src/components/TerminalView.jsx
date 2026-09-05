@@ -206,9 +206,17 @@ export default function TerminalView({ tabId, cwd, active, launchCommand, initia
       });
 
       // Handle exit
-      cleanupExit = window.nockTerminal.terminal.onExit((id, code) => {
+      cleanupExit = window.nockTerminal.terminal.onExit((id, code, details = {}) => {
         if (id === tabId && term) {
-          term.writeln(`\r\n\x1b[90m[Process exited with code ${code}]\x1b[0m`);
+          const reasonLabels = {
+            'dead-root-pid': 'root pid disappeared',
+            'orphaned-renderer-tab': 'stale session cleaned',
+            destroyed: 'closed',
+          };
+          const suffix = code == null
+            ? `: ${reasonLabels[details.reason] || 'ended'}`
+            : ` with code ${code}`;
+          term.writeln(`\r\n\x1b[90m[Process exited${suffix}]\x1b[0m`);
         }
       });
 

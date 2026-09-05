@@ -4,7 +4,6 @@ const Store = require('electron-store');
 const TerminalManager = require('./terminal-manager');
 const SessionDiscovery = require('./session-discovery');
 const OllamaClient = require('./ollama-client');
-const ClaudeCodeClient = require('./claude-code-client');
 const PortScanner = require('./port-scanner');
 const FileService = require('./file-service');
 const FileWatcher = require('./file-watcher');
@@ -44,7 +43,6 @@ let tray = null;
 let terminalManager = null;
 let sessionDiscovery = null;
 let ollamaClient = null;
-let claudeCodeClient = null;
 let portScanner = null;
 let fileService = null;
 let fileWatcher = null;
@@ -56,11 +54,7 @@ let promptStore = null;
 let nockccClient = null;
 let agentDispatchService = null;
 let nockccHeartbeatInterval = null;
-let nockccActivity = {
-  activeProjectCount: 0,
-  activeClaudeSessionIds: [],
-  activeAgentSessionIds: [],
-};
+let nockccActivity = { activeProjectCount: 0, activeClaudeSessionIds: [], activeAgentSessionIds: [] };
 
 const isDev = !app.isPackaged;
 
@@ -247,7 +241,6 @@ function initServices() {
     skipList: settings.projectSkipList,
   });
   ollamaClient = new OllamaClient(settings.ollamaUrl);
-  claudeCodeClient = new ClaudeCodeClient(settings.claudeCodePath);
   portScanner = new PortScanner();
   fileService = new FileService(store);
   fileWatcher = new FileWatcher(fileService);
@@ -280,6 +273,12 @@ function registerIPC() {
       shellArgs,
       envVars,
     });
+  });
+  ipcMain.handle('terminal:list', async () => {
+    return terminalManager.listTerminals();
+  });
+  ipcMain.handle('terminal:reapStale', async (_, payload = {}) => {
+    return terminalManager.reapStaleTerminals(payload);
   });
   ipcMain.on('terminal:write', (_, { id, data }) => {
     terminalManager.write(id, data);
@@ -321,15 +320,6 @@ function registerIPC() {
   });
   ipcMain.handle('ai:ollama:status', async () => {
     return ollamaClient.checkStatus();
-  });
-
-  // Claude Code chat (Kit/Mara)
-  ipcMain.handle('ai:claude:chat', async (event, { message, mode, cwd }) => {
-    const maraBriefPath = store.get('maraBriefPath');
-    const response = await claudeCodeClient.chat(message, mode, cwd, maraBriefPath, (chunk) => {
-      mainWindow?.webContents.send('ai:stream', { chunk });
-    });
-    return response;
   });
 
   // Port scanning
@@ -528,9 +518,6 @@ function registerIPC() {
     if (key === 'ollamaUrl') {
       ollamaClient.setUrl(currentValue);
     }
-    if (key === 'claudeCodePath') {
-      claudeCodeClient.setBinaryPath(currentValue);
-    }
     if (key === 'devRoots' || key === 'projectSkipList') {
       sessionDiscovery.setConfig({
         devRoots: getSettingsSnapshot().devRoots,
@@ -672,11 +659,11 @@ function wireTerminalEvents() {
       sessionHistory.appendOutput(id, data);
     }
   });
-  terminalManager.on('exit', (id, code) => {
-    mainWindow?.webContents.send('terminal:exit', { id, code });
+  terminalManager.on('exit', (id, code, details = {}) => {
+    mainWindow?.webContents.send('terminal:exit', { id, code, details });
     // End session in history
     if (sessionHistory) {
-      sessionHistory.endSession(id, code);
+      sessionHistory.endSession(id, code, details);
     }
   });
 }
@@ -737,12 +724,11 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => {
-  // Don't quit — keep in tray
-  if (process.platform !== 'darwin') {
-    // On Windows, hide to tray instead of quitting
-  }
-});
+// Subscribing to this event (even with an empty handler) overrides Electron's
+// default-quit-on-all-closed on Windows/Linux. We want the app to stay alive in
+// the tray until the user explicitly quits via the tray menu (which sets
+// app.isQuitting = true → before-quit → will-quit teardown).
+app.on('window-all-closed', () => {});
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();

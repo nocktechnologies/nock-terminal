@@ -1,10 +1,22 @@
 const EventEmitter = require('events');
 const os = require('os');
 
+const WRITE_CHUNK_SIZE = 512;
+
 class TerminalManager extends EventEmitter {
-  constructor() {
+  constructor(options = {}) {
     super();
     this.terminals = new Map();
+    this.terminalMeta = new Map();
+    // Stash for in-flight destroy() intent. Lets onExit emit with reason:'destroyed'
+    // even when node-pty fires the exit event synchronously inside kill().
+    this._destroyIntents = new Map();
+    // Per-id write queues so chunked large writes don't interleave with each other.
+    this._writeQueues = new Map();
+    this.now = typeof options.now === 'function' ? options.now : () => Date.now();
+    this.isPidAlive = typeof options.isPidAlive === 'function'
+      ? options.isPidAlive
+      : (pid) => this._pidIsAlive(pid);
     this.pty = null;
     // Lazy-load node-pty to handle missing native module gracefully
     try {
@@ -45,16 +57,35 @@ class TerminalManager extends EventEmitter {
         useConpty: process.platform !== 'win32',
       });
 
+      const startedAt = this.now();
+      const metadata = {
+        id,
+        pid: ptyProcess.pid,
+        cwd: cwd || os.homedir(),
+        shell,
+        createdAt: startedAt,
+        lastDataAt: null,
+        lastResizeAt: null,
+        lastWriteAt: null,
+      };
+
       ptyProcess.onData((data) => {
+        this._touch(id, 'lastDataAt');
         this.emit('data', id, data);
       });
 
       ptyProcess.onExit(({ exitCode }) => {
-        this.terminals.delete(id);
-        this.emit('exit', id, exitCode);
+        const intent = this._destroyIntents.get(id);
+        this._destroyIntents.delete(id);
+        if (intent) {
+          this._finalizeTerminal(id, null, { pid: intent.pid, reason: intent.reason });
+        } else {
+          this._finalizeTerminal(id, exitCode, { reason: 'process-exit' });
+        }
       });
 
       this.terminals.set(id, ptyProcess);
+      this.terminalMeta.set(id, metadata);
       return { success: true, id, pid: ptyProcess.pid };
     } catch (err) {
       return { success: false, error: err.message };
@@ -63,27 +94,55 @@ class TerminalManager extends EventEmitter {
 
   write(id, data) {
     const term = this.terminals.get(id);
-    if (!term) return;
+    if (!term || typeof data !== 'string' || data.length === 0) return;
+    this._touch(id, 'lastWriteAt');
 
-    // ConPTY on Windows can drop or corrupt large inputs sent in a single write.
-    // Chunk into 512-byte segments with 1ms spacing to stay within buffer limits.
-    const CHUNK_SIZE = 512;
-    if (data.length <= CHUNK_SIZE) {
+    // Fast path: small write and nothing already queued — write directly.
+    // ConPTY on Windows can drop or corrupt large inputs sent in a single write,
+    // so larger payloads go through the per-id chunked queue below.
+    const queue = this._writeQueues.get(id);
+    if (data.length <= WRITE_CHUNK_SIZE && !queue) {
       term.write(data);
       return;
     }
 
-    let offset = 0;
-    const writeChunk = () => {
-      if (offset >= data.length || !this.terminals.has(id)) return;
-      const chunk = data.slice(offset, offset + CHUNK_SIZE);
-      term.write(chunk);
-      offset += CHUNK_SIZE;
-      if (offset < data.length) {
-        setTimeout(writeChunk, 1);
+    if (queue) {
+      queue.pending.push(data);
+    } else {
+      this._writeQueues.set(id, { pending: [data], draining: false });
+    }
+    this._drainWriteQueue(id);
+  }
+
+  _drainWriteQueue(id) {
+    const queue = this._writeQueues.get(id);
+    if (!queue || queue.draining) return;
+    queue.draining = true;
+
+    const step = () => {
+      const queueRef = this._writeQueues.get(id);
+      const term = this.terminals.get(id);
+      if (!queueRef || !term) {
+        this._writeQueues.delete(id);
+        return;
       }
+      if (queueRef.pending.length === 0) {
+        this._writeQueues.delete(id);
+        return;
+      }
+
+      const head = queueRef.pending[0];
+      if (head.length <= WRITE_CHUNK_SIZE) {
+        term.write(head);
+        queueRef.pending.shift();
+      } else {
+        term.write(head.slice(0, WRITE_CHUNK_SIZE));
+        queueRef.pending[0] = head.slice(WRITE_CHUNK_SIZE);
+      }
+
+      setTimeout(step, 1);
     };
-    writeChunk();
+    step();
   }
 
   resize(id, cols, rows) {
@@ -91,6 +150,7 @@ class TerminalManager extends EventEmitter {
     if (term && cols > 0 && rows > 0) {
       try {
         term.resize(cols, rows);
+        this._touch(id, 'lastResizeAt');
       } catch {
         // Ignore resize errors on dead processes
       }
@@ -99,13 +159,24 @@ class TerminalManager extends EventEmitter {
 
   destroy(id) {
     const term = this.terminals.get(id);
-    if (term) {
-      try {
-        term.kill();
-      } catch {
-        // Process may already be dead
-      }
-      this.terminals.delete(id);
+    if (!term) return;
+    const metadata = this.terminalMeta.get(id);
+    const pid = metadata?.pid ?? term.pid ?? null;
+
+    // Stash intent BEFORE kill() so a synchronous onExit emits with the right reason.
+    this._destroyIntents.set(id, { reason: 'destroyed', pid });
+    try {
+      term.kill();
+    } catch {
+      // Process may already be dead
+    }
+    // If onExit didn't fire synchronously, finalize now for deterministic teardown
+    // (callers like destroyAll on app-quit rely on the exit event landing before
+    // electron tears down). A later async onExit will be a no-op via the guard
+    // in _finalizeTerminal.
+    if (this.terminals.has(id)) {
+      this._destroyIntents.delete(id);
+      this._finalizeTerminal(id, null, { pid, reason: 'destroyed' });
     }
   }
 
@@ -117,6 +188,96 @@ class TerminalManager extends EventEmitter {
 
   getActiveCount() {
     return this.terminals.size;
+  }
+
+  listTerminals() {
+    return Array.from(this.terminalMeta.values()).map((metadata) => ({ ...metadata }));
+  }
+
+  reapStaleTerminals(options = {}) {
+    const liveTerminalIds = new Set(
+      Array.isArray(options.liveTerminalIds)
+        ? options.liveTerminalIds.filter(id => typeof id === 'string' && id.length > 0)
+        : []
+    );
+    const graceMs = Number.isFinite(options.graceMs)
+      ? Math.max(0, options.graceMs)
+      : 5_000;
+    // When provided, only orphan-reap terminals that existed *before* the renderer
+    // started — anything newer is presumed to be a freshly-opened tab the renderer
+    // hasn't propagated to its `tabs` state yet. Dead-pid reaping is unconditional.
+    const rendererStartedAt = Number.isFinite(options.rendererStartedAt)
+      ? options.rendererStartedAt
+      : null;
+    const now = this.now();
+    const reaped = [];
+
+    for (const [id, term] of Array.from(this.terminals.entries())) {
+      const metadata = this.terminalMeta.get(id);
+      const pid = metadata?.pid ?? term.pid ?? null;
+
+      if (!this.isPidAlive(pid)) {
+        this.terminals.delete(id);
+        this._finalizeTerminal(id, null, {
+          pid,
+          reason: 'dead-root-pid',
+          reaped: true,
+        });
+        reaped.push({ id, pid, reason: 'dead-root-pid' });
+        continue;
+      }
+
+      const createdAt = metadata?.createdAt ?? now;
+      const ageMs = now - createdAt;
+      const predatesRenderer = rendererStartedAt == null || createdAt < rendererStartedAt;
+      if (!liveTerminalIds.has(id) && ageMs >= graceMs && predatesRenderer) {
+        try {
+          term.kill();
+        } catch {
+          // Process may already be dead; finalization below still clears state.
+        }
+        this._finalizeTerminal(id, null, {
+          pid,
+          reason: 'orphaned-renderer-tab',
+          reaped: true,
+        });
+        reaped.push({ id, pid, reason: 'orphaned-renderer-tab' });
+      }
+    }
+
+    return {
+      success: true,
+      reaped,
+      activeCount: this.terminals.size,
+    };
+  }
+
+  _touch(id, field) {
+    const metadata = this.terminalMeta.get(id);
+    if (metadata) {
+      metadata[field] = this.now();
+    }
+  }
+
+  _finalizeTerminal(id, exitCode, details = {}) {
+    const hadTerminal = this.terminals.has(id);
+    const hadMetadata = this.terminalMeta.has(id);
+    if (!hadTerminal && !hadMetadata) return false;
+
+    this.terminals.delete(id);
+    this.terminalMeta.delete(id);
+    this.emit('exit', id, exitCode ?? null, details);
+    return true;
+  }
+
+  _pidIsAlive(pid) {
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (err) {
+      return err?.code === 'EPERM';
+    }
   }
 
   _defaultShell() {

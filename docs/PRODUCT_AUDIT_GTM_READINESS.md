@@ -1,7 +1,7 @@
 # Product Audit And GTM Readiness
 
 Audit date: 2026-05-15
-Latest product update: 2026-05-16
+Latest product update: 2026-05-18
 
 Scope: repository documentation, Electron/React implementation, local verification commands, browser smoke checks with the mocked preload bridge, and a current market read of agentic development tools.
 
@@ -31,11 +31,23 @@ The approved agent-agnostic cockpit phases now have a working private-alpha slic
 
 Readiness impact: this improves private-alpha usefulness and product clarity, especially for agent-agnostic orchestration. It does not remove the public-GTM blockers around real transcript discovery beyond Claude, attach/reconnect semantics, dispatch completion-thread tracking, worktree lanes, session replay, packaged smoke automation, update distribution, crash/error reporting, and public support/demo material.
 
+## May 18 Reliability Progress
+
+The approved stale-session cleanup slice now has a working private-alpha implementation:
+
+- Main-process PTY metadata for terminal id, root pid, cwd, shell, creation time, and activity timestamps.
+- Automatic renderer/main reconciliation after startup and every minute.
+- Dashboard `Clean` action for manual stale-session sweeps.
+- Conservative cleanup rules: kill orphaned renderer-tab PTYs after a grace window, clear dead root-pid records, and do not kill quiet attached sessions by idle age.
+- Session-history closeout for explicit closes and reaped sessions, including cleanup reason metadata.
+
+Readiness impact: this reduces dogfood friction from terminals that did not exit cleanly. It does not replace true reconnect/attach semantics; stale cleanup is a safety valve for orphaned or dead PTYs, not a session-resume feature.
+
 ## Verification Summary
 
 | Check | Result | Notes |
 | --- | --- | --- |
-| `npm test` | Pass | 44 Node test-runner tests passed after the May 16 launcher/profile/dispatch additions and PR review hardening. |
+| `npm test` | Pass | 59 Node test-runner tests passed after the May 18 stale-session cleanup additions. |
 | `npm audit --audit-level=moderate` | Pass | 0 vulnerabilities found after dependency remediation. |
 | `npx vite build` | Pass with warnings | Renderer build succeeded; known Monaco/editor chunks exceed Vite's generic 500 kB warning threshold. |
 | `npm run check:bundle` | Pass | Explicit budgets cover app entry, Monaco workers/API, and xterm chunks. |

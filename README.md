@@ -16,6 +16,7 @@ As of the May 16, 2026 agent-agnostic cockpit pass, this repo is ready for renew
 - New agent-agnostic launcher: `Ctrl+K` searches repos/agents and launches Claude Code, Codex CLI, Gemini CLI, local agent folders, or a custom agent command from project profiles.
 - New task staging: the launcher can open a fresh agent terminal and place task text into it without auto-submitting the prompt.
 - New dispatch support: Codex and DeepSeek dispatch agents with `agent_runtime` configs are visible even when intentionally `enabled:false`; allowlisted agents can be sent brokered tasks through Mira or launched through the local dispatch script.
+- New stale-session cleanup: the app reconciles renderer tab state with main-process PTYs on startup and every minute, and the dashboard can manually clean orphaned or dead terminal sessions.
 - Strategic gap: Claude Code remains the only transcript-discovery source. Codex/Gemini support now has context/process/profile launch foundations, and CRM Codex/DeepSeek dispatch is implemented, but Codex/Gemini transcript discovery and resume/attach behavior are still roadmap work.
 - Launch gap: release workflows now enforce signing/notarization secrets and checksums, but packaged-app smoke tests, update distribution, crash/error reporting, and support flow still need a release pass.
 
@@ -33,6 +34,7 @@ Read the full audit in [docs/PRODUCT_AUDIT_GTM_READINESS.md](docs/PRODUCT_AUDIT_
 - Sends brokered dispatch requests to Mira through NockCC AgentMessage, or opens a direct dispatch alias/script terminal with a generated payload file.
 - Opens xterm.js terminal tabs through `node-pty`, including splits.
 - Keeps terminal sessions mounted while switching between dashboard, terminal, and settings views.
+- Cleans stale PTYs that lost their renderer tab or whose root pid disappeared, without killing quiet attached sessions.
 - Provides a sidebar file tree, git status markers, context checks, and Monaco editing.
 - Provides local AI chat through Ollama models.
 - Launches a Claude Code terminal tab from the AI panel.

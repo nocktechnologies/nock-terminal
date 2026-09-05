@@ -21,7 +21,7 @@ This document describes the current codebase, not aspirational product copy. Tod
 
 ## Main-Process Services
 
-- `TerminalManager` wraps `node-pty`, chooses a platform shell, applies global/project shell overrides, parses shell arguments and environment variables, relays terminal data, resizes PTYs, chunks large writes on Windows, and destroys processes.
+- `TerminalManager` wraps `node-pty`, chooses a platform shell, applies global/project shell overrides, parses shell arguments and environment variables, relays terminal data, resizes PTYs, chunks large writes on Windows, tracks PTY metadata, and destroys or reaps processes.
 - `SessionDiscovery` reads Claude Code transcripts from `~/.claude/projects`, scans configured dev roots for git repos and `agents/*/config.json` folders, merges them by path, and annotates branch, dirty state, activity metadata, agent runtime state, terminal launch defaults, and dispatch descriptors.
 - `AgentDispatchService` builds sanitized dispatch payloads, writes direct-dispatch payload files, and sends brokered NockCC AgentMessages to Mira.
 - `PortScanner` finds local development servers for the sidebar.
@@ -52,7 +52,8 @@ This document describes the current codebase, not aspirational product copy. Tod
 4. xterm sends user input through `terminal:write`; resize events use `terminal:resize`.
 5. When a tab has a launch command, `TerminalView` sends it after the shell initializes.
 6. When a tab has staged task text, `TerminalView` places the sanitized text into the terminal after launch without sending an Enter key.
-7. Session history records output only when `autoCaptureSessions` is enabled.
+7. `App` periodically sends the live renderer terminal ids to `terminal:reapStale`; `TerminalManager` only reaps orphaned renderer tabs after a grace window or PTYs whose root pid is gone.
+8. Session history records output only when `autoCaptureSessions` is enabled and stores cleanup reasons for reaped or explicitly closed sessions.
 
 ### Files And Git
 

@@ -15,9 +15,6 @@ const DEFAULT_SETTINGS = {
   temperature: 0.7,
   maxTokens: 4096,
   showThinking: false,
-  // Claude Code
-  claudeCodePath: '',
-  maraBriefPath: '',
   // Terminal
   terminalFontSize: 16,
   terminalFontFamily: "'JetBrains Mono', 'Consolas', monospace",
@@ -196,8 +193,6 @@ const STRING_KEYS = {
   theme: { maxLength: 40 },
   defaultModel: { maxLength: 200 },
   systemPrompt: { maxLength: 20000, trim: false },
-  claudeCodePath: { maxLength: 1000 },
-  maraBriefPath: { maxLength: 1000 },
   terminalFontFamily: { maxLength: 200, trim: false },
   defaultShell: { maxLength: 1000 },
   shellArgs: { maxLength: 1000, trim: false },

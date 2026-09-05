@@ -1,6 +1,6 @@
 # Release Readiness
 
-Updated: 2026-05-16
+Updated: 2026-05-18
 
 Nock Terminal has a release pipeline, but public distribution should stay gated until the checks below pass on a tagged release and the packaged installers are manually smoked on each target OS.
 
@@ -52,6 +52,8 @@ Before a public beta announcement, install the generated artifacts on clean mach
 - Linux AppImage launches and the deb package installs cleanly.
 - First-run onboarding can detect dev roots, Claude/Codex CLI availability, project context files, and Ollama status.
 - Terminal tab opens in the selected shell and respects shell arguments and environment variables.
+- Dashboard `Clean` runs a stale-session sweep without closing attached quiet terminals.
+- Relaunch/reload cleanup reaps terminal PTYs whose renderer tab disappeared or whose root pid is already dead.
 - `Ctrl+K` command launcher opens, searches repos/agents, and launches the selected target, including fallback-discovered agents when stored `devRoots` is empty.
 - Persistent CRM agents without shell aliases launch through the canonical tmux fallback, such as `tmux attach -t crm-default-cooper`.
 - Claude, Codex, Gemini, and custom-agent profile launch commands use the configured project command when present.

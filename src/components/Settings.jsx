@@ -382,24 +382,6 @@ export default function Settings() {
                 label="Show thinking output"
               />
             </Field>
-            <Field label="Claude Code Binary" description="Leave empty for auto-detection">
-              <input
-                type="text"
-                value={settings.claudeCodePath || ''}
-                onChange={(e) => updateSetting('claudeCodePath', e.target.value)}
-                className="settings-input font-mono"
-                placeholder="Auto-detect"
-              />
-            </Field>
-            <Field label="Mara Brief File" description="Prepended to messages in Mara mode">
-              <input
-                type="text"
-                value={settings.maraBriefPath || ''}
-                onChange={(e) => updateSetting('maraBriefPath', e.target.value)}
-                className="settings-input font-mono"
-                placeholder="~/.claude/mara-brief.md"
-              />
-            </Field>
           </SettingsSection>
         );
 
@@ -788,7 +770,7 @@ export default function Settings() {
                 <img
                   src="./nock-logo.png"
                   alt=""
-                  className="h-12 w-12 rounded-xl border border-nock-border/70 bg-nock-bg shadow-[0_0_18px_rgba(31,184,128,0.16)]"
+                  className="h-12 w-12 rounded-xl border border-nock-border/70 bg-nock-bg shadow-[0_0_18px_rgba(63,88,112,0.22)]"
                   draggable={false}
                 />
                 <div>

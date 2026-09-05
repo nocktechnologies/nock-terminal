@@ -1,6 +1,6 @@
 # Product Roadmap
 
-Updated: 2026-05-16
+Updated: 2026-05-18
 
 This roadmap follows the audit in `docs/PRODUCT_AUDIT_GTM_READINESS.md`. It assumes Nock Terminal should become a local-first cockpit for supervising coding agents, not a generic AI IDE.
 
@@ -53,6 +53,18 @@ The approved seven-phase dispatch slice is now represented in-product:
 
 This gives Nock a sharper agent-agnostic wedge: not every agent needs to be a process Nock owns. Some agents are brokered work orders, and the cockpit can still discover, route, and track them.
 
+### May 18 Stale-Session Cleanup Slice
+
+The approved stale-session reliability slice is now represented in-product:
+
+- **PTY metadata**: the main process tracks each terminal's id, root pid, cwd, shell, creation time, and last data/write/resize activity.
+- **Mark-and-sweep cleanup**: the renderer periodically sends the terminal ids it still owns; the main process reaps only orphaned PTYs after a grace window or records whose root pid is already gone.
+- **Manual sweep**: the dashboard operations panel exposes a `Clean` action for an operator-triggered stale-session pass.
+- **Session history closeout**: explicit closes and stale reaps end session-history records once, with a cleanup reason attached.
+- **Regression coverage**: unit tests cover terminal metadata, grace-window behavior, orphan cleanup, dead pid cleanup, renderer live-id collection, and duplicate exit suppression.
+
+This improves dogfood reliability without changing the agent model: quiet attached sessions stay alive, and cleanup is based on ownership drift or pid death rather than idle time.
+
 ### 1. Relaunch Foundations
 
 Goal: make the current app trustworthy for private dogfood.
@@ -92,6 +104,7 @@ Completed in the May 16 command-center pass:
 - Added Gemini process detection and `GEMINI.md` context checks, based on the official Gemini CLI context-file convention.
 - Added task staging into launched terminal sessions for safe human review before submit.
 - Added dashboard operations telemetry for active agents, live agent processes, terminal count, quiet tabs, stale agents, and dirty repos.
+- Added stale PTY reconciliation so orphaned terminal sessions can be cleaned automatically or through the dashboard without killing quiet attached sessions.
 
 Extend the adapter contract for:
 

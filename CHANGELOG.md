@@ -4,6 +4,20 @@ This changelog is summarized from git history. The repository has no version tag
 
 ## Unreleased
 
+### 2026-05-18
+
+- Added stale terminal cleanup that reconciles renderer-owned tab ids with main-process PTYs on startup and every minute.
+- Added a dashboard `Clean` action for manually sweeping orphaned or dead terminal sessions without killing quiet attached tabs.
+- Added terminal metadata and session-history closeout reasons for explicit closes, orphan reaps, and dead root-pid cleanup.
+- Added regression tests for PTY metadata, stale cleanup grace windows, dead pid cleanup, renderer live-id collection, and duplicate exit suppression.
+
+### 2026-05-17
+
+- Rebranded app, Dock, Windows installer, Linux, tray/menu-bar, renderer, and About-panel icon assets to the terminal-specific `n_` identity.
+- Added checked-in brand SVG sources under `assets/brand/` plus `scripts/generate-brand-assets.py` for repeatable PNG/ICNS/ICO/tray regeneration.
+- Added sanitized marketing screenshots and brand candidate preview docs under `docs/marketing/`.
+- Tightened the title-bar logo surface so the corner icon renders as the full mark instead of a zoomed crop.
+
 ### 2026-05-16
 
 - Added the `Ctrl+K` command launcher for searching repos, agent folders, branches, lifecycle state, models, and launch commands.
