@@ -39,8 +39,14 @@ class FileService {
     this.trustedRepoRoots = [];
   }
 
+  getConfiguredRoots() {
+    return sanitizeDevRoots(this.store?.get('devRoots') || []);
+  }
+
   setGrantedRoots(roots) {
-    this.grantedRoots = sanitizeDevRoots(roots || []);
+    const configuredRoots = this.getConfiguredRoots();
+    const candidates = sanitizeDevRoots(roots || []);
+    this.grantedRoots = candidates.filter((root) => isPathWithinRoots(root, configuredRoots));
   }
 
   // Mark the repository a terminal was opened in as trusted for gitOp. We resolve
@@ -339,8 +345,9 @@ class FileService {
   }
 
   isAllowedPath(filePath) {
-    const configuredRoots = sanitizeDevRoots(this.store?.get('devRoots') || []);
-    const allowedRoots = [...new Set([...configuredRoots, ...this.grantedRoots])];
+    const configuredRoots = this.getConfiguredRoots();
+    const grantedRoots = this.grantedRoots.filter((root) => isPathWithinRoots(root, configuredRoots));
+    const allowedRoots = [...new Set([...configuredRoots, ...grantedRoots])];
     if (allowedRoots.length === 0 || typeof filePath !== 'string' || filePath.trim() === '') {
       console.warn('FileService: no allowed roots configured — all paths rejected');
       return false;

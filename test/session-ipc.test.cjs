@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
+const FileService = require('../electron/file-service');
 const { registerSessionIPC, safeSessionRoots } = require('../electron/session-ipc');
 
 function createIpcHarness() {
@@ -110,4 +114,43 @@ test('sessions:discover does not refresh roots if discovery fails', async () => 
 
   await assert.rejects(() => ipc.invoke('sessions:discover'), /discovery unavailable/);
   assert.deepEqual(calls, [['discover']]);
+});
+
+test('sessions:discover does not grant file roots outside configured devRoots', async () => {
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'nock-terminal-session-ipc-'));
+  test.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
+
+  const configured = path.join(sandbox, 'workspace');
+  const inside = path.join(configured, 'product');
+  const outside = path.join(sandbox, 'secrets');
+  fs.mkdirSync(inside, { recursive: true });
+  fs.mkdirSync(outside, { recursive: true });
+
+  const ipc = createIpcHarness();
+  const fileService = new FileService({
+    get(key) {
+      if (key === 'devRoots') return [configured];
+      return undefined;
+    },
+  });
+
+  registerSessionIPC({
+    ipcMain: ipc.ipcMain,
+    sessionDiscovery: {
+      async discover() {
+        return [
+          { id: 'inside', path: inside },
+          { id: 'outside', path: outside },
+        ];
+      },
+    },
+    fileService,
+    fileWatcher: { revalidate() {} },
+  });
+
+  await ipc.invoke('sessions:discover');
+
+  assert.equal(fileService.isAllowedPath(inside), true);
+  assert.equal(fileService.isAllowedPath(outside), false);
+  assert.equal(fileService.grantedRoots.some((root) => root === fs.realpathSync(outside)), false);
 });

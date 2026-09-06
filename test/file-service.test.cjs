@@ -192,3 +192,45 @@ test('gitStatus resolves to {} for a disallowed path', async () => {
   const status = await fileService.gitStatus('/definitely/not/allowed');
   assert.deepEqual(status, {});
 });
+
+test('setGrantedRoots does not widen file IPC beyond configured devRoots', () => {
+  const sandbox = makeSandbox();
+  const configured = path.join(sandbox, 'workspace');
+  const sessionCwd = path.join(sandbox, 'secrets');
+  fs.mkdirSync(configured, { recursive: true });
+  fs.mkdirSync(sessionCwd, { recursive: true });
+  fs.writeFileSync(path.join(sessionCwd, 'id_ed25519'), 'secret', 'utf8');
+
+  const fileService = new FileService(createStore([configured]));
+  fileService.setGrantedRoots([sessionCwd]);
+
+  assert.equal(fileService.isAllowedPath(sessionCwd), false);
+  assert.equal(fileService.isAllowedPath(path.join(sessionCwd, 'id_ed25519')), false);
+  assert.deepEqual(fileService.grantedRoots, []);
+});
+
+test('setGrantedRoots keeps session cwds that sit inside configured devRoots', () => {
+  const sandbox = makeSandbox();
+  const configured = path.join(sandbox, 'workspace');
+  const sessionCwd = path.join(configured, 'product');
+  fs.mkdirSync(sessionCwd, { recursive: true });
+
+  const fileService = new FileService(createStore([configured]));
+  fileService.setGrantedRoots([sessionCwd]);
+
+  assert.equal(fileService.isAllowedPath(sessionCwd), true);
+  assert.equal(fileService.grantedRoots.length, 1);
+  assert.equal(fileService.isAllowedPath(configured), true);
+});
+
+test('empty configured devRoots reject granted session cwds', () => {
+  const sandbox = makeSandbox();
+  const sessionCwd = path.join(sandbox, 'claude-project');
+  fs.mkdirSync(sessionCwd, { recursive: true });
+
+  const fileService = new FileService(createStore([]));
+  fileService.setGrantedRoots([sessionCwd]);
+
+  assert.equal(fileService.isAllowedPath(sessionCwd), false);
+  assert.deepEqual(fileService.grantedRoots, []);
+});
