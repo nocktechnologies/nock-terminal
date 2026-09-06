@@ -79,15 +79,23 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          # All signing material lives in one fresh, invocation-unique, owner-only
-          # directory. mktemp -d guarantees it did not pre-exist, so neither the p12
-          # nor the keychain path can be a symlink planted by an earlier step. The
-          # decoded p12 is removed right after import; the keychain and directory are
-          # deleted in the always() cleanup step below.
-          WORKDIR="$(mktemp -d "$RUNNER_TEMP/nock-signing.XXXXXX")"
-          chmod 700 "$WORKDIR"
-          CERT="$WORKDIR/cert.p12"
-          KC="$WORKDIR/signing.keychain-db"
+          # Two fresh, unique, owner-only dirs (mktemp -d cannot pre-exist, so
+          # neither path can be a planted symlink).
+          #  - p12 dir: an EXIT trap removes it on ANY exit of this step, including
+          #    an early `set -e` failure or a job cancellation, so the decoded
+          #    private key never survives a failed import.
+          #  - keychain dir: must persist to the signing step; its paths are exported
+          #    to GITHUB_ENV BEFORE the risky commands so the always() cleanup can
+          #    remove it even if this step aborts partway.
+          P12DIR="$(mktemp -d "$RUNNER_TEMP/nock-p12.XXXXXX")"
+          chmod 700 "$P12DIR"
+          trap 'rm -rf "$P12DIR"' EXIT
+          KEYDIR="$(mktemp -d "$RUNNER_TEMP/nock-kc.XXXXXX")"
+          chmod 700 "$KEYDIR"
+          CERT="$P12DIR/cert.p12"
+          KC="$KEYDIR/signing.keychain-db"
+          echo "CSC_KEYCHAIN=$KC" >> "$GITHUB_ENV"
+          echo "SIGNING_KEYDIR=$KEYDIR" >> "$GITHUB_ENV"
           KP="$(openssl rand -hex 20)"
           printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$CERT"
           security create-keychain -p "$KP" "$KC"
@@ -97,9 +105,6 @@ jobs:
             -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KP" "$KC" >/dev/null
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
-          rm -f "$CERT"
-          echo "CSC_KEYCHAIN=$KC" >> "$GITHUB_ENV"
-          echo "SIGNING_WORKDIR=$WORKDIR" >> "$GITHUB_ENV"
 
       - name: Build + sign macOS DMG
         env:
@@ -131,8 +136,8 @@ jobs:
           if [ -n "${CSC_KEYCHAIN:-}" ]; then
             security delete-keychain "$CSC_KEYCHAIN" || true
           fi
-          if [ -n "${SIGNING_WORKDIR:-}" ]; then
-            rm -rf "$SIGNING_WORKDIR" || true
+          if [ -n "${SIGNING_KEYDIR:-}" ]; then
+            rm -rf "$SIGNING_KEYDIR" || true
           fi
 
   build-win:
