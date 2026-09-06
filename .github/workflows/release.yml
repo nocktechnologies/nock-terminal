@@ -78,13 +78,17 @@ jobs:
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: |
           set -euo pipefail
+          umask 077
+          # Write the decoded private key only inside a fresh, owner-only directory
+          # (defeats a pre-created symlink at a predictable path) and remove it on
+          # any exit, including an early failure or cancellation.
+          CERTDIR="$(mktemp -d "$RUNNER_TEMP/nock-signing.XXXXXX")"
+          chmod 700 "$CERTDIR"
+          trap 'rm -rf "$CERTDIR"' EXIT
+          CERT="$CERTDIR/cert.p12"
           KC="$RUNNER_TEMP/nock-signing.keychain-db"
           KP="$(openssl rand -hex 20)"
-          CERT="$RUNNER_TEMP/cert.p12"
-          # Remove the decoded private key on any exit, including an early failure
-          # or cancellation before signing completes.
-          trap 'rm -f "$CERT"' EXIT
-          (umask 077; printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$CERT")
+          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$CERT"
           security create-keychain -p "$KP" "$KC"
           security set-keychain-settings -lut 21600 "$KC"
           security unlock-keychain -p "$KP" "$KC"
