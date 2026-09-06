@@ -62,7 +62,7 @@ const EMBEDDED_ACCESS_MODES = [
     Icon: Radio,
     eyebrow: 'Interactive',
     title: 'Enter live console',
-    detail: 'Watch her work and speak into the current turn from one protected input line.',
+    detail: 'Watch the agent work and speak into the current turn from one protected input line.',
   },
   {
     mode: 'watch',
