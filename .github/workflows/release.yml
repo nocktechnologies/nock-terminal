@@ -119,6 +119,18 @@ jobs:
             dist/*.dmg
             dist/nock-terminal-mac.SHA256SUMS
 
+      # Remove the signing keychain even on build failure or cancellation, so the
+      # imported Developer ID key never outlives the signing step. (Defense in
+      # depth; the hosted runner VM is destroyed at job end regardless.)
+      - name: Remove signing keychain
+        if: always()
+        run: |
+          KC="${CSC_KEYCHAIN:-$RUNNER_TEMP/nock-signing.keychain-db}"
+          if [ -f "$KC" ]; then
+            security list-keychains -d user -s $(security list-keychains -d user | sed 's/"//g' | grep -vF "$KC") || true
+            security delete-keychain "$KC" || true
+          fi
+
   build-win:
     name: Build Windows (signed NSIS installer)
     runs-on: windows-latest
