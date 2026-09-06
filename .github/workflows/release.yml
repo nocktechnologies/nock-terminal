@@ -66,10 +66,51 @@ jobs:
       - name: Check bundle budget
         run: npm run check:bundle
 
+      # electron-builder's own keychain import is broken on macOS 26 (Tahoe)
+      # runners: it creates the temp keychain with a random password but calls
+      # `security set-key-partition-list` with the certificate password, which the
+      # newer OS rejects ("SecKeychainUnlock: passphrase not correct"). Import the
+      # cert ourselves with one consistent keychain password and point
+      # electron-builder at that keychain via CSC_KEYCHAIN instead.
+      - name: Import Developer ID certificate into a dedicated keychain
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          # Two fresh, unique, owner-only dirs (mktemp -d cannot pre-exist, so
+          # neither path can be a planted symlink).
+          #  - p12 dir: an EXIT trap removes it on ANY exit of this step, including
+          #    an early `set -e` failure or a job cancellation, so the decoded
+          #    private key never survives a failed import.
+          #  - keychain dir: must persist to the signing step; its paths are exported
+          #    to GITHUB_ENV BEFORE the risky commands so the always() cleanup can
+          #    remove it even if this step aborts partway.
+          P12DIR="$(mktemp -d "$RUNNER_TEMP/nock-p12.XXXXXX")"
+          chmod 700 "$P12DIR"
+          trap 'rm -rf "$P12DIR"' EXIT
+          KEYDIR="$(mktemp -d "$RUNNER_TEMP/nock-kc.XXXXXX")"
+          chmod 700 "$KEYDIR"
+          CERT="$P12DIR/cert.p12"
+          KC="$KEYDIR/signing.keychain-db"
+          echo "CSC_KEYCHAIN=$KC" >> "$GITHUB_ENV"
+          echo "SIGNING_KEYDIR=$KEYDIR" >> "$GITHUB_ENV"
+          KP="$(openssl rand -hex 20)"
+          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$CERT"
+          security create-keychain -p "$KP" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KP" "$KC"
+          security import "$CERT" -k "$KC" -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KP" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
+
       - name: Build + sign macOS DMG
         env:
-          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          # Certificate is already in CSC_KEYCHAIN (previous step); do not set
+          # CSC_LINK/CSC_KEY_PASSWORD or electron-builder runs its broken import.
+          CSC_IDENTITY_AUTO_DISCOVERY: "true"
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -85,6 +126,19 @@ jobs:
           path: |
             dist/*.dmg
             dist/nock-terminal-mac.SHA256SUMS
+
+      # Remove the signing keychain even on build failure or cancellation, so the
+      # imported Developer ID key never outlives the signing step. (Defense in
+      # depth; the hosted runner VM is destroyed at job end regardless.)
+      - name: Remove signing keychain
+        if: always()
+        run: |
+          if [ -n "${CSC_KEYCHAIN:-}" ]; then
+            security delete-keychain "$CSC_KEYCHAIN" || true
+          fi
+          if [ -n "${SIGNING_KEYDIR:-}" ]; then
+            rm -rf "$SIGNING_KEYDIR" || true
+          fi
 
   build-win:
     name: Build Windows (signed NSIS installer)
