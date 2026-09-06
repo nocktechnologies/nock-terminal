@@ -122,7 +122,11 @@ jobs:
       # no Gatekeeper prompt (the app inside is already notarized; this covers the
       # wrapper). notarytool authenticates with the Apple ID + app-specific password
       # + team id; the values come from masked secrets.
-      - name: Notarize and staple the DMGs
+      # Notarizing the DMG staples a ticket but does NOT sign it; a downloaded DMG
+      # is still Gatekeeper-rejected ("no usable signature") without a Developer ID
+      # signature. Sign the DMG (identity already in CSC_KEYCHAIN), THEN notarize
+      # and staple, so the wrapper opens clean on download too.
+      - name: Sign, notarize, and staple the DMGs
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -133,6 +137,9 @@ jobs:
           found=0
           for dmg in dist/*.dmg; do
             found=1
+            echo "Signing $dmg"
+            codesign --force --timestamp \
+              --sign "Developer ID Application" --keychain "$CSC_KEYCHAIN" "$dmg"
             echo "Notarizing $dmg"
             xcrun notarytool submit "$dmg" \
               --apple-id "$APPLE_ID" \
