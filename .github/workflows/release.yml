@@ -114,7 +114,11 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx electron-builder --mac --publish never
+        # arm64 only for v1.0.0: covers all Apple Silicon Macs. Intel (x64) is a
+        # fast-follow — dropped for now because Apple's notary service was taking
+        # ~70 min per architecture, making a two-arch build ~2h. Re-add x64 by
+        # removing the --arm64 flag (build.mac.target already lists both arches).
+        run: npx electron-builder --mac --arm64 --publish never
 
       - name: Write macOS checksums
         run: shasum -a 256 dist/*.dmg > dist/nock-terminal-mac.SHA256SUMS
