@@ -114,11 +114,35 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        # arm64 only for v1.0.0: covers all Apple Silicon Macs. Intel (x64) is a
-        # fast-follow — dropped for now because Apple's notary service was taking
-        # ~70 min per architecture, making a two-arch build ~2h. Re-add x64 by
-        # removing the --arm64 flag (build.mac.target already lists both arches).
-        run: npx electron-builder --mac --arm64 --publish never
+        # Build both arm64 and x64 (build.mac.target lists both). electron-builder
+        # signs + notarizes + staples the .app inside each DMG.
+        run: npx electron-builder --mac --publish never
+
+      # Notarize and staple the DMG containers too, so a downloaded DMG opens with
+      # no Gatekeeper prompt (the app inside is already notarized; this covers the
+      # wrapper). notarytool authenticates with the Apple ID + app-specific password
+      # + team id; the values come from masked secrets.
+      - name: Notarize and staple the DMGs
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          found=0
+          for dmg in dist/*.dmg; do
+            found=1
+            echo "Notarizing $dmg"
+            xcrun notarytool submit "$dmg" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          done
+          [ "$found" = 1 ] || { echo "No DMG produced to notarize"; exit 1; }
 
       - name: Write macOS checksums
         run: shasum -a 256 dist/*.dmg > dist/nock-terminal-mac.SHA256SUMS
