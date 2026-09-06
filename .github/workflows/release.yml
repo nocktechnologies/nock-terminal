@@ -80,15 +80,18 @@ jobs:
           set -euo pipefail
           KC="$RUNNER_TEMP/nock-signing.keychain-db"
           KP="$(openssl rand -hex 20)"
-          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          CERT="$RUNNER_TEMP/cert.p12"
+          # Remove the decoded private key on any exit, including an early failure
+          # or cancellation before signing completes.
+          trap 'rm -f "$CERT"' EXIT
+          (umask 077; printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$CERT")
           security create-keychain -p "$KP" "$KC"
           security set-keychain-settings -lut 21600 "$KC"
           security unlock-keychain -p "$KP" "$KC"
-          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$MACOS_CERTIFICATE_PASSWORD" \
+          security import "$CERT" -k "$KC" -P "$MACOS_CERTIFICATE_PASSWORD" \
             -T /usr/bin/codesign -T /usr/bin/security
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KP" "$KC" >/dev/null
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed 's/"//g')
-          rm -f "$RUNNER_TEMP/cert.p12"
           echo "CSC_KEYCHAIN=$KC" >> "$GITHUB_ENV"
 
       - name: Build + sign macOS DMG
